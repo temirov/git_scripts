@@ -79,19 +79,19 @@ log "Checking GitHub Pages configuration"
 pages_json="$(gh api -X GET "repos/${name_with_owner}/pages" 2>/dev/null || true)"
 if [[ -n "${pages_json}" && "${pages_json}" != "null" ]]; then
   pages_branch="$(echo "${pages_json}" | jq -r '.source.branch // empty')"
-  pages_path="$(echo   "${pages_json}" | jq -r '.source.path   // empty')"
+  pages_path="$(echo   "${pages_json}" | jq -r '.source.path   // "/"')"
   build_type="$(echo   "${pages_json}" | jq -r '.build_type    // "legacy"')"
-  if [[ -z "${pages_path}" ]]; then pages_path="/"; fi
+
   log "Pages enabled: branch=${pages_branch:-<none>} path=${pages_path} build_type=${build_type}"
 
-  # Only retarget the source when Pages is branch-based ("legacy") and uses main.
   if [[ "${build_type}" == "legacy" && "${pages_branch}" == "main" ]]; then
     log "Updating GitHub Pages publishing source to master (${pages_path})"
-    gh api -X PUT "repos/${name_with_owner}/pages" \
-      -H "Content-Type: application/json" \
-      -f accept=application/vnd.github+json \
-      -d "$(jq -n --arg path "${pages_path}" '{source:{branch:"master", path:$path}}')" \
-      >/dev/null
+    jq -n --arg path "${pages_path}" '{source:{branch:"master", path:$path}}' \
+    | gh api -X PUT "repos/${name_with_owner}/pages" \
+        --input - \
+        -H "Content-Type: application/json" \
+        -H "Accept: application/vnd.github+json" \
+        >/dev/null
   fi
 else
   log "GitHub Pages not configured; skipping."
