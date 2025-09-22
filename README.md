@@ -10,6 +10,36 @@ A small collection of practical Bash scripts that automate common Git and GitHub
   repo name, **updates `origin` if the repo was renamed/transferred on GitHub**, and **converts remote URL protocols** (
   `https`, `git`, `ssh`).
 
+## Go-based CLI
+
+The repository now ships a Go-based command-line interface that complements the existing Bash scripts. The CLI boots a Cobra root command, hydrates configuration with Viper (covering config files and environment overrides), and emits structured Zap logs.
+
+### Usage overview
+
+```bash
+go run ./cmd/cli --log-level debug
+```
+
+Add `--config=path/to/config.yaml` to load persisted settings. Configuration files currently support a `log_level` key, for example:
+
+```yaml
+log_level: debug
+```
+
+Environment variables prefixed with `GITSCRIPTS_` override file values. For instance, `GITSCRIPTS_LOG_LEVEL=error` forces error-only logging.
+
+### Building the binary
+
+```bash
+go build -o bin/git-scripts-cli ./cmd/cli
+```
+
+### Recommended workflows
+
+* `make check-format` — ensures Go sources are formatted.
+* `make lint` — runs `go vet` against the module.
+* `make test` — executes unit and integration tests (`go test ./...`).
+
 ## Prerequisites
 
 These scripts assume a Unix-like environment (macOS or Linux) with the following tools:
