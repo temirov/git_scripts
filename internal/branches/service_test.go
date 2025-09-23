@@ -61,8 +61,9 @@ const (
 )
 
 type fakeCommandExecutor struct {
-	responses        map[string]fakeCommandResponse
-	executedCommands []executedCommandRecord
+	responses           map[string]fakeCommandResponse
+	repositoryResponses map[string]map[string]fakeCommandResponse
+	executedCommands    []executedCommandRecord
 }
 
 type fakeCommandResponse struct {
@@ -98,6 +99,17 @@ func (executor *fakeCommandExecutor) executeCommand(toolName string, details exe
 		workingDirectory: details.WorkingDirectory,
 	})
 
+	if executor.repositoryResponses != nil {
+		if repositoryResponseMap, found := executor.repositoryResponses[details.WorkingDirectory]; found {
+			if response, found := repositoryResponseMap[commandKey]; found {
+				if response.err != nil {
+					return execshell.ExecutionResult{}, response.err
+				}
+				return response.result, nil
+			}
+		}
+	}
+
 	if response, found := executor.responses[commandKey]; found {
 		if response.err != nil {
 			return execshell.ExecutionResult{}, response.err
@@ -117,6 +129,16 @@ func registerResponse(executor *fakeCommandExecutor, toolName string, arguments 
 		executor.responses = map[string]fakeCommandResponse{}
 	}
 	executor.responses[buildCommandKey(toolName, arguments)] = fakeCommandResponse{result: result, err: commandError}
+}
+
+func registerRepositoryResponse(executor *fakeCommandExecutor, workingDirectory string, toolName string, arguments []string, result execshell.ExecutionResult, commandError error) {
+	if executor.repositoryResponses == nil {
+		executor.repositoryResponses = map[string]map[string]fakeCommandResponse{}
+	}
+	if executor.repositoryResponses[workingDirectory] == nil {
+		executor.repositoryResponses[workingDirectory] = map[string]fakeCommandResponse{}
+	}
+	executor.repositoryResponses[workingDirectory][buildCommandKey(toolName, arguments)] = fakeCommandResponse{result: result, err: commandError}
 }
 
 func buildRemoteOutput(branchNames []string) string {
