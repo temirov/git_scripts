@@ -52,7 +52,8 @@ The binary exposes the same helpers as the historical shell scripts:
   go run . branch migrate --debug
   ```
 
-* **GitHub Packages maintenance** — purge untagged GHCR images using stored configuration or command flags.
+* **GitHub Packages maintenance** — purge untagged GHCR images using stored configuration or command flags. The packages
+  configuration supports overrides such as `service_base_url` (for GitHub Enterprise or integration testing) and `page_size`.
 
   ```bash
   go run . packages purge \
@@ -63,20 +64,43 @@ The binary exposes the same helpers as the historical shell scripts:
     --dry-run
   ```
 
+  ```yaml
+  # packages.yaml
+  packages:
+    purge:
+      owner: my-org
+      package: my-image
+      owner_type: org
+      token_source: env:GITHUB_PACKAGES_TOKEN
+      service_base_url: https://github.example.com/api/v3
+      page_size: 50
+  ```
+
+  ```bash
+  go run . --config packages.yaml packages purge
+  ```
+
 ### Building and releasing
 
-`go build` now produces a single binary from the repository root:
+`go build` at the repository root produces a single binary that embeds every command:
 
 ```bash
 go build
 ./git_scripts --help
 ```
 
-For reproducible artifacts, use the dedicated Make target:
+`make build` writes the binary to `./bin/git-scripts` for repeatable local installs:
 
 ```bash
 make build
 ./bin/git-scripts --help
+```
+
+Use `make release` to cross-compile ready-to-upload artifacts. The target emits platform-specific binaries in `./dist`:
+
+```bash
+make release
+ls dist
 ```
 
 ### Migration notes
@@ -92,7 +116,8 @@ make build
 * `make test-unit` — executes fast unit tests across all Go packages.
 * `make test-integration` — runs the end-to-end suite under `./tests`.
 * `make test` — runs both unit and integration tests.
-* `make build` — creates the release binary in `bin/git-scripts`.
+* `make build` — creates the local binary in `bin/git-scripts`.
+* `make release` — cross-compiles platform-specific binaries in `dist/`.
 
 ## Prerequisites
 

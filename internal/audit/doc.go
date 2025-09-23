@@ -1,5 +1,7 @@
-// Package audit provides repository auditing and maintenance workflows for the
-// git_scripts command-line interface. The package discovers git repositories,
-// inspects their metadata, and coordinates actions such as reporting,
-// renaming, remote updates, and protocol conversions.
+// Package audit implements repository discovery, reporting, and reconciliation
+// workflows used by the git_scripts CLI.
+//
+// It exposes CommandBuilder for wiring Cobra commands, Service for driving the
+// workflow programmatically, and supporting abstractions for Git, GitHub, file
+// system, and prompting collaborators.
 package audit
