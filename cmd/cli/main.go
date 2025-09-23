@@ -13,6 +13,7 @@ import (
 	"github.com/temirov/git_scripts/internal/audit"
 	"github.com/temirov/git_scripts/internal/branches"
 	"github.com/temirov/git_scripts/internal/migrate"
+	"github.com/temirov/git_scripts/internal/packages"
 	"github.com/temirov/git_scripts/internal/utils"
 )
 
@@ -46,7 +47,8 @@ const (
 
 // ApplicationConfiguration describes the persisted configuration for the CLI entrypoint.
 type ApplicationConfiguration struct {
-	LogLevel string `mapstructure:"log_level"`
+	LogLevel string                 `mapstructure:"log_level"`
+	Packages packages.Configuration `mapstructure:"packages"`
 }
 
 // CLIApplication wires the Cobra root command, configuration loader, and structured logger.
@@ -130,6 +132,19 @@ func newCLIApplication() *CLIApplication {
 		cobraCommand.AddCommand(branchCommand)
 	}
 
+	packagesBuilder := packages.CommandBuilder{
+		LoggerProvider: func() *zap.Logger {
+			return cliApplication.logger
+		},
+		ConfigurationProvider: func() packages.Configuration {
+			return cliApplication.configuration.Packages
+		},
+	}
+	packagesCommand, packagesBuildError := packagesBuilder.Build()
+	if packagesBuildError == nil {
+		cobraCommand.AddCommand(packagesCommand)
+	}
+
 	cliApplication.rootCommand = cobraCommand
 
 	return cliApplication
@@ -147,6 +162,9 @@ func (application *CLIApplication) Execute() error {
 func (application *CLIApplication) initializeConfiguration(command *cobra.Command) error {
 	defaultValues := map[string]any{
 		logLevelConfigKeyConstant: string(utils.LogLevelInfo),
+	}
+	for configurationKey, configurationValue := range packages.DefaultConfigurationValues() {
+		defaultValues[configurationKey] = configurationValue
 	}
 
 	loadedConfiguration, loadError := application.configurationLoader.LoadConfiguration(application.configurationFilePath, defaultValues, &application.configuration)
