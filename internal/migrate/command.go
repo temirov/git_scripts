@@ -149,6 +149,9 @@ func (builder *CommandBuilder) runMigrate(command *cobra.Command, arguments []st
 
 		remoteURL, remoteError := repositoryManager.GetRemoteURL(command.Context(), normalizedRepositoryPath, defaultRemoteNameConstant)
 		if remoteError != nil {
+			if errors.Is(remoteError, context.Canceled) || errors.Is(remoteError, context.DeadlineExceeded) {
+				return remoteError
+			}
 			failure := fmt.Errorf(repositoryResolutionErrorTemplateConstant, remoteError)
 			builder.logMigrationFailure(logger, normalizedRepositoryPath, failure)
 			migrationErrors = append(migrationErrors, failure)
