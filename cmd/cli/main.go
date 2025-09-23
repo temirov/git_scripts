@@ -11,6 +11,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/temirov/git_scripts/internal/audit"
+	"github.com/temirov/git_scripts/internal/branches"
 	"github.com/temirov/git_scripts/internal/utils"
 )
 
@@ -106,6 +107,16 @@ func newCLIApplication() *CLIApplication {
 	auditCommand, auditBuildError := auditBuilder.Build()
 	if auditBuildError == nil {
 		cobraCommand.AddCommand(auditCommand)
+	}
+
+	branchCleanupBuilder := branches.CommandBuilder{
+		LoggerProvider: func() *zap.Logger {
+			return cliApplication.logger
+		},
+	}
+	branchCleanupCommand, branchCleanupBuildError := branchCleanupBuilder.Build()
+	if branchCleanupBuildError == nil {
+		cobraCommand.AddCommand(branchCleanupCommand)
 	}
 
 	cliApplication.rootCommand = cobraCommand
