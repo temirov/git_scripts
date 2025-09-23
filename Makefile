@@ -1,6 +1,7 @@
 GO_SOURCES := $(shell find . -name '*.go' -not -path "./vendor/*")
+UNIT_PACKAGES := $(shell go list ./... | grep -v '/tests$$')
 
-.PHONY: format check-format lint test ci
+.PHONY: format check-format lint test test-unit test-integration build ci
 
 format:
 	gofmt -w $(GO_SOURCES)
@@ -16,7 +17,16 @@ check-format:
 lint:
 	go vet ./...
 
-test:
-	go test ./...
+test-unit:
+	go test $(UNIT_PACKAGES)
+
+test-integration:
+	go test ./tests
+
+test: test-unit test-integration
+
+build:
+	mkdir -p bin
+	go build -o bin/git-scripts .
 
 ci: check-format lint test

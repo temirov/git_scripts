@@ -3,6 +3,7 @@ package tests
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -24,6 +25,8 @@ const (
 	integrationWorkflowFileNameConstant      = "ci.yml"
 	integrationWorkflowInitialContent        = "on:\n  push:\n    branches:\n      - main\n"
 	integrationWorkflowCommitMessageConstant = "CI: switch workflow branch filters to master"
+	migrationDefaultCaseNameConstant         = "main_to_master"
+	migrationSubtestNameTemplateConstant     = "%d_%s"
 )
 
 type recordingGitHubOperations struct {
@@ -72,89 +75,99 @@ func (operations *recordingGitHubOperations) CheckBranchProtection(_ context.Con
 }
 
 func TestMigrationIntegration(testInstance *testing.T) {
-	repositoryDirectory := testInstance.TempDir()
-
-	runMigrationGitCommand(testInstance, repositoryDirectory, "init")
-	runMigrationGitCommand(testInstance, repositoryDirectory, "config", "user.name", "Integration User")
-	runMigrationGitCommand(testInstance, repositoryDirectory, "config", "user.email", "integration@example.com")
-	runMigrationGitCommand(testInstance, repositoryDirectory, "checkout", "-b", "main")
-
-	readmePath := filepath.Join(repositoryDirectory, "README.md")
-	require.NoError(testInstance, os.WriteFile(readmePath, []byte("hello\n"), 0o644))
-	runMigrationGitCommand(testInstance, repositoryDirectory, "add", "README.md")
-	runMigrationGitCommand(testInstance, repositoryDirectory, "commit", "-m", "initial commit")
-
-	runMigrationGitCommand(testInstance, repositoryDirectory, "remote", "add", "origin", integrationRemoteURLConstant)
-	runMigrationGitCommand(testInstance, repositoryDirectory, "branch", "master")
-	runMigrationGitCommand(testInstance, repositoryDirectory, "checkout", "master")
-
-	workflowsDirectory := filepath.Join(repositoryDirectory, integrationWorkflowDirectoryConstant)
-	require.NoError(testInstance, os.MkdirAll(workflowsDirectory, 0o755))
-	workflowPath := filepath.Join(workflowsDirectory, integrationWorkflowFileNameConstant)
-	require.NoError(testInstance, os.WriteFile(workflowPath, []byte(integrationWorkflowInitialContent), 0o644))
-	runMigrationGitCommand(testInstance, repositoryDirectory, "add", integrationWorkflowDirectoryConstant)
-	runMigrationGitCommand(testInstance, repositoryDirectory, "commit", "-m", "add workflow")
-
-	logger := zap.NewNop()
-	commandRunner := execshell.NewOSCommandRunner()
-	executor, creationError := execshell.NewShellExecutor(logger, commandRunner)
-	require.NoError(testInstance, creationError)
-	repositoryManager, managerError := gitrepo.NewRepositoryManager(executor)
-	require.NoError(testInstance, managerError)
-
-	githubOperations := &recordingGitHubOperations{
-		pagesStatus: githubcli.PagesStatus{
-			Enabled:      true,
-			BuildType:    githubcli.PagesBuildTypeLegacy,
-			SourceBranch: "main",
-			SourcePath:   "/docs",
-		},
-		pullRequests: []githubcli.PullRequest{{Number: 12}},
+	testCases := []struct {
+		name string
+	}{
+		{name: migrationDefaultCaseNameConstant},
 	}
 
-	service, serviceError := migrate.NewService(migrate.ServiceDependencies{
-		Logger:            logger,
-		RepositoryManager: repositoryManager,
-		GitHubClient:      githubOperations,
-		GitExecutor:       executor,
-	})
-	require.NoError(testInstance, serviceError)
+	for testCaseIndex, testCase := range testCases {
+		testInstance.Run(fmt.Sprintf(migrationSubtestNameTemplateConstant, testCaseIndex, testCase.name), func(subtest *testing.T) {
+			repositoryDirectory := subtest.TempDir()
 
-	options := migrate.MigrationOptions{
-		RepositoryPath:       repositoryDirectory,
-		RepositoryRemoteName: "origin",
-		RepositoryIdentifier: integrationRepositoryIdentifierConstant,
-		WorkflowsDirectory:   integrationWorkflowDirectoryConstant,
-		SourceBranch:         migrate.BranchMain,
-		TargetBranch:         migrate.BranchMaster,
-		PushUpdates:          false,
+			runMigrationGitCommand(subtest, repositoryDirectory, "init")
+			runMigrationGitCommand(subtest, repositoryDirectory, "config", "user.name", "Integration User")
+			runMigrationGitCommand(subtest, repositoryDirectory, "config", "user.email", "integration@example.com")
+			runMigrationGitCommand(subtest, repositoryDirectory, "checkout", "-b", "main")
+
+			readmePath := filepath.Join(repositoryDirectory, "README.md")
+			require.NoError(subtest, os.WriteFile(readmePath, []byte("hello\n"), 0o644))
+			runMigrationGitCommand(subtest, repositoryDirectory, "add", "README.md")
+			runMigrationGitCommand(subtest, repositoryDirectory, "commit", "-m", "initial commit")
+
+			runMigrationGitCommand(subtest, repositoryDirectory, "remote", "add", "origin", integrationRemoteURLConstant)
+			runMigrationGitCommand(subtest, repositoryDirectory, "branch", "master")
+			runMigrationGitCommand(subtest, repositoryDirectory, "checkout", "master")
+
+			workflowsDirectory := filepath.Join(repositoryDirectory, integrationWorkflowDirectoryConstant)
+			require.NoError(subtest, os.MkdirAll(workflowsDirectory, 0o755))
+			workflowPath := filepath.Join(workflowsDirectory, integrationWorkflowFileNameConstant)
+			require.NoError(subtest, os.WriteFile(workflowPath, []byte(integrationWorkflowInitialContent), 0o644))
+			runMigrationGitCommand(subtest, repositoryDirectory, "add", integrationWorkflowDirectoryConstant)
+			runMigrationGitCommand(subtest, repositoryDirectory, "commit", "-m", "add workflow")
+
+			logger := zap.NewNop()
+			commandRunner := execshell.NewOSCommandRunner()
+			executor, creationError := execshell.NewShellExecutor(logger, commandRunner)
+			require.NoError(subtest, creationError)
+			repositoryManager, managerError := gitrepo.NewRepositoryManager(executor)
+			require.NoError(subtest, managerError)
+
+			githubOperations := &recordingGitHubOperations{
+				pagesStatus: githubcli.PagesStatus{
+					Enabled:      true,
+					BuildType:    githubcli.PagesBuildTypeLegacy,
+					SourceBranch: "main",
+					SourcePath:   "/docs",
+				},
+				pullRequests: []githubcli.PullRequest{{Number: 12}},
+			}
+
+			service, serviceError := migrate.NewService(migrate.ServiceDependencies{
+				Logger:            logger,
+				RepositoryManager: repositoryManager,
+				GitHubClient:      githubOperations,
+				GitExecutor:       executor,
+			})
+			require.NoError(subtest, serviceError)
+
+			options := migrate.MigrationOptions{
+				RepositoryPath:       repositoryDirectory,
+				RepositoryRemoteName: "origin",
+				RepositoryIdentifier: integrationRepositoryIdentifierConstant,
+				WorkflowsDirectory:   integrationWorkflowDirectoryConstant,
+				SourceBranch:         migrate.BranchMain,
+				TargetBranch:         migrate.BranchMaster,
+				PushUpdates:          false,
+			}
+
+			result, migrationError := service.Execute(context.Background(), options)
+			require.NoError(subtest, migrationError)
+
+			require.Len(subtest, result.WorkflowOutcome.UpdatedFiles, 1)
+			require.Contains(subtest, result.WorkflowOutcome.UpdatedFiles[0], integrationWorkflowFileNameConstant)
+			require.True(subtest, result.PagesConfigurationUpdated)
+			require.True(subtest, result.DefaultBranchUpdated)
+			require.ElementsMatch(subtest, []int{12}, result.RetargetedPullRequests)
+			require.False(subtest, result.SafetyStatus.SafeToDelete)
+			require.Contains(subtest, result.SafetyStatus.BlockingReasons, "open pull requests still target source branch")
+
+			contentBytes, readError := os.ReadFile(workflowPath)
+			require.NoError(subtest, readError)
+			require.Contains(subtest, string(contentBytes), "- master")
+
+			logOutput := runMigrationGitCommand(subtest, repositoryDirectory, "log", "-1", "--pretty=%s")
+			require.Equal(subtest, integrationWorkflowCommitMessageConstant, logOutput)
+
+			statusOutput := runMigrationGitCommand(subtest, repositoryDirectory, "status", "--porcelain")
+			require.Equal(subtest, "", statusOutput)
+
+			require.NotNil(subtest, githubOperations.updatedPagesConfig)
+			require.Equal(subtest, string(migrate.BranchMaster), githubOperations.updatedPagesConfig.SourceBranch)
+			require.Equal(subtest, []int{12}, githubOperations.retargetedPullRequests)
+			require.Equal(subtest, string(migrate.BranchMaster), githubOperations.defaultBranchTarget)
+		})
 	}
-
-	result, migrationError := service.Execute(context.Background(), options)
-	require.NoError(testInstance, migrationError)
-
-	require.Len(testInstance, result.WorkflowOutcome.UpdatedFiles, 1)
-	require.Contains(testInstance, result.WorkflowOutcome.UpdatedFiles[0], integrationWorkflowFileNameConstant)
-	require.True(testInstance, result.PagesConfigurationUpdated)
-	require.True(testInstance, result.DefaultBranchUpdated)
-	require.ElementsMatch(testInstance, []int{12}, result.RetargetedPullRequests)
-	require.False(testInstance, result.SafetyStatus.SafeToDelete)
-	require.Contains(testInstance, result.SafetyStatus.BlockingReasons, "open pull requests still target source branch")
-
-	contentBytes, readError := os.ReadFile(workflowPath)
-	require.NoError(testInstance, readError)
-	require.Contains(testInstance, string(contentBytes), "- master")
-
-	logOutput := runMigrationGitCommand(testInstance, repositoryDirectory, "log", "-1", "--pretty=%s")
-	require.Equal(testInstance, integrationWorkflowCommitMessageConstant, logOutput)
-
-	statusOutput := runMigrationGitCommand(testInstance, repositoryDirectory, "status", "--porcelain")
-	require.Equal(testInstance, "", statusOutput)
-
-	require.NotNil(testInstance, githubOperations.updatedPagesConfig)
-	require.Equal(testInstance, string(migrate.BranchMaster), githubOperations.updatedPagesConfig.SourceBranch)
-	require.Equal(testInstance, []int{12}, githubOperations.retargetedPullRequests)
-	require.Equal(testInstance, string(migrate.BranchMaster), githubOperations.defaultBranchTarget)
 }
 
 func runMigrationGitCommand(testInstance *testing.T, repositoryPath string, arguments ...string) string {

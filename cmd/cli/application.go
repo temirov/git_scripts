@@ -1,10 +1,9 @@
-package main
+package cli
 
 import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"syscall"
 
 	"github.com/spf13/cobra"
@@ -42,7 +41,6 @@ const (
 	logFieldArgumentsConstant               = "arguments"
 	loggerNotInitializedMessageConstant     = "logger not initialized"
 	defaultConfigurationSearchPathConstant  = "."
-	errorOutputTemplateConstant             = "%v\n"
 )
 
 // ApplicationConfiguration describes the persisted configuration for the CLI entrypoint.
@@ -51,8 +49,8 @@ type ApplicationConfiguration struct {
 	Packages packages.Configuration `mapstructure:"packages"`
 }
 
-// CLIApplication wires the Cobra root command, configuration loader, and structured logger.
-type CLIApplication struct {
+// Application wires the Cobra root command, configuration loader, and structured logger.
+type Application struct {
 	rootCommand           *cobra.Command
 	configurationLoader   *utils.ConfigurationLoader
 	loggerFactory         *utils.LoggerFactory
@@ -63,15 +61,8 @@ type CLIApplication struct {
 	logLevelFlagValue     string
 }
 
-func main() {
-	cliApplication := newCLIApplication()
-	if executionError := cliApplication.Execute(); executionError != nil {
-		fmt.Fprintf(os.Stderr, errorOutputTemplateConstant, executionError)
-		os.Exit(1)
-	}
-}
-
-func newCLIApplication() *CLIApplication {
+// NewApplication assembles a fully wired CLI application instance.
+func NewApplication() *Application {
 	configurationLoader := utils.NewConfigurationLoader(
 		configurationNameConstant,
 		configurationTypeConstant,
@@ -79,7 +70,7 @@ func newCLIApplication() *CLIApplication {
 		[]string{defaultConfigurationSearchPathConstant},
 	)
 
-	cliApplication := &CLIApplication{
+	application := &Application{
 		configurationLoader: configurationLoader,
 		loggerFactory:       utils.NewLoggerFactory(),
 	}
@@ -91,20 +82,20 @@ func newCLIApplication() *CLIApplication {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		PersistentPreRunE: func(command *cobra.Command, arguments []string) error {
-			return cliApplication.initializeConfiguration(command)
+			return application.initializeConfiguration(command)
 		},
 		RunE: func(command *cobra.Command, arguments []string) error {
-			return cliApplication.runRootCommand(command, arguments)
+			return application.runRootCommand(command, arguments)
 		},
 	}
 
 	cobraCommand.SetContext(context.Background())
-	cobraCommand.PersistentFlags().StringVar(&cliApplication.configurationFilePath, configFileFlagNameConstant, "", configFileFlagUsageConstant)
-	cobraCommand.PersistentFlags().StringVar(&cliApplication.logLevelFlagValue, logLevelFlagNameConstant, "", logLevelFlagUsageConstant)
+	cobraCommand.PersistentFlags().StringVar(&application.configurationFilePath, configFileFlagNameConstant, "", configFileFlagUsageConstant)
+	cobraCommand.PersistentFlags().StringVar(&application.logLevelFlagValue, logLevelFlagNameConstant, "", logLevelFlagUsageConstant)
 
 	auditBuilder := audit.CommandBuilder{
 		LoggerProvider: func() *zap.Logger {
-			return cliApplication.logger
+			return application.logger
 		},
 	}
 	auditCommand, auditBuildError := auditBuilder.Build()
@@ -114,7 +105,7 @@ func newCLIApplication() *CLIApplication {
 
 	branchCleanupBuilder := branches.CommandBuilder{
 		LoggerProvider: func() *zap.Logger {
-			return cliApplication.logger
+			return application.logger
 		},
 	}
 	branchCleanupCommand, branchCleanupBuildError := branchCleanupBuilder.Build()
@@ -124,7 +115,7 @@ func newCLIApplication() *CLIApplication {
 
 	branchMigrationBuilder := migrate.CommandBuilder{
 		LoggerProvider: func() *zap.Logger {
-			return cliApplication.logger
+			return application.logger
 		},
 	}
 	branchCommand, branchBuildError := branchMigrationBuilder.Build()
@@ -134,10 +125,10 @@ func newCLIApplication() *CLIApplication {
 
 	packagesBuilder := packages.CommandBuilder{
 		LoggerProvider: func() *zap.Logger {
-			return cliApplication.logger
+			return application.logger
 		},
 		ConfigurationProvider: func() packages.Configuration {
-			return cliApplication.configuration.Packages
+			return application.configuration.Packages
 		},
 	}
 	packagesCommand, packagesBuildError := packagesBuilder.Build()
@@ -145,13 +136,13 @@ func newCLIApplication() *CLIApplication {
 		cobraCommand.AddCommand(packagesCommand)
 	}
 
-	cliApplication.rootCommand = cobraCommand
+	application.rootCommand = cobraCommand
 
-	return cliApplication
+	return application
 }
 
 // Execute runs the configured Cobra command hierarchy and ensures logger flushing.
-func (application *CLIApplication) Execute() error {
+func (application *Application) Execute() error {
 	executionError := application.rootCommand.Execute()
 	if syncError := application.flushLogger(); syncError != nil {
 		return fmt.Errorf(loggerSyncErrorTemplateConstant, syncError)
@@ -159,7 +150,12 @@ func (application *CLIApplication) Execute() error {
 	return executionError
 }
 
-func (application *CLIApplication) initializeConfiguration(command *cobra.Command) error {
+// Execute builds a fresh application instance and executes the root command hierarchy.
+func Execute() error {
+	return NewApplication().Execute()
+}
+
+func (application *Application) initializeConfiguration(command *cobra.Command) error {
 	defaultValues := map[string]any{
 		logLevelConfigKeyConstant: string(utils.LogLevelInfo),
 	}
@@ -194,7 +190,7 @@ func (application *CLIApplication) initializeConfiguration(command *cobra.Comman
 	return nil
 }
 
-func (application *CLIApplication) runRootCommand(command *cobra.Command, arguments []string) error {
+func (application *Application) runRootCommand(command *cobra.Command, arguments []string) error {
 	if application.logger == nil {
 		return errors.New(loggerNotInitializedMessageConstant)
 	}
@@ -213,7 +209,7 @@ func (application *CLIApplication) runRootCommand(command *cobra.Command, argume
 	return nil
 }
 
-func (application *CLIApplication) flushLogger() error {
+func (application *Application) flushLogger() error {
 	if application.logger == nil {
 		return nil
 	}
