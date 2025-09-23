@@ -12,6 +12,7 @@ import (
 
 	"github.com/temirov/git_scripts/internal/audit"
 	"github.com/temirov/git_scripts/internal/branches"
+	"github.com/temirov/git_scripts/internal/migrate"
 	"github.com/temirov/git_scripts/internal/utils"
 )
 
@@ -117,6 +118,16 @@ func newCLIApplication() *CLIApplication {
 	branchCleanupCommand, branchCleanupBuildError := branchCleanupBuilder.Build()
 	if branchCleanupBuildError == nil {
 		cobraCommand.AddCommand(branchCleanupCommand)
+	}
+
+	branchMigrationBuilder := migrate.CommandBuilder{
+		LoggerProvider: func() *zap.Logger {
+			return cliApplication.logger
+		},
+	}
+	branchCommand, branchBuildError := branchMigrationBuilder.Build()
+	if branchBuildError == nil {
+		cobraCommand.AddCommand(branchCommand)
 	}
 
 	cliApplication.rootCommand = cobraCommand

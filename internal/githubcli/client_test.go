@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -13,26 +14,42 @@ import (
 )
 
 const (
-	testRepositoryIdentifierConstant                = "owner/example"
-	testBaseBranchConstant                          = "main"
-	testPullRequestTitleConstant                    = "Example"
-	testPullRequestHeadConstant                     = "feature/example"
-	testPagesSourceBranchConstant                   = "gh-pages"
-	testPagesSourcePathConstant                     = "/docs"
-	testResolveSuccessCaseNameConstant              = "resolve_success"
-	testResolveDecodeFailureCaseNameConstant        = "resolve_decode_failure"
-	testResolveCommandFailureCaseNameConstant       = "resolve_command_failure"
-	testResolveInputFailureCaseNameConstant         = "resolve_input_failure"
-	testListSuccessCaseNameConstant                 = "list_success"
-	testListDecodeFailureCaseNameConstant           = "list_decode_failure"
-	testListCommandFailureCaseNameConstant          = "list_command_failure"
-	testListRepositoryValidationCaseNameConstant    = "list_repository_validation"
-	testListBaseValidationCaseNameConstant          = "list_base_validation"
-	testListStateValidationCaseNameConstant         = "list_state_validation"
-	testPagesSuccessCaseNameConstant                = "pages_success"
-	testPagesCommandFailureCaseNameConstant         = "pages_command_failure"
-	testPagesRepositoryValidationCaseNameConstant   = "pages_repository_validation"
-	testPagesSourceBranchValidationCaseNameConstant = "pages_source_branch_validation"
+	testRepositoryIdentifierConstant                    = "owner/example"
+	testBaseBranchConstant                              = "main"
+	testPullRequestTitleConstant                        = "Example"
+	testPullRequestHeadConstant                         = "feature/example"
+	testPagesSourceBranchConstant                       = "gh-pages"
+	testPagesSourcePathConstant                         = "/docs"
+	testTargetBranchConstant                            = "master"
+	testResolveSuccessCaseNameConstant                  = "resolve_success"
+	testResolveDecodeFailureCaseNameConstant            = "resolve_decode_failure"
+	testResolveCommandFailureCaseNameConstant           = "resolve_command_failure"
+	testResolveInputFailureCaseNameConstant             = "resolve_input_failure"
+	testListSuccessCaseNameConstant                     = "list_success"
+	testListDecodeFailureCaseNameConstant               = "list_decode_failure"
+	testListCommandFailureCaseNameConstant              = "list_command_failure"
+	testListRepositoryValidationCaseNameConstant        = "list_repository_validation"
+	testListBaseValidationCaseNameConstant              = "list_base_validation"
+	testListStateValidationCaseNameConstant             = "list_state_validation"
+	testPagesSuccessCaseNameConstant                    = "pages_success"
+	testPagesCommandFailureCaseNameConstant             = "pages_command_failure"
+	testPagesRepositoryValidationCaseNameConstant       = "pages_repository_validation"
+	testPagesSourceBranchValidationCaseNameConstant     = "pages_source_branch_validation"
+	testGetPagesSuccessCaseNameConstant                 = "get_pages_success"
+	testGetPagesNullCaseNameConstant                    = "get_pages_null"
+	testGetPagesDecodeFailureCaseNameConstant           = "get_pages_decode_failure"
+	testGetPagesCommandFailureCaseNameConstant          = "get_pages_command_failure"
+	testGetPagesValidationCaseNameConstant              = "get_pages_validation"
+	testDefaultBranchSuccessCaseNameConstant            = "default_branch_success"
+	testDefaultBranchCommandFailureCaseNameConstant     = "default_branch_command_failure"
+	testDefaultBranchValidationCaseNameConstant         = "default_branch_validation"
+	testUpdatePullRequestSuccessCaseNameConstant        = "update_pull_request_success"
+	testUpdatePullRequestCommandFailureCaseNameConstant = "update_pull_request_command_failure"
+	testUpdatePullRequestValidationCaseNameConstant     = "update_pull_request_validation"
+	testBranchProtectionProtectedCaseNameConstant       = "branch_protection_protected"
+	testBranchProtectionUnprotectedCaseNameConstant     = "branch_protection_unprotected"
+	testBranchProtectionCommandFailureCaseNameConstant  = "branch_protection_command_failure"
+	testBranchProtectionValidationCaseNameConstant      = "branch_protection_validation"
 )
 
 type stubGitHubExecutor struct {
@@ -285,6 +302,279 @@ func TestUpdatePagesConfig(testInstance *testing.T) {
 				require.NoError(testInstance, executionError)
 				require.NotNil(testInstance, testCase.verify)
 				testCase.verify(testInstance, testCase.executor)
+			}
+		})
+	}
+}
+
+func TestGetPagesConfig(testInstance *testing.T) {
+	testCases := []struct {
+		name        string
+		repository  string
+		executor    *stubGitHubExecutor
+		expectError bool
+		errorType   any
+		verify      func(testInstance *testing.T, status githubcli.PagesStatus, executor *stubGitHubExecutor)
+	}{
+		{
+			name:       testGetPagesSuccessCaseNameConstant,
+			repository: testRepositoryIdentifierConstant,
+			executor: &stubGitHubExecutor{executeFunc: func(context.Context, execshell.CommandDetails) (execshell.ExecutionResult, error) {
+				return execshell.ExecutionResult{StandardOutput: `{"build_type":"legacy","source":{"branch":"main","path":"/"}}`}, nil
+			}},
+			verify: func(testInstance *testing.T, status githubcli.PagesStatus, executor *stubGitHubExecutor) {
+				require.True(testInstance, status.Enabled)
+				require.Equal(testInstance, githubcli.PagesBuildTypeLegacy, status.BuildType)
+				require.Equal(testInstance, "main", status.SourceBranch)
+				require.Equal(testInstance, "/", status.SourcePath)
+				require.Len(testInstance, executor.recordedDetails, 1)
+			},
+		},
+		{
+			name:       testGetPagesNullCaseNameConstant,
+			repository: testRepositoryIdentifierConstant,
+			executor: &stubGitHubExecutor{executeFunc: func(context.Context, execshell.CommandDetails) (execshell.ExecutionResult, error) {
+				return execshell.ExecutionResult{StandardOutput: "null"}, nil
+			}},
+			verify: func(testInstance *testing.T, status githubcli.PagesStatus, executor *stubGitHubExecutor) {
+				require.False(testInstance, status.Enabled)
+				require.Len(testInstance, executor.recordedDetails, 1)
+			},
+		},
+		{
+			name:       testGetPagesDecodeFailureCaseNameConstant,
+			repository: testRepositoryIdentifierConstant,
+			executor: &stubGitHubExecutor{executeFunc: func(context.Context, execshell.CommandDetails) (execshell.ExecutionResult, error) {
+				return execshell.ExecutionResult{StandardOutput: "{"}, nil
+			}},
+			expectError: true,
+			errorType:   githubcli.ResponseDecodingError{},
+		},
+		{
+			name:       testGetPagesCommandFailureCaseNameConstant,
+			repository: testRepositoryIdentifierConstant,
+			executor: &stubGitHubExecutor{executeFunc: func(context.Context, execshell.CommandDetails) (execshell.ExecutionResult, error) {
+				return execshell.ExecutionResult{}, execshell.CommandExecutionError{Command: execshell.ShellCommand{Name: execshell.CommandGitHub}, Cause: errors.New("failed")}
+			}},
+			expectError: true,
+			errorType:   githubcli.OperationError{},
+		},
+		{
+			name:        testGetPagesValidationCaseNameConstant,
+			repository:  " ",
+			executor:    &stubGitHubExecutor{},
+			expectError: true,
+			errorType:   githubcli.InvalidInputError{},
+		},
+	}
+
+	for _, testCase := range testCases {
+		testInstance.Run(testCase.name, func(testInstance *testing.T) {
+			client, creationError := githubcli.NewClient(testCase.executor)
+			require.NoError(testInstance, creationError)
+
+			status, getError := client.GetPagesConfig(context.Background(), testCase.repository)
+			if testCase.expectError {
+				require.Error(testInstance, getError)
+				require.IsType(testInstance, testCase.errorType, getError)
+			} else {
+				require.NoError(testInstance, getError)
+				require.NotNil(testInstance, testCase.verify)
+				testCase.verify(testInstance, status, testCase.executor)
+			}
+		})
+	}
+}
+
+func TestSetDefaultBranch(testInstance *testing.T) {
+	testCases := []struct {
+		name        string
+		repository  string
+		branchName  string
+		executor    *stubGitHubExecutor
+		expectError bool
+		errorType   any
+		verify      func(testInstance *testing.T, executor *stubGitHubExecutor)
+	}{
+		{
+			name:       testDefaultBranchSuccessCaseNameConstant,
+			repository: testRepositoryIdentifierConstant,
+			branchName: testTargetBranchConstant,
+			executor: &stubGitHubExecutor{executeFunc: func(context.Context, execshell.CommandDetails) (execshell.ExecutionResult, error) {
+				return execshell.ExecutionResult{}, nil
+			}},
+			verify: func(testInstance *testing.T, executor *stubGitHubExecutor) {
+				require.Len(testInstance, executor.recordedDetails, 1)
+				recorded := executor.recordedDetails[0]
+				require.Contains(testInstance, recorded.Arguments, "PATCH")
+				require.Contains(testInstance, recorded.Arguments, fmt.Sprintf("default_branch=%s", testTargetBranchConstant))
+			},
+		},
+		{
+			name:       testDefaultBranchCommandFailureCaseNameConstant,
+			repository: testRepositoryIdentifierConstant,
+			branchName: testTargetBranchConstant,
+			executor: &stubGitHubExecutor{executeFunc: func(context.Context, execshell.CommandDetails) (execshell.ExecutionResult, error) {
+				return execshell.ExecutionResult{}, execshell.CommandExecutionError{Command: execshell.ShellCommand{Name: execshell.CommandGitHub}, Cause: errors.New("failed")}
+			}},
+			expectError: true,
+			errorType:   githubcli.OperationError{},
+		},
+		{
+			name:        testDefaultBranchValidationCaseNameConstant,
+			repository:  "",
+			branchName:  " ",
+			executor:    &stubGitHubExecutor{},
+			expectError: true,
+			errorType:   githubcli.InvalidInputError{},
+		},
+	}
+
+	for _, testCase := range testCases {
+		testInstance.Run(testCase.name, func(testInstance *testing.T) {
+			client, creationError := githubcli.NewClient(testCase.executor)
+			require.NoError(testInstance, creationError)
+
+			executionError := client.SetDefaultBranch(context.Background(), testCase.repository, testCase.branchName)
+			if testCase.expectError {
+				require.Error(testInstance, executionError)
+				require.IsType(testInstance, testCase.errorType, executionError)
+			} else {
+				require.NoError(testInstance, executionError)
+				require.NotNil(testInstance, testCase.verify)
+				testCase.verify(testInstance, testCase.executor)
+			}
+		})
+	}
+}
+
+func TestUpdatePullRequestBase(testInstance *testing.T) {
+	testCases := []struct {
+		name        string
+		repository  string
+		number      int
+		branchName  string
+		executor    *stubGitHubExecutor
+		expectError bool
+		errorType   any
+		verify      func(testInstance *testing.T, executor *stubGitHubExecutor)
+	}{
+		{
+			name:       testUpdatePullRequestSuccessCaseNameConstant,
+			repository: testRepositoryIdentifierConstant,
+			number:     42,
+			branchName: testTargetBranchConstant,
+			executor: &stubGitHubExecutor{executeFunc: func(context.Context, execshell.CommandDetails) (execshell.ExecutionResult, error) {
+				return execshell.ExecutionResult{}, nil
+			}},
+			verify: func(testInstance *testing.T, executor *stubGitHubExecutor) {
+				require.Len(testInstance, executor.recordedDetails, 1)
+				recorded := executor.recordedDetails[0]
+				require.Contains(testInstance, recorded.Arguments, "edit")
+				require.Contains(testInstance, recorded.Arguments, strconv.Itoa(42))
+				require.Contains(testInstance, recorded.Arguments, testTargetBranchConstant)
+			},
+		},
+		{
+			name:       testUpdatePullRequestCommandFailureCaseNameConstant,
+			repository: testRepositoryIdentifierConstant,
+			number:     7,
+			branchName: testTargetBranchConstant,
+			executor: &stubGitHubExecutor{executeFunc: func(context.Context, execshell.CommandDetails) (execshell.ExecutionResult, error) {
+				return execshell.ExecutionResult{}, execshell.CommandExecutionError{Command: execshell.ShellCommand{Name: execshell.CommandGitHub}, Cause: errors.New("failed")}
+			}},
+			expectError: true,
+			errorType:   githubcli.OperationError{},
+		},
+		{
+			name:        testUpdatePullRequestValidationCaseNameConstant,
+			repository:  "",
+			number:      0,
+			branchName:  " ",
+			executor:    &stubGitHubExecutor{},
+			expectError: true,
+			errorType:   githubcli.InvalidInputError{},
+		},
+	}
+
+	for _, testCase := range testCases {
+		testInstance.Run(testCase.name, func(testInstance *testing.T) {
+			client, creationError := githubcli.NewClient(testCase.executor)
+			require.NoError(testInstance, creationError)
+
+			executionError := client.UpdatePullRequestBase(context.Background(), testCase.repository, testCase.number, testCase.branchName)
+			if testCase.expectError {
+				require.Error(testInstance, executionError)
+				require.IsType(testInstance, testCase.errorType, executionError)
+			} else {
+				require.NoError(testInstance, executionError)
+				require.NotNil(testInstance, testCase.verify)
+				testCase.verify(testInstance, testCase.executor)
+			}
+		})
+	}
+}
+
+func TestCheckBranchProtection(testInstance *testing.T) {
+	testCases := []struct {
+		name              string
+		repository        string
+		branchName        string
+		executor          *stubGitHubExecutor
+		expectedProtected bool
+		expectError       bool
+		errorType         any
+	}{
+		{
+			name:       testBranchProtectionProtectedCaseNameConstant,
+			repository: testRepositoryIdentifierConstant,
+			branchName: testBaseBranchConstant,
+			executor: &stubGitHubExecutor{executeFunc: func(context.Context, execshell.CommandDetails) (execshell.ExecutionResult, error) {
+				return execshell.ExecutionResult{}, nil
+			}},
+			expectedProtected: true,
+		},
+		{
+			name:       testBranchProtectionUnprotectedCaseNameConstant,
+			repository: testRepositoryIdentifierConstant,
+			branchName: testBaseBranchConstant,
+			executor: &stubGitHubExecutor{executeFunc: func(context.Context, execshell.CommandDetails) (execshell.ExecutionResult, error) {
+				return execshell.ExecutionResult{}, execshell.CommandFailedError{Command: execshell.ShellCommand{Name: execshell.CommandGitHub}, Result: execshell.ExecutionResult{ExitCode: 1}}
+			}},
+			expectedProtected: false,
+		},
+		{
+			name:       testBranchProtectionCommandFailureCaseNameConstant,
+			repository: testRepositoryIdentifierConstant,
+			branchName: testBaseBranchConstant,
+			executor: &stubGitHubExecutor{executeFunc: func(context.Context, execshell.CommandDetails) (execshell.ExecutionResult, error) {
+				return execshell.ExecutionResult{}, execshell.CommandExecutionError{Command: execshell.ShellCommand{Name: execshell.CommandGitHub}, Cause: errors.New("failed")}
+			}},
+			expectError: true,
+			errorType:   githubcli.OperationError{},
+		},
+		{
+			name:        testBranchProtectionValidationCaseNameConstant,
+			repository:  "",
+			branchName:  " ",
+			executor:    &stubGitHubExecutor{},
+			expectError: true,
+			errorType:   githubcli.InvalidInputError{},
+		},
+	}
+
+	for _, testCase := range testCases {
+		testInstance.Run(testCase.name, func(testInstance *testing.T) {
+			client, creationError := githubcli.NewClient(testCase.executor)
+			require.NoError(testInstance, creationError)
+
+			protected, protectionError := client.CheckBranchProtection(context.Background(), testCase.repository, testCase.branchName)
+			if testCase.expectError {
+				require.Error(testInstance, protectionError)
+				require.IsType(testInstance, testCase.errorType, protectionError)
+			} else {
+				require.NoError(testInstance, protectionError)
+				require.Equal(testInstance, testCase.expectedProtected, protected)
 			}
 		})
 	}
