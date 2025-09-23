@@ -206,6 +206,10 @@ func (application *Application) runRootCommand(command *cobra.Command, arguments
 		zap.Strings(logFieldArgumentsConstant, arguments),
 	)
 
+	if len(arguments) == 0 {
+		return command.Help()
+	}
+
 	return nil
 }
 
