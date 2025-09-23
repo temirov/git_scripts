@@ -1,16 +1,17 @@
 package main
 
 import (
-	"context"
-	"errors"
-	"fmt"
-	"os"
-	"syscall"
+        "context"
+        "errors"
+        "fmt"
+        "os"
+        "syscall"
 
-	"github.com/spf13/cobra"
-	"go.uber.org/zap"
+        "github.com/spf13/cobra"
+        "go.uber.org/zap"
 
-	"github.com/temirov/git_scripts/internal/utils"
+        "github.com/temirov/git_scripts/internal/audit"
+        "github.com/temirov/git_scripts/internal/utils"
 )
 
 const (
@@ -97,7 +98,17 @@ func newCLIApplication() *CLIApplication {
 	cobraCommand.PersistentFlags().StringVar(&cliApplication.configurationFilePath, configFileFlagNameConstant, "", configFileFlagUsageConstant)
 	cobraCommand.PersistentFlags().StringVar(&cliApplication.logLevelFlagValue, logLevelFlagNameConstant, "", logLevelFlagUsageConstant)
 
-	cliApplication.rootCommand = cobraCommand
+        auditBuilder := audit.CommandBuilder{
+                LoggerProvider: func() *zap.Logger {
+                        return cliApplication.logger
+                },
+        }
+        auditCommand, auditBuildError := auditBuilder.Build()
+        if auditBuildError == nil {
+                cobraCommand.AddCommand(auditCommand)
+        }
+
+        cliApplication.rootCommand = cobraCommand
 
 	return cliApplication
 }
