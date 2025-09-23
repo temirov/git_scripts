@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"syscall"
 
 	"github.com/spf13/cobra"
@@ -124,6 +125,9 @@ func NewApplication() *Application {
 		LoggerProvider: func() *zap.Logger {
 			return application.logger
 		},
+	}
+	if workingDirectory, workingDirectoryError := os.Getwd(); workingDirectoryError == nil {
+		branchMigrationBuilder.WorkingDirectory = workingDirectory
 	}
 	branchCommand, branchBuildError := branchMigrationBuilder.Build()
 	if branchBuildError == nil {

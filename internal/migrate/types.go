@@ -17,6 +17,11 @@ type CommandExecutor interface {
 	ExecuteGitHubCLI(executionContext context.Context, details execshell.CommandDetails) (execshell.ExecutionResult, error)
 }
 
+// MigrationExecutor exposes the migration workflow execution contract.
+type MigrationExecutor interface {
+	Execute(executionContext context.Context, options MigrationOptions) (MigrationResult, error)
+}
+
 // GitHubOperations exposes the GitHub workflows required for migration.
 type GitHubOperations interface {
 	GetPagesConfig(executionContext context.Context, repository string) (githubcli.PagesStatus, error)
