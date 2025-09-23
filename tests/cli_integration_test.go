@@ -27,6 +27,9 @@ const (
 	integrationConfigFlagTemplateConstant            = "--config=%s"
 	integrationEnvironmentAssignmentTemplateConstant = "%s=%s"
 	integrationSubtestNameTemplateConstant           = "%d_%s"
+	integrationHelpUsagePrefixConstant               = "Usage:"
+	integrationHelpDescriptionSnippetConstant        = "git_scripts ships reusable helpers that integrate Git, GitHub CLI, and related tooling."
+	integrationHelpCaseNameConstant                  = "help_output"
 )
 
 func TestCLIIntegrationLogLevels(testInstance *testing.T) {
@@ -103,6 +106,45 @@ func TestCLIIntegrationLogLevels(testInstance *testing.T) {
 				require.Contains(testInstance, outputText, integrationDebugMessageConstant)
 			} else {
 				require.NotContains(testInstance, outputText, integrationDebugMessageConstant)
+			}
+		})
+	}
+}
+
+func TestCLIIntegrationDisplaysHelpWhenNoArgumentsProvided(testInstance *testing.T) {
+	testCases := []struct {
+		name             string
+		expectedSnippets []string
+	}{
+		{
+			name: integrationHelpCaseNameConstant,
+			expectedSnippets: []string{
+				integrationHelpUsagePrefixConstant,
+				integrationHelpDescriptionSnippetConstant,
+			},
+		},
+	}
+
+	currentWorkingDirectory, workingDirectoryError := os.Getwd()
+	require.NoError(testInstance, workingDirectoryError)
+	repositoryRootDirectory := filepath.Dir(currentWorkingDirectory)
+
+	for testCaseIndex, testCase := range testCases {
+		testInstance.Run(fmt.Sprintf(integrationSubtestNameTemplateConstant, testCaseIndex, testCase.name), func(testInstance *testing.T) {
+			commandArguments := []string{"run", "."}
+			executionContext, cancelFunction := context.WithTimeout(context.Background(), integrationCommandTimeout)
+			defer cancelFunction()
+
+			command := exec.CommandContext(executionContext, "go", commandArguments...)
+			command.Dir = repositoryRootDirectory
+			command.Env = os.Environ()
+
+			outputBytes, runError := command.CombinedOutput()
+			outputText := string(outputBytes)
+			require.NoError(testInstance, runError, outputText)
+
+			for _, expectedSnippet := range testCase.expectedSnippets {
+				require.Contains(testInstance, outputText, expectedSnippet)
 			}
 		})
 	}
