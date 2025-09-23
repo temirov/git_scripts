@@ -1,9 +1,14 @@
-package audit
+package prompt
 
 import (
 	"bufio"
 	"io"
 	"strings"
+)
+
+const (
+	affirmativeShortResponseConstant = "y"
+	affirmativeLongResponseConstant  = "yes"
 )
 
 // IOConfirmationPrompter reads confirmation responses from an io.Reader.
@@ -32,7 +37,7 @@ func (prompter *IOConfirmationPrompter) Confirm(prompt string) (bool, error) {
 
 	trimmedResponse := strings.TrimSpace(strings.ToLower(response))
 	switch trimmedResponse {
-	case "y", "yes":
+	case affirmativeShortResponseConstant, affirmativeLongResponseConstant:
 		return true, nil
 	default:
 		return false, nil

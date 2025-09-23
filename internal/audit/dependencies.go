@@ -1,45 +1,21 @@
 package audit
 
-import (
-	"context"
-	"io/fs"
-
-	"github.com/temirov/git_scripts/internal/execshell"
-	"github.com/temirov/git_scripts/internal/githubcli"
-)
+import "github.com/temirov/git_scripts/internal/repos/shared"
 
 // RepositoryDiscoverer finds git repositories rooted under the provided paths.
-type RepositoryDiscoverer interface {
-	DiscoverRepositories(roots []string) ([]string, error)
-}
+type RepositoryDiscoverer = shared.RepositoryDiscoverer
 
 // GitExecutor exposes the subset of shell execution used by the audit command.
-type GitExecutor interface {
-	ExecuteGit(executionContext context.Context, details execshell.CommandDetails) (execshell.ExecutionResult, error)
-	ExecuteGitHubCLI(executionContext context.Context, details execshell.CommandDetails) (execshell.ExecutionResult, error)
-}
+type GitExecutor = shared.GitExecutor
 
 // GitRepositoryManager exposes repository-level git operations.
-type GitRepositoryManager interface {
-	CheckCleanWorktree(executionContext context.Context, repositoryPath string) (bool, error)
-	GetCurrentBranch(executionContext context.Context, repositoryPath string) (string, error)
-	GetRemoteURL(executionContext context.Context, repositoryPath string, remoteName string) (string, error)
-	SetRemoteURL(executionContext context.Context, repositoryPath string, remoteName string, remoteURL string) error
-}
+type GitRepositoryManager = shared.GitRepositoryManager
 
 // GitHubMetadataResolver resolves canonical repository metadata via GitHub CLI.
-type GitHubMetadataResolver interface {
-	ResolveRepoMetadata(executionContext context.Context, repository string) (githubcli.RepositoryMetadata, error)
-}
+type GitHubMetadataResolver = shared.GitHubMetadataResolver
 
 // ConfirmationPrompter prompts users for confirmation during mutable operations.
-type ConfirmationPrompter interface {
-	Confirm(prompt string) (bool, error)
-}
+type ConfirmationPrompter = shared.ConfirmationPrompter
 
 // FileSystem provides filesystem operations required by the audit workflows.
-type FileSystem interface {
-	Stat(path string) (fs.FileInfo, error)
-	Rename(oldPath string, newPath string) error
-	Abs(path string) (string, error)
-}
+type FileSystem = shared.FileSystem

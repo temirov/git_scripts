@@ -34,11 +34,18 @@ Environment variables prefixed with `GITSCRIPTS_` override file values. For inst
 
 The binary exposes the same helpers as the historical shell scripts:
 
-* **Repository audit and reconciliation** — scan directories, emit CSV reports, rename folders, and normalize remotes.
+* **Repository audit** — scan directories and emit CSV reports summarizing GitHub metadata.
 
   ```bash
   go run . audit --audit --dry-run ~/code
-  go run . audit --rename --require-clean ~/code
+  ```
+
+* **Repository maintenance** — rename folders, normalize remotes, and convert origin protocols.
+
+  ```bash
+  go run . repos rename-folders --dry-run ~/code
+  go run . repos update-canonical-remote --yes ~/code
+  go run . repos convert-remote-protocol --from https --to ssh --yes ~/code
   ```
 
 * **Pull-request branch cleanup** — delete merged branches locally and on the remote using metadata from `gh`.

@@ -1,10 +1,12 @@
-package audit
+package discovery
 
 import (
 	"io/fs"
 	"path/filepath"
 	"sort"
 )
+
+const gitMetadataDirectoryNameConstant = ".git"
 
 // FilesystemRepositoryDiscoverer locates git repositories on disk.
 type FilesystemRepositoryDiscoverer struct{}
@@ -25,7 +27,7 @@ func (discoverer *FilesystemRepositoryDiscoverer) DiscoverRepositories(roots []s
 				return nil
 			}
 
-			if directoryEntry.Name() != ".git" {
+			if directoryEntry.Name() != gitMetadataDirectoryNameConstant {
 				return nil
 			}
 
