@@ -98,6 +98,8 @@ type Service struct {
 	safetyEvaluator   SafetyEvaluator
 }
 
+var _ MigrationExecutor = (*Service)(nil)
+
 var (
 	errRepositoryManagerMissing = errors.New(repositoryManagerMissingMessageConstant)
 	errGitHubClientMissing      = errors.New(githubClientMissingMessageConstant)
