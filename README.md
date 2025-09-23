@@ -17,7 +17,7 @@ The repository now ships a Go-based command-line interface that complements the 
 ### Usage overview
 
 ```bash
-go run ./cmd/cli --log-level debug
+go run . --log-level debug
 ```
 
 Add `--config=path/to/config.yaml` to load persisted settings. Configuration files currently support a `log_level` key, for example:
@@ -26,19 +26,73 @@ Add `--config=path/to/config.yaml` to load persisted settings. Configuration fil
 log_level: debug
 ```
 
-Environment variables prefixed with `GITSCRIPTS_` override file values. For instance, `GITSCRIPTS_LOG_LEVEL=error` forces error-only logging.
+Environment variables prefixed with `GITSCRIPTS_` override file values. For instance, `GITSCRIPTS_LOG_LEVEL=error` forces error-only logging. The CLI assumes the same external tooling as the shell scripts: Git, the GitHub CLI (`gh` authenticated via `gh auth login`), `jq`, and core Unix utilities.
 
-### Building the binary
+### Command catalog
+
+The binary exposes the same helpers as the historical shell scripts:
+
+* **Repository audit and reconciliation** — scan directories, emit CSV reports, rename folders, and normalize remotes.
+
+  ```bash
+  go run . audit --audit --dry-run ~/code
+  go run . audit --rename --require-clean ~/code
+  ```
+
+* **Pull-request branch cleanup** — delete merged branches locally and on the remote using metadata from `gh`.
+
+  ```bash
+  go run . pr-cleanup --remote origin --limit 100
+  go run . pr-cleanup --remote origin --dry-run
+  ```
+
+* **Default-branch migration** — retarget workflows, GitHub Pages, and pull requests before switching from `main` to `master`.
+
+  ```bash
+  go run . branch migrate --debug
+  ```
+
+* **GitHub Packages maintenance** — purge untagged GHCR images using stored configuration or command flags.
+
+  ```bash
+  go run . packages purge \
+    --owner my-org \
+    --package my-image \
+    --owner-type org \
+    --token-source env:GITHUB_PACKAGES_TOKEN \
+    --dry-run
+  ```
+
+### Building and releasing
+
+`go build` now produces a single binary from the repository root:
 
 ```bash
-go build -o bin/git-scripts-cli ./cmd/cli
+go build
+./git_scripts --help
 ```
+
+For reproducible artifacts, use the dedicated Make target:
+
+```bash
+make build
+./bin/git-scripts --help
+```
+
+### Migration notes
+
+* The CLI entrypoint moved to the repository root. Replace invocations of `go run ./cmd/cli` with `go run .`.
+* `go build -o bin/git-scripts-cli ./cmd/cli` is no longer required. Use `go build` (which emits `./git_scripts`) or `make build` (which writes `./bin/git-scripts`).
+* Update any wrapper scripts to call the new binary paths while keeping `gh` authenticated and on `$PATH`.
 
 ### Recommended workflows
 
 * `make check-format` — ensures Go sources are formatted.
 * `make lint` — runs `go vet` against the module.
-* `make test` — executes unit and integration tests (`go test ./...`).
+* `make test-unit` — executes fast unit tests across all Go packages.
+* `make test-integration` — runs the end-to-end suite under `./tests`.
+* `make test` — runs both unit and integration tests.
+* `make build` — creates the release binary in `bin/git-scripts`.
 
 ## Prerequisites
 
