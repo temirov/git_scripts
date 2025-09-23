@@ -1,19 +1,16 @@
 package audit
 
 import (
-        "errors"
-        "fmt"
-        "io/fs"
-        "strings"
+	"errors"
+	"fmt"
+	"io/fs"
+	"strings"
 
-        "github.com/temirov/git_scripts/internal/repos/shared"
+	"github.com/temirov/git_scripts/internal/repos/shared"
 )
 
 const (
 	githubHostConstant                 = "github.com"
-	gitProtocolPrefixConstant          = "git@github.com:"
-	sshProtocolPrefixConstant          = "ssh://git@github.com/"
-	httpsProtocolPrefixConstant        = "https://github.com/"
 	gitSuffixConstant                  = ".git"
 	repositoryOwnerSeparatorConstant   = "/"
 	refsHeadsPrefixConstant            = "refs/heads/"
@@ -35,11 +32,11 @@ var errOwnerRepoNotDetected = errors.New("owner repository not detected")
 
 func detectRemoteProtocol(remote string) RemoteProtocolType {
 	switch {
-	case strings.HasPrefix(remote, gitProtocolPrefixConstant):
+	case strings.HasPrefix(remote, shared.GitProtocolURLPrefixConstant):
 		return RemoteProtocolGit
-	case strings.HasPrefix(remote, sshProtocolPrefixConstant):
+	case strings.HasPrefix(remote, shared.SSHProtocolURLPrefixConstant):
 		return RemoteProtocolSSH
-	case strings.HasPrefix(remote, httpsProtocolPrefixConstant):
+	case strings.HasPrefix(remote, shared.HTTPSProtocolURLPrefixConstant):
 		return RemoteProtocolHTTPS
 	default:
 		return RemoteProtocolOther
@@ -49,12 +46,12 @@ func detectRemoteProtocol(remote string) RemoteProtocolType {
 func canonicalizeOwnerRepo(remote string) (string, error) {
 	trimmed := strings.TrimSpace(remote)
 	switch {
-	case strings.HasPrefix(trimmed, gitProtocolPrefixConstant):
-		trimmed = strings.TrimPrefix(trimmed, gitProtocolPrefixConstant)
-	case strings.HasPrefix(trimmed, sshProtocolPrefixConstant):
-		trimmed = strings.TrimPrefix(trimmed, sshProtocolPrefixConstant)
-	case strings.HasPrefix(trimmed, httpsProtocolPrefixConstant):
-		trimmed = strings.TrimPrefix(trimmed, httpsProtocolPrefixConstant)
+	case strings.HasPrefix(trimmed, shared.GitProtocolURLPrefixConstant):
+		trimmed = strings.TrimPrefix(trimmed, shared.GitProtocolURLPrefixConstant)
+	case strings.HasPrefix(trimmed, shared.SSHProtocolURLPrefixConstant):
+		trimmed = strings.TrimPrefix(trimmed, shared.SSHProtocolURLPrefixConstant)
+	case strings.HasPrefix(trimmed, shared.HTTPSProtocolURLPrefixConstant):
+		trimmed = strings.TrimPrefix(trimmed, shared.HTTPSProtocolURLPrefixConstant)
 	default:
 		return "", errOwnerRepoNotDetected
 	}
@@ -81,7 +78,7 @@ func finalRepositoryName(ownerRepo string) string {
 }
 
 func ownerRepoCaseInsensitiveEqual(first string, second string) bool {
-        return strings.EqualFold(first, second)
+	return strings.EqualFold(first, second)
 }
 
 func sanitizeBranchName(branch string) string {
@@ -93,14 +90,14 @@ func sanitizeBranchName(branch string) string {
 }
 
 func remoteFetchArguments(branch string) []string {
-        return []string{
-                gitFetchSubcommandConstant,
-                gitQuietFlagConstant,
-                gitNoTagsFlagConstant,
-                gitNoRecurseSubmodulesFlagConstant,
-                shared.OriginRemoteNameConstant,
-                branch,
-        }
+	return []string{
+		gitFetchSubcommandConstant,
+		gitQuietFlagConstant,
+		gitNoTagsFlagConstant,
+		gitNoRecurseSubmodulesFlagConstant,
+		shared.OriginRemoteNameConstant,
+		branch,
+	}
 }
 
 func upstreamReferenceArguments() []string {
@@ -127,25 +124,21 @@ func revisionArguments(reference string) []string {
 }
 
 func fallbackRemoteRevisionReferences(branch string) []string {
-        return []string{
-                fmt.Sprintf("refs/remotes/%s/%s", shared.OriginRemoteNameConstant, branch),
-                fmt.Sprintf("%s/%s", shared.OriginRemoteNameConstant, branch),
-        }
+	return []string{
+		fmt.Sprintf("refs/remotes/%s/%s", shared.OriginRemoteNameConstant, branch),
+		fmt.Sprintf("%s/%s", shared.OriginRemoteNameConstant, branch),
+	}
 }
 
 func lsRemoteHeadArguments() []string {
-        return []string{
-                gitLSRemoteSubcommandConstant,
-                gitSymrefFlagConstant,
-                shared.OriginRemoteNameConstant,
-                gitHeadReferenceConstant,
-        }
+	return []string{
+		gitLSRemoteSubcommandConstant,
+		gitSymrefFlagConstant,
+		shared.OriginRemoteNameConstant,
+		gitHeadReferenceConstant,
+	}
 }
 
 func isNotExistError(err error) bool {
 	return errors.Is(err, fs.ErrNotExist)
-}
-
-func isCaseOnlyRename(oldPath string, newPath string) bool {
-	return strings.EqualFold(oldPath, newPath) && oldPath != newPath
 }

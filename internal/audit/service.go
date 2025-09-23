@@ -1,139 +1,123 @@
 package audit
 
 import (
-        "context"
-        "encoding/csv"
-        "errors"
-        "fmt"
-        "io"
-        "path/filepath"
-        "sort"
-        "strings"
+	"context"
+	"encoding/csv"
+	"errors"
+	"fmt"
+	"io"
+	"path/filepath"
+	"sort"
+	"strings"
 
-        "github.com/temirov/git_scripts/internal/execshell"
-        "github.com/temirov/git_scripts/internal/repos/shared"
+	"github.com/temirov/git_scripts/internal/execshell"
+	"github.com/temirov/git_scripts/internal/repos/shared"
 )
 
 // Service coordinates repository discovery, reporting, and reconciliation.
 type Service struct {
-        discoverer   RepositoryDiscoverer
-        gitManager   GitRepositoryManager
-        gitExecutor  GitExecutor
-        githubClient GitHubMetadataResolver
-        outputWriter io.Writer
-        errorWriter  io.Writer
-}
-
-// RepositoryInspection captures gathered repository state.
-type RepositoryInspection struct {
-	Path                   string
-	FolderName             string
-	OriginURL              string
-	OriginOwnerRepo        string
-	CanonicalOwnerRepo     string
-	FinalOwnerRepo         string
-	DesiredFolderName      string
-	RemoteProtocol         RemoteProtocolType
-	RemoteDefaultBranch    string
-	LocalBranch            string
-	InSyncStatus           TernaryValue
-	OriginMatchesCanonical TernaryValue
+	discoverer   RepositoryDiscoverer
+	gitManager   GitRepositoryManager
+	gitExecutor  GitExecutor
+	githubClient GitHubMetadataResolver
+	outputWriter io.Writer
+	errorWriter  io.Writer
 }
 
 // NewService constructs a Service using the provided dependencies.
 func NewService(discoverer RepositoryDiscoverer, gitManager GitRepositoryManager, gitExecutor GitExecutor, githubClient GitHubMetadataResolver, outputWriter io.Writer, errorWriter io.Writer) *Service {
-        return &Service{
-                discoverer:   discoverer,
-                gitManager:   gitManager,
-                gitExecutor:  gitExecutor,
-                githubClient: githubClient,
-                outputWriter: outputWriter,
-                errorWriter:  errorWriter,
-        }
+	return &Service{
+		discoverer:   discoverer,
+		gitManager:   gitManager,
+		gitExecutor:  gitExecutor,
+		githubClient: githubClient,
+		outputWriter: outputWriter,
+		errorWriter:  errorWriter,
+	}
 }
 
 // Run executes the service according to the provided options.
 func (service *Service) Run(executionContext context.Context, options CommandOptions) error {
-        roots := options.Roots
-        if len(roots) == 0 {
-                roots = []string{defaultRootPathConstant}
-        }
+	roots := options.Roots
+	if len(roots) == 0 {
+		roots = []string{defaultRootPathConstant}
+	}
 
-        inspections, inspectionError := service.DiscoverInspections(executionContext, roots, options.DebugOutput)
-        if inspectionError != nil {
-                return inspectionError
-        }
+	inspections, inspectionError := service.DiscoverInspections(executionContext, roots, options.DebugOutput)
+	if inspectionError != nil {
+		return inspectionError
+	}
 
-        if !options.AuditReport {
-                return nil
-        }
+	if !options.AuditReport {
+		return nil
+	}
 
-        return service.writeAuditReport(inspections)
+	return service.writeAuditReport(inspections)
 }
 
 // DiscoverInspections collects repository inspections for the provided roots.
 func (service *Service) DiscoverInspections(executionContext context.Context, roots []string, debug bool) ([]RepositoryInspection, error) {
-        repositories, discoveryError := service.discoverer.DiscoverRepositories(roots)
-        if discoveryError != nil {
-                return nil, discoveryError
-        }
+	repositories, discoveryError := service.discoverer.DiscoverRepositories(roots)
+	if discoveryError != nil {
+		return nil, discoveryError
+	}
 
-        if debug {
-                fmt.Fprintf(service.errorWriter, debugDiscoveredTemplate, len(repositories), strings.Join(roots, " "))
-        }
+	if debug {
+		fmt.Fprintf(service.errorWriter, debugDiscoveredTemplate, len(repositories), strings.Join(roots, " "))
+	}
 
-        uniqueRepositories := deduplicatePaths(repositories)
-        inspections := make([]RepositoryInspection, 0, len(uniqueRepositories))
+	uniqueRepositories := deduplicatePaths(repositories)
+	inspections := make([]RepositoryInspection, 0, len(uniqueRepositories))
 
-        for _, repositoryPath := range uniqueRepositories {
-                if debug {
-                        fmt.Fprintf(service.errorWriter, debugCheckingTemplate, repositoryPath)
-                }
+	for _, repositoryPath := range uniqueRepositories {
+		if debug {
+			fmt.Fprintf(service.errorWriter, debugCheckingTemplate, repositoryPath)
+		}
 
-                if !service.isGitRepository(executionContext, repositoryPath) {
-                        continue
-                }
+		if !service.isGitRepository(executionContext, repositoryPath) {
+			continue
+		}
 
-                inspection, inspectError := service.inspectRepository(executionContext, repositoryPath)
-                if inspectError != nil {
-                        continue
-                }
+		inspection, inspectError := service.inspectRepository(executionContext, repositoryPath)
+		if inspectError != nil {
+			continue
+		}
 
-                if len(inspection.OriginOwnerRepo) == 0 && len(inspection.CanonicalOwnerRepo) == 0 {
-                        continue
-                }
+		if len(inspection.OriginOwnerRepo) == 0 && len(inspection.CanonicalOwnerRepo) == 0 {
+			continue
+		}
 
-                inspections = append(inspections, inspection)
-        }
+		inspections = append(inspections, inspection)
+	}
 
-        return inspections, nil
+	return inspections, nil
 }
 
 func (service *Service) writeAuditReport(inspections []RepositoryInspection) error {
-        csvWriter := csv.NewWriter(service.outputWriter)
-        header := []string{
-                csvHeaderFinalRepository,
-                csvHeaderFolderName,
-                csvHeaderNameMatches,
-                csvHeaderRemoteDefault,
-                csvHeaderLocalBranch,
-                csvHeaderInSync,
-                csvHeaderRemoteProtocol,
-                csvHeaderOriginCanonical,
-        }
-        if writeError := csvWriter.Write(header); writeError != nil {
-                return writeError
-        }
+	csvWriter := csv.NewWriter(service.outputWriter)
+	header := []string{
+		csvHeaderFinalRepository,
+		csvHeaderFolderName,
+		csvHeaderNameMatches,
+		csvHeaderRemoteDefault,
+		csvHeaderLocalBranch,
+		csvHeaderInSync,
+		csvHeaderRemoteProtocol,
+		csvHeaderOriginCanonical,
+	}
+	if writeError := csvWriter.Write(header); writeError != nil {
+		return writeError
+	}
 
-        for inspectionIndex := range inspections {
-                record := inspectionReportRow(inspections[inspectionIndex])
-                if writeError := csvWriter.Write(record.CSVRecord()); writeError != nil {
-                        return writeError
-                }
-        }
+	for inspectionIndex := range inspections {
+		record := inspectionReportRow(inspections[inspectionIndex])
+		if writeError := csvWriter.Write(record.CSVRecord()); writeError != nil {
+			return writeError
+		}
+	}
 
-        csvWriter.Flush()
-        return csvWriter.Error()
+	csvWriter.Flush()
+	return csvWriter.Error()
 }
 
 func deduplicatePaths(paths []string) []string {
@@ -167,7 +151,7 @@ func (service *Service) isGitRepository(executionContext context.Context, reposi
 func (service *Service) inspectRepository(executionContext context.Context, repositoryPath string) (RepositoryInspection, error) {
 	folderName := filepath.Base(repositoryPath)
 
-        originURL, originError := service.gitManager.GetRemoteURL(executionContext, repositoryPath, shared.OriginRemoteNameConstant)
+	originURL, originError := service.gitManager.GetRemoteURL(executionContext, repositoryPath, shared.OriginRemoteNameConstant)
 	if originError != nil {
 		return RepositoryInspection{}, originError
 	}
@@ -349,19 +333,19 @@ func (service *Service) resolveRevision(executionContext context.Context, reposi
 }
 
 func (service *Service) resolveRemoteRevision(executionContext context.Context, repositoryPath string, upstreamRef string, branch string) string {
-        if len(strings.TrimSpace(upstreamRef)) > 0 {
-                revision, revisionError := service.resolveRevision(executionContext, repositoryPath, revisionArguments(upstreamRef))
-                if revisionError == nil && len(revision) > 0 {
-                        return revision
-                }
-        }
+	if len(strings.TrimSpace(upstreamRef)) > 0 {
+		revision, revisionError := service.resolveRevision(executionContext, repositoryPath, revisionArguments(upstreamRef))
+		if revisionError == nil && len(revision) > 0 {
+			return revision
+		}
+	}
 
-        for _, reference := range fallbackRemoteRevisionReferences(branch) {
-                revision, revisionError := service.resolveRevision(executionContext, repositoryPath, revisionArguments(reference))
-                if revisionError == nil && len(revision) > 0 {
-                        return revision
-                }
-        }
+	for _, reference := range fallbackRemoteRevisionReferences(branch) {
+		revision, revisionError := service.resolveRevision(executionContext, repositoryPath, revisionArguments(reference))
+		if revisionError == nil && len(revision) > 0 {
+			return revision
+		}
+	}
 
-        return ""
+	return ""
 }

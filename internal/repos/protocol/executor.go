@@ -11,16 +11,13 @@ import (
 )
 
 const (
-	ownerRepoErrorMessage       = "ERROR: cannot derive owner/repo for protocol conversion in %s\n"
-	targetErrorMessage          = "ERROR: cannot build target URL for protocol '%s' in %s\n"
-	planMessage                 = "PLAN-CONVERT: %s origin %s → %s\n"
-	promptTemplate              = "Convert 'origin' in '%s' (%s → %s)? [y/N] "
-	declinedMessage             = "CONVERT-SKIP: user declined for %s\n"
-	successMessage              = "CONVERT-DONE: %s origin now %s\n"
-	failureMessage              = "ERROR: failed to set origin to %s in %s\n"
-	gitProtocolPrefixConstant   = "git@github.com:"
-	sshProtocolPrefixConstant   = "ssh://git@github.com/"
-	httpsProtocolPrefixConstant = "https://github.com/"
+	ownerRepoErrorMessage = "ERROR: cannot derive owner/repo for protocol conversion in %s\n"
+	targetErrorMessage    = "ERROR: cannot build target URL for protocol '%s' in %s\n"
+	planMessage           = "PLAN-CONVERT: %s origin %s → %s\n"
+	promptTemplate        = "Convert 'origin' in '%s' (%s → %s)? [y/N] "
+	declinedMessage       = "CONVERT-SKIP: user declined for %s\n"
+	successMessage        = "CONVERT-DONE: %s origin now %s\n"
+	failureMessage        = "ERROR: failed to set origin to %s in %s\n"
 )
 
 // Options configures the protocol conversion workflow.
@@ -134,11 +131,11 @@ func (executor *Executor) printfError(format string, arguments ...any) {
 
 func detectProtocol(remoteURL string) shared.RemoteProtocol {
 	switch {
-	case strings.HasPrefix(remoteURL, gitProtocolPrefixConstant):
+	case strings.HasPrefix(remoteURL, shared.GitProtocolURLPrefixConstant):
 		return shared.RemoteProtocolGit
-	case strings.HasPrefix(remoteURL, sshProtocolPrefixConstant):
+	case strings.HasPrefix(remoteURL, shared.SSHProtocolURLPrefixConstant):
 		return shared.RemoteProtocolSSH
-	case strings.HasPrefix(remoteURL, httpsProtocolPrefixConstant):
+	case strings.HasPrefix(remoteURL, shared.HTTPSProtocolURLPrefixConstant):
 		return shared.RemoteProtocolHTTPS
 	default:
 		return shared.RemoteProtocolOther

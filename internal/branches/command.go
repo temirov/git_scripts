@@ -1,16 +1,16 @@
 package branches
 
 import (
-        "context"
-        "errors"
-        "fmt"
-        "strings"
+	"context"
+	"errors"
+	"fmt"
+	"strings"
 
-        "github.com/spf13/cobra"
-        "go.uber.org/zap"
+	"github.com/spf13/cobra"
+	"go.uber.org/zap"
 
-        "github.com/temirov/git_scripts/internal/execshell"
-        "github.com/temirov/git_scripts/internal/repos/discovery"
+	"github.com/temirov/git_scripts/internal/execshell"
+	"github.com/temirov/git_scripts/internal/repos/discovery"
 )
 
 const (
@@ -173,7 +173,7 @@ func (builder *CommandBuilder) resolveRepositoryDiscoverer() RepositoryDiscovere
 		return builder.RepositoryDiscoverer
 	}
 
-        return discovery.NewFilesystemRepositoryDiscoverer()
+	return discovery.NewFilesystemRepositoryDiscoverer()
 }
 
 func (builder *CommandBuilder) determineRepositoryRoots(arguments []string) []string {

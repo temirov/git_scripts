@@ -1,20 +1,20 @@
 package migrate
 
 import (
-        "context"
-        "errors"
-        "fmt"
-        "path/filepath"
-        "strings"
+	"context"
+	"errors"
+	"fmt"
+	"path/filepath"
+	"strings"
 
-        "github.com/spf13/cobra"
-        "go.uber.org/zap"
-        "go.uber.org/zap/zapcore"
+	"github.com/spf13/cobra"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 
-        "github.com/temirov/git_scripts/internal/execshell"
-        "github.com/temirov/git_scripts/internal/githubcli"
-        "github.com/temirov/git_scripts/internal/gitrepo"
-        "github.com/temirov/git_scripts/internal/repos/discovery"
+	"github.com/temirov/git_scripts/internal/execshell"
+	"github.com/temirov/git_scripts/internal/githubcli"
+	"github.com/temirov/git_scripts/internal/gitrepo"
+	"github.com/temirov/git_scripts/internal/repos/discovery"
 )
 
 const (
@@ -256,10 +256,10 @@ func (builder *CommandBuilder) resolveExecutor(logger *zap.Logger) (CommandExecu
 }
 
 func (builder *CommandBuilder) resolveRepositoryDiscoverer() RepositoryDiscoverer {
-        if builder.RepositoryDiscoverer != nil {
-                return builder.RepositoryDiscoverer
-        }
-        return discovery.NewFilesystemRepositoryDiscoverer()
+	if builder.RepositoryDiscoverer != nil {
+		return builder.RepositoryDiscoverer
+	}
+	return discovery.NewFilesystemRepositoryDiscoverer()
 }
 
 func (builder *CommandBuilder) resolveService(dependencies ServiceDependencies) (MigrationExecutor, error) {
