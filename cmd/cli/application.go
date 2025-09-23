@@ -24,12 +24,16 @@ const (
 	configFileFlagUsageConstant             = "Optional path to a configuration file (YAML or JSON)."
 	logLevelFlagNameConstant                = "log-level"
 	logLevelFlagUsageConstant               = "Override the configured log level."
+	logFormatFlagNameConstant               = "log-format"
+	logFormatFlagUsageConstant              = "Override the configured log format (structured or console)."
 	logLevelConfigKeyConstant               = "log_level"
+	logFormatConfigKeyConstant              = "log_format"
 	environmentPrefixConstant               = "GITSCRIPTS"
 	configurationNameConstant               = "config"
 	configurationTypeConstant               = "yaml"
 	configurationInitializedMessageConstant = "configuration initialized"
 	configurationLogLevelFieldConstant      = "log_level"
+	configurationLogFormatFieldConstant     = "log_format"
 	configurationFileFieldConstant          = "config_file"
 	configurationLoadErrorTemplateConstant  = "unable to load configuration: %w"
 	loggerCreationErrorTemplateConstant     = "unable to create logger: %w"
@@ -45,8 +49,9 @@ const (
 
 // ApplicationConfiguration describes the persisted configuration for the CLI entrypoint.
 type ApplicationConfiguration struct {
-	LogLevel string                 `mapstructure:"log_level"`
-	Packages packages.Configuration `mapstructure:"packages"`
+	LogLevel  string                 `mapstructure:"log_level"`
+	LogFormat string                 `mapstructure:"log_format"`
+	Packages  packages.Configuration `mapstructure:"packages"`
 }
 
 // Application wires the Cobra root command, configuration loader, and structured logger.
@@ -59,6 +64,7 @@ type Application struct {
 	configurationMetadata utils.LoadedConfiguration
 	configurationFilePath string
 	logLevelFlagValue     string
+	logFormatFlagValue    string
 }
 
 // NewApplication assembles a fully wired CLI application instance.
@@ -92,6 +98,7 @@ func NewApplication() *Application {
 	cobraCommand.SetContext(context.Background())
 	cobraCommand.PersistentFlags().StringVar(&application.configurationFilePath, configFileFlagNameConstant, "", configFileFlagUsageConstant)
 	cobraCommand.PersistentFlags().StringVar(&application.logLevelFlagValue, logLevelFlagNameConstant, "", logLevelFlagUsageConstant)
+	cobraCommand.PersistentFlags().StringVar(&application.logFormatFlagValue, logFormatFlagNameConstant, "", logFormatFlagUsageConstant)
 
 	auditBuilder := audit.CommandBuilder{
 		LoggerProvider: func() *zap.Logger {
@@ -157,7 +164,8 @@ func Execute() error {
 
 func (application *Application) initializeConfiguration(command *cobra.Command) error {
 	defaultValues := map[string]any{
-		logLevelConfigKeyConstant: string(utils.LogLevelInfo),
+		logLevelConfigKeyConstant:  string(utils.LogLevelInfo),
+		logFormatConfigKeyConstant: string(utils.LogFormatStructured),
 	}
 	for configurationKey, configurationValue := range packages.DefaultConfigurationValues() {
 		defaultValues[configurationKey] = configurationValue
@@ -174,7 +182,14 @@ func (application *Application) initializeConfiguration(command *cobra.Command) 
 		application.configuration.LogLevel = application.logLevelFlagValue
 	}
 
-	logger, loggerCreationError := application.loggerFactory.CreateLogger(utils.LogLevel(application.configuration.LogLevel))
+	if command.PersistentFlags().Changed(logFormatFlagNameConstant) {
+		application.configuration.LogFormat = application.logFormatFlagValue
+	}
+
+	logger, loggerCreationError := application.loggerFactory.CreateLogger(
+		utils.LogLevel(application.configuration.LogLevel),
+		utils.LogFormat(application.configuration.LogFormat),
+	)
 	if loggerCreationError != nil {
 		return fmt.Errorf(loggerCreationErrorTemplateConstant, loggerCreationError)
 	}
@@ -184,6 +199,7 @@ func (application *Application) initializeConfiguration(command *cobra.Command) 
 	application.logger.Info(
 		configurationInitializedMessageConstant,
 		zap.String(configurationLogLevelFieldConstant, application.configuration.LogLevel),
+		zap.String(configurationLogFormatFieldConstant, application.configuration.LogFormat),
 		zap.String(configurationFileFieldConstant, application.configurationMetadata.ConfigFileUsed),
 	)
 
