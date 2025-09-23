@@ -12,21 +12,23 @@ A small collection of practical Bash scripts that automate common Git and GitHub
 
 ## Go-based CLI
 
-The repository now ships a Go-based command-line interface that complements the existing Bash scripts. The CLI boots a Cobra root command, hydrates configuration with Viper (covering config files and environment overrides), and emits structured Zap logs.
+The repository now ships a Go-based command-line interface that complements the existing Bash scripts. The CLI boots a Cobra root command, hydrates configuration with Viper (covering config files and environment overrides), and emits Zap logs in either structured JSON or console form.
 
 ### Usage overview
 
 ```bash
 go run . --log-level debug
+go run . --log-format console
 ```
 
-Add `--config=path/to/config.yaml` to load persisted settings. Configuration files currently support a `log_level` key, for example:
+Add `--config=path/to/config.yaml` to load persisted settings. Configuration files currently support `log_level` and `log_format` keys, for example:
 
 ```yaml
 log_level: debug
+log_format: console
 ```
 
-Environment variables prefixed with `GITSCRIPTS_` override file values. For instance, `GITSCRIPTS_LOG_LEVEL=error` forces error-only logging. The CLI assumes the same external tooling as the shell scripts: Git, the GitHub CLI (`gh` authenticated via `gh auth login`), `jq`, and core Unix utilities.
+Environment variables prefixed with `GITSCRIPTS_` override file values. For instance, `GITSCRIPTS_LOG_LEVEL=error` forces error-only logging, and `GITSCRIPTS_LOG_FORMAT=console` switches to console output globally. The CLI assumes the same external tooling as the shell scripts: Git, the GitHub CLI (`gh` authenticated via `gh auth login`), `jq`, and core Unix utilities.
 
 ### Command catalog
 
