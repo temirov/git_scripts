@@ -1,12 +1,12 @@
 package audit
 
 import (
-        "errors"
+	"errors"
 
-        "github.com/spf13/cobra"
-        "go.uber.org/zap"
+	"github.com/spf13/cobra"
+	"go.uber.org/zap"
 
-        "github.com/temirov/git_scripts/internal/repos/dependencies"
+	"github.com/temirov/git_scripts/internal/repos/dependencies"
 )
 
 // LoggerProvider supplies a zap logger for command execution.
@@ -14,11 +14,11 @@ type LoggerProvider func() *zap.Logger
 
 // CommandBuilder assembles the audit cobra command with configurable dependencies.
 type CommandBuilder struct {
-        LoggerProvider  LoggerProvider
-        Discoverer      RepositoryDiscoverer
-        GitExecutor     GitExecutor
-        GitManager      GitRepositoryManager
-        GitHubResolver  GitHubMetadataResolver
+	LoggerProvider LoggerProvider
+	Discoverer     RepositoryDiscoverer
+	GitExecutor    GitExecutor
+	GitManager     GitRepositoryManager
+	GitHubResolver GitHubMetadataResolver
 }
 
 // Build constructs the cobra command for repository audit workflows.
@@ -31,7 +31,7 @@ func (builder *CommandBuilder) Build() (*cobra.Command, error) {
 	}
 
 	command.Flags().Bool(flagAuditName, false, flagAuditDescription)
-        command.Flags().Bool(flagDebugName, false, flagDebugDescription)
+	command.Flags().Bool(flagDebugName, false, flagDebugDescription)
 
 	return command, nil
 }
@@ -43,44 +43,44 @@ func (builder *CommandBuilder) run(command *cobra.Command, arguments []string) e
 	}
 
 	logger := builder.resolveLogger()
-        gitExecutor, executorError := builder.resolveGitExecutor(logger)
-        if executorError != nil {
-                return executorError
-        }
+	gitExecutor, executorError := builder.resolveGitExecutor(logger)
+	if executorError != nil {
+		return executorError
+	}
 
-        gitManager, managerError := builder.resolveGitManager(gitExecutor)
+	gitManager, managerError := builder.resolveGitManager(gitExecutor)
 	if managerError != nil {
 		return managerError
 	}
 
 	githubClient, githubError := builder.resolveGitHubClient(gitExecutor)
-        if githubError != nil {
-                return githubError
-        }
+	if githubError != nil {
+		return githubError
+	}
 
-        discoverer := dependencies.ResolveRepositoryDiscoverer(builder.Discoverer)
+	discoverer := dependencies.ResolveRepositoryDiscoverer(builder.Discoverer)
 
-        service := NewService(discoverer, gitManager, gitExecutor, githubClient, command.OutOrStdout(), command.ErrOrStderr())
-        return service.Run(command.Context(), options)
+	service := NewService(discoverer, gitManager, gitExecutor, githubClient, command.OutOrStdout(), command.ErrOrStderr())
+	return service.Run(command.Context(), options)
 }
 
 func (builder *CommandBuilder) parseOptions(command *cobra.Command, arguments []string) (CommandOptions, error) {
 	auditFlag, _ := command.Flags().GetBool(flagAuditName)
-        debugFlag, _ := command.Flags().GetBool(flagDebugName)
+	debugFlag, _ := command.Flags().GetBool(flagDebugName)
 
-        if !auditFlag {
-                return CommandOptions{}, errors.New(errorMissingOperation)
-        }
+	if !auditFlag {
+		return CommandOptions{}, errors.New(errorMissingOperation)
+	}
 
-        roots := append([]string{}, arguments...)
+	roots := append([]string{}, arguments...)
 
-        options := CommandOptions{
-                Roots:       roots,
-                AuditReport: auditFlag,
-                DebugOutput: debugFlag,
-        }
+	options := CommandOptions{
+		Roots:       roots,
+		AuditReport: auditFlag,
+		DebugOutput: debugFlag,
+	}
 
-        return options, nil
+	return options, nil
 }
 
 func (builder *CommandBuilder) resolveLogger() *zap.Logger {
@@ -95,13 +95,13 @@ func (builder *CommandBuilder) resolveLogger() *zap.Logger {
 }
 
 func (builder *CommandBuilder) resolveGitExecutor(logger *zap.Logger) (GitExecutor, error) {
-        return dependencies.ResolveGitExecutor(builder.GitExecutor, logger)
+	return dependencies.ResolveGitExecutor(builder.GitExecutor, logger)
 }
 
 func (builder *CommandBuilder) resolveGitManager(executor GitExecutor) (GitRepositoryManager, error) {
-        return dependencies.ResolveGitRepositoryManager(builder.GitManager, executor)
+	return dependencies.ResolveGitRepositoryManager(builder.GitManager, executor)
 }
 
 func (builder *CommandBuilder) resolveGitHubClient(executor GitExecutor) (GitHubMetadataResolver, error) {
-        return dependencies.ResolveGitHubResolver(builder.GitHubResolver, executor)
+	return dependencies.ResolveGitHubResolver(builder.GitHubResolver, executor)
 }
