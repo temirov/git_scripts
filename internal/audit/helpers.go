@@ -1,10 +1,12 @@
 package audit
 
 import (
-	"errors"
-	"fmt"
-	"io/fs"
-	"strings"
+        "errors"
+        "fmt"
+        "io/fs"
+        "strings"
+
+        "github.com/temirov/git_scripts/internal/repos/shared"
 )
 
 const (
@@ -78,25 +80,8 @@ func finalRepositoryName(ownerRepo string) string {
 	return segments[len(segments)-1]
 }
 
-func buildRemoteURL(protocol RemoteProtocolType, ownerRepo string) (string, error) {
-	trimmed := strings.TrimSpace(ownerRepo)
-	if len(trimmed) == 0 {
-		return "", errOwnerRepoNotDetected
-	}
-	switch protocol {
-	case RemoteProtocolGit:
-		return fmt.Sprintf("%s%s.git", gitProtocolPrefixConstant, trimmed), nil
-	case RemoteProtocolSSH:
-		return fmt.Sprintf("%s%s.git", sshProtocolPrefixConstant, trimmed), nil
-	case RemoteProtocolHTTPS:
-		return fmt.Sprintf("%s%s.git", httpsProtocolPrefixConstant, trimmed), nil
-	default:
-		return "", fmt.Errorf("unknown protocol %s", protocol)
-	}
-}
-
 func ownerRepoCaseInsensitiveEqual(first string, second string) bool {
-	return strings.EqualFold(first, second)
+        return strings.EqualFold(first, second)
 }
 
 func sanitizeBranchName(branch string) string {
@@ -107,19 +92,15 @@ func sanitizeBranchName(branch string) string {
 	return trimmed
 }
 
-func computeIntermediateRenamePath(oldPath string, timestamp int64) string {
-	return fmt.Sprintf("%s.rename.%d", oldPath, timestamp)
-}
-
 func remoteFetchArguments(branch string) []string {
-	return []string{
-		gitFetchSubcommandConstant,
-		gitQuietFlagConstant,
-		gitNoTagsFlagConstant,
-		gitNoRecurseSubmodulesFlagConstant,
-		originRemoteNameConstant,
-		branch,
-	}
+        return []string{
+                gitFetchSubcommandConstant,
+                gitQuietFlagConstant,
+                gitNoTagsFlagConstant,
+                gitNoRecurseSubmodulesFlagConstant,
+                shared.OriginRemoteNameConstant,
+                branch,
+        }
 }
 
 func upstreamReferenceArguments() []string {
@@ -146,19 +127,19 @@ func revisionArguments(reference string) []string {
 }
 
 func fallbackRemoteRevisionReferences(branch string) []string {
-	return []string{
-		fmt.Sprintf("refs/remotes/%s/%s", originRemoteNameConstant, branch),
-		fmt.Sprintf("%s/%s", originRemoteNameConstant, branch),
-	}
+        return []string{
+                fmt.Sprintf("refs/remotes/%s/%s", shared.OriginRemoteNameConstant, branch),
+                fmt.Sprintf("%s/%s", shared.OriginRemoteNameConstant, branch),
+        }
 }
 
 func lsRemoteHeadArguments() []string {
-	return []string{
-		gitLSRemoteSubcommandConstant,
-		gitSymrefFlagConstant,
-		originRemoteNameConstant,
-		gitHeadReferenceConstant,
-	}
+        return []string{
+                gitLSRemoteSubcommandConstant,
+                gitSymrefFlagConstant,
+                shared.OriginRemoteNameConstant,
+                gitHeadReferenceConstant,
+        }
 }
 
 func isNotExistError(err error) bool {
