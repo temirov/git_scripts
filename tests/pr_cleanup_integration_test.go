@@ -41,6 +41,7 @@ const (
 	integrationFakeGHPayloadConstant              = "[{\"headRefName\":\"feature/delete\"},{\"headRefName\":\"feature/missing\"}]"
 	integrationFakeGHScriptTemplateConstant       = "#!/bin/sh\ncat <<'JSON'\n%s\nJSON\n"
 	integrationExpectationMessageTemplateConstant = "expected branch state: %s"
+	prCleanupSubtestNameTemplateConstant          = "%d_%s"
 )
 
 func TestPullRequestCleanupIntegration(testInstance *testing.T) {
@@ -105,17 +106,50 @@ func TestPullRequestCleanupIntegration(testInstance *testing.T) {
 	cleanupError := cleanupService.Cleanup(context.Background(), cleanupOptions)
 	require.NoError(testInstance, cleanupError)
 
-	remoteDeletedOutput := runGitCommand(testInstance, localRepositoryPath, []string{integrationGitExecutableNameConstant, "ls-remote", "--heads", integrationRemoteNameConstant, integrationFeatureDeleteBranchConstant})
-	require.Empty(testInstance, strings.TrimSpace(remoteDeletedOutput), fmt.Sprintf(integrationExpectationMessageTemplateConstant, integrationFeatureDeleteBranchConstant))
+	branchExpectations := []struct {
+		name        string
+		command     []string
+		expectEmpty bool
+		branchName  string
+	}{
+		{
+			name:        "remote_deleted",
+			command:     []string{integrationGitExecutableNameConstant, "ls-remote", "--heads", integrationRemoteNameConstant, integrationFeatureDeleteBranchConstant},
+			expectEmpty: true,
+			branchName:  integrationFeatureDeleteBranchConstant,
+		},
+		{
+			name:        "remote_preserved",
+			command:     []string{integrationGitExecutableNameConstant, "ls-remote", "--heads", integrationRemoteNameConstant, integrationFeatureSkipBranchConstant},
+			expectEmpty: false,
+			branchName:  integrationFeatureSkipBranchConstant,
+		},
+		{
+			name:        "local_deleted",
+			command:     []string{integrationGitExecutableNameConstant, "branch", "--list", integrationFeatureDeleteBranchConstant},
+			expectEmpty: true,
+			branchName:  integrationFeatureDeleteBranchConstant,
+		},
+		{
+			name:        "local_missing_branch_retained",
+			command:     []string{integrationGitExecutableNameConstant, "branch", "--list", integrationFeatureMissingBranchConstant},
+			expectEmpty: false,
+			branchName:  integrationFeatureMissingBranchConstant,
+		},
+	}
 
-	remoteSkipOutput := runGitCommand(testInstance, localRepositoryPath, []string{integrationGitExecutableNameConstant, "ls-remote", "--heads", integrationRemoteNameConstant, integrationFeatureSkipBranchConstant})
-	require.NotEmpty(testInstance, strings.TrimSpace(remoteSkipOutput), fmt.Sprintf(integrationExpectationMessageTemplateConstant, integrationFeatureSkipBranchConstant))
-
-	localDeletedOutput := runGitCommand(testInstance, localRepositoryPath, []string{integrationGitExecutableNameConstant, "branch", "--list", integrationFeatureDeleteBranchConstant})
-	require.Empty(testInstance, strings.TrimSpace(localDeletedOutput), fmt.Sprintf(integrationExpectationMessageTemplateConstant, integrationFeatureDeleteBranchConstant))
-
-	localMissingOutput := runGitCommand(testInstance, localRepositoryPath, []string{integrationGitExecutableNameConstant, "branch", "--list", integrationFeatureMissingBranchConstant})
-	require.NotEmpty(testInstance, strings.TrimSpace(localMissingOutput), fmt.Sprintf(integrationExpectationMessageTemplateConstant, integrationFeatureMissingBranchConstant))
+	for testCaseIndex, expectation := range branchExpectations {
+		testInstance.Run(fmt.Sprintf(prCleanupSubtestNameTemplateConstant, testCaseIndex, expectation.name), func(subtest *testing.T) {
+			commandOutput := runGitCommand(subtest, localRepositoryPath, expectation.command)
+			trimmedOutput := strings.TrimSpace(commandOutput)
+			message := fmt.Sprintf(integrationExpectationMessageTemplateConstant, expectation.branchName)
+			if expectation.expectEmpty {
+				require.Empty(subtest, trimmedOutput, message)
+			} else {
+				require.NotEmpty(subtest, trimmedOutput, message)
+			}
+		})
+	}
 }
 
 func configureLocalRepository(testInstance *testing.T, repositoryPath string) {

@@ -66,7 +66,7 @@ func TestCLIIntegrationLogLevels(testInstance *testing.T) {
 
 	for testCaseIndex, testCase := range testCases {
 		testInstance.Run(fmt.Sprintf(integrationSubtestNameTemplateConstant, testCaseIndex, testCase.name), func(testInstance *testing.T) {
-			arguments := []string{"run", "./cmd/cli"}
+			arguments := []string{"run", "."}
 			environment := os.Environ()
 			tempDirectory := testInstance.TempDir()
 

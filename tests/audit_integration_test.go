@@ -14,27 +14,30 @@ import (
 )
 
 const (
-	auditIntegrationTimeout            = 10 * time.Second
-	auditIntegrationLogLevelFlag       = "--log-level"
-	auditIntegrationErrorLevel         = "error"
-	auditIntegrationCommand            = "go"
-	auditIntegrationRunSubcommand      = "run"
-	auditIntegrationCLIPath            = "./cmd/cli"
-	auditIntegrationAuditSubcommand    = "audit"
-	auditIntegrationDryRunFlag         = "--dry-run"
-	auditIntegrationAuditFlag          = "--audit"
-	auditIntegrationRenameFlag         = "--rename"
-	auditIntegrationRequireCleanFlag   = "--require-clean"
-	auditIntegrationGitExecutable      = "git"
-	auditIntegrationInitFlag           = "init"
-	auditIntegrationInitialBranchFlag  = "--initial-branch=main"
-	auditIntegrationRemoteSubcommand   = "remote"
-	auditIntegrationAddSubcommand      = "add"
-	auditIntegrationOriginRemoteName   = "origin"
-	auditIntegrationOriginURL          = "https://github.com/origin/example.git"
-	auditIntegrationStubExecutableName = "gh"
-	auditIntegrationStubScript         = "#!/bin/sh\nif [ \"$1\" = \"repo\" ] && [ \"$2\" = \"view\" ]; then\n  cat <<'EOF'\n{\"nameWithOwner\":\"canonical/example\",\"defaultBranchRef\":{\"name\":\"main\"},\"description\":\"\"}\nEOF\n  exit 0\nfi\nexit 0\n"
-	auditIntegrationCSVOutput          = "final_github_repo,folder_name,name_matches,remote_default_branch,local_branch,in_sync,remote_protocol,origin_matches_canonical\ncanonical/example,legacy,no,main,,n/a,https,no\n"
+	auditIntegrationTimeout                     = 10 * time.Second
+	auditIntegrationLogLevelFlag                = "--log-level"
+	auditIntegrationErrorLevel                  = "error"
+	auditIntegrationCommand                     = "go"
+	auditIntegrationRunSubcommand               = "run"
+	auditIntegrationModulePathConstant          = "."
+	auditIntegrationAuditSubcommand             = "audit"
+	auditIntegrationDryRunFlag                  = "--dry-run"
+	auditIntegrationAuditFlag                   = "--audit"
+	auditIntegrationRenameFlag                  = "--rename"
+	auditIntegrationRequireCleanFlag            = "--require-clean"
+	auditIntegrationGitExecutable               = "git"
+	auditIntegrationInitFlag                    = "init"
+	auditIntegrationInitialBranchFlag           = "--initial-branch=main"
+	auditIntegrationRemoteSubcommand            = "remote"
+	auditIntegrationAddSubcommand               = "add"
+	auditIntegrationOriginRemoteName            = "origin"
+	auditIntegrationOriginURL                   = "https://github.com/origin/example.git"
+	auditIntegrationStubExecutableName          = "gh"
+	auditIntegrationStubScript                  = "#!/bin/sh\nif [ \"$1\" = \"repo\" ] && [ \"$2\" = \"view\" ]; then\n  cat <<'EOF'\n{\"nameWithOwner\":\"canonical/example\",\"defaultBranchRef\":{\"name\":\"main\"},\"description\":\"\"}\nEOF\n  exit 0\nfi\nexit 0\n"
+	auditIntegrationCSVOutput                   = "final_github_repo,folder_name,name_matches,remote_default_branch,local_branch,in_sync,remote_protocol,origin_matches_canonical\ncanonical/example,legacy,no,main,,n/a,https,no\n"
+	auditIntegrationAuditCaseNameConstant       = "audit_csv"
+	auditIntegrationRenameCaseNameConstant      = "rename_plan"
+	auditIntegrationSubtestNameTemplateConstant = "%d_%s"
 )
 
 func TestAuditCommandIntegration(testInstance *testing.T) {
@@ -66,9 +69,9 @@ func TestAuditCommandIntegration(testInstance *testing.T) {
 
 	extendedPath := pathWithStub + string(os.PathListSeparator) + os.Getenv("PATH")
 
-	auditCommand := []string{
+	auditCommandArguments := []string{
 		auditIntegrationRunSubcommand,
-		auditIntegrationCLIPath,
+		auditIntegrationModulePathConstant,
 		auditIntegrationLogLevelFlag,
 		auditIntegrationErrorLevel,
 		auditIntegrationAuditSubcommand,
@@ -77,12 +80,9 @@ func TestAuditCommandIntegration(testInstance *testing.T) {
 		repositoryPath,
 	}
 
-	auditOutput := runCommand(testInstance, repositoryRoot, extendedPath, auditCommand)
-	require.Equal(testInstance, auditIntegrationCSVOutput, filterCommandOutput(auditOutput))
-
-	renameCommand := []string{
+	renameCommandArguments := []string{
 		auditIntegrationRunSubcommand,
-		auditIntegrationCLIPath,
+		auditIntegrationModulePathConstant,
 		auditIntegrationLogLevelFlag,
 		auditIntegrationErrorLevel,
 		auditIntegrationAuditSubcommand,
@@ -92,9 +92,31 @@ func TestAuditCommandIntegration(testInstance *testing.T) {
 		repositoryPath,
 	}
 
-	renameOutput := runCommand(testInstance, repositoryRoot, extendedPath, renameCommand)
 	expectedRename := fmt.Sprintf("PLAN-OK: %s → %s\n", repositoryPath, filepath.Join(filepath.Dir(repositoryPath), "example"))
-	require.Equal(testInstance, expectedRename, filterCommandOutput(renameOutput))
+
+	testCases := []struct {
+		name           string
+		arguments      []string
+		expectedOutput string
+	}{
+		{
+			name:           auditIntegrationAuditCaseNameConstant,
+			arguments:      auditCommandArguments,
+			expectedOutput: auditIntegrationCSVOutput,
+		},
+		{
+			name:           auditIntegrationRenameCaseNameConstant,
+			arguments:      renameCommandArguments,
+			expectedOutput: expectedRename,
+		},
+	}
+
+	for testCaseIndex, testCase := range testCases {
+		testInstance.Run(fmt.Sprintf(auditIntegrationSubtestNameTemplateConstant, testCaseIndex, testCase.name), func(subtest *testing.T) {
+			subtestOutput := runCommand(subtest, repositoryRoot, extendedPath, testCase.arguments)
+			require.Equal(subtest, testCase.expectedOutput, filterCommandOutput(subtestOutput))
+		})
+	}
 }
 
 func runCommand(testInstance *testing.T, repositoryRoot string, pathVariable string, arguments []string) string {
