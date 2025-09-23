@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -38,6 +39,8 @@ const (
 	integrationRemoteNameConstant                 = "origin"
 	integrationPullRequestLimitConstant           = 100
 	prCleanupCommandTimeoutConstant               = 10 * time.Second
+	integrationCommandRemoteFlagConstant          = "--remote"
+	integrationCommandLimitFlagConstant           = "--limit"
 	integrationFakeGHPayloadConstant              = "[{\"headRefName\":\"feature/delete\"},{\"headRefName\":\"feature/missing\"}]"
 	integrationFakeGHScriptTemplateConstant       = "#!/bin/sh\ncat <<'JSON'\n%s\nJSON\n"
 	integrationExpectationMessageTemplateConstant = "expected branch state: %s"
@@ -92,19 +95,27 @@ func TestPullRequestCleanupIntegration(testInstance *testing.T) {
 	shellExecutor, executorError := execshell.NewShellExecutor(commandLogger, commandRunner)
 	require.NoError(testInstance, executorError)
 
-	serviceLogger := zap.NewNop()
-	cleanupService, serviceError := branches.NewService(serviceLogger, shellExecutor)
-	require.NoError(testInstance, serviceError)
-
-	cleanupOptions := branches.CleanupOptions{
-		RemoteName:       integrationRemoteNameConstant,
-		PullRequestLimit: integrationPullRequestLimitConstant,
-		DryRun:           false,
-		WorkingDirectory: localRepositoryPath,
+	cleanupCommandBuilder := branches.CommandBuilder{
+		LoggerProvider: func() *zap.Logger {
+			return zap.NewNop()
+		},
+		Executor: shellExecutor,
 	}
 
-	cleanupError := cleanupService.Cleanup(context.Background(), cleanupOptions)
-	require.NoError(testInstance, cleanupError)
+	cleanupCommand, buildError := cleanupCommandBuilder.Build()
+	require.NoError(testInstance, buildError)
+
+	cleanupCommand.SetContext(context.Background())
+	cleanupCommand.SetArgs([]string{
+		integrationCommandRemoteFlagConstant,
+		integrationRemoteNameConstant,
+		integrationCommandLimitFlagConstant,
+		strconv.Itoa(integrationPullRequestLimitConstant),
+		localRepositoryPath,
+	})
+
+	executionError := cleanupCommand.Execute()
+	require.NoError(testInstance, executionError)
 
 	branchExpectations := []struct {
 		name        string

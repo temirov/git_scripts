@@ -1,40 +1,48 @@
 package branches
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 
+	"github.com/temirov/git_scripts/internal/audit"
 	"github.com/temirov/git_scripts/internal/execshell"
 )
 
 const (
-	commandUseConstant                    = "pr-cleanup"
-	commandShortDescriptionConstant       = "Remove remote and local branches for closed pull requests"
-	commandLongDescriptionConstant        = "pr-cleanup removes remote and local Git branches whose pull requests are already closed."
-	commandExecutionErrorTemplateConstant = "branch cleanup failed: %w"
-	unexpectedArgumentsMessageConstant    = "pr-cleanup does not accept positional arguments"
-	flagRemoteNameConstant                = "remote"
-	flagRemoteDescriptionConstant         = "Name of the remote containing pull request branches"
-	flagLimitNameConstant                 = "limit"
-	flagLimitDescriptionConstant          = "Maximum number of closed pull requests to examine"
-	flagDryRunNameConstant                = "dry-run"
-	flagDryRunDescriptionConstant         = "Preview deletions without making changes"
+	commandUseConstant                          = "pr-cleanup [root ...]"
+	commandShortDescriptionConstant             = "Remove remote and local branches for closed pull requests"
+	commandLongDescriptionConstant              = "pr-cleanup removes remote and local Git branches whose pull requests are already closed."
+	flagRemoteNameConstant                      = "remote"
+	flagRemoteDescriptionConstant               = "Name of the remote containing pull request branches"
+	flagLimitNameConstant                       = "limit"
+	flagLimitDescriptionConstant                = "Maximum number of closed pull requests to examine"
+	flagDryRunNameConstant                      = "dry-run"
+	flagDryRunDescriptionConstant               = "Preview deletions without making changes"
+	repositoryDiscoveryErrorTemplateConstant    = "repository discovery failed: %w"
+	defaultRepositoryRootConstant               = "."
+	logMessageRepositoryDiscoveryFailedConstant = "Repository discovery failed"
+	logMessageRepositoryCleanupFailedConstant   = "Repository cleanup failed"
+	logFieldRepositoryRootsConstant             = "roots"
+	logFieldRepositoryPathConstant              = "repository"
 )
 
-var errUnexpectedArguments = errors.New(unexpectedArgumentsMessageConstant)
+// RepositoryDiscoverer locates Git repositories beneath the provided roots.
+type RepositoryDiscoverer interface {
+	DiscoverRepositories(roots []string) ([]string, error)
+}
 
 // LoggerProvider supplies a zap logger instance.
 type LoggerProvider func() *zap.Logger
 
 // CommandBuilder assembles the Cobra command for branch cleanup.
 type CommandBuilder struct {
-	LoggerProvider   LoggerProvider
-	Executor         CommandExecutor
-	WorkingDirectory string
+	LoggerProvider       LoggerProvider
+	Executor             CommandExecutor
+	WorkingDirectory     string
+	RepositoryDiscoverer RepositoryDiscoverer
 }
 
 // Build constructs the pr-cleanup command.
@@ -54,11 +62,7 @@ func (builder *CommandBuilder) Build() (*cobra.Command, error) {
 }
 
 func (builder *CommandBuilder) run(command *cobra.Command, arguments []string) error {
-	if len(arguments) > 0 {
-		return errUnexpectedArguments
-	}
-
-	options, optionsError := builder.parseOptions(command)
+	options, optionsError := builder.parseOptions(command, arguments)
 	if optionsError != nil {
 		return optionsError
 	}
@@ -69,20 +73,44 @@ func (builder *CommandBuilder) run(command *cobra.Command, arguments []string) e
 		return executorError
 	}
 
+	repositoryDiscoverer := builder.resolveRepositoryDiscoverer()
+	repositories, discoveryError := repositoryDiscoverer.DiscoverRepositories(options.RepositoryRoots)
+	if discoveryError != nil {
+		logger.Error(logMessageRepositoryDiscoveryFailedConstant,
+			zap.Strings(logFieldRepositoryRootsConstant, options.RepositoryRoots),
+			zap.Error(discoveryError),
+		)
+		return fmt.Errorf(repositoryDiscoveryErrorTemplateConstant, discoveryError)
+	}
+
 	service, serviceError := NewService(logger, executor)
 	if serviceError != nil {
 		return serviceError
 	}
 
-	cleanupError := service.Cleanup(command.Context(), options)
-	if cleanupError != nil {
-		return fmt.Errorf(commandExecutionErrorTemplateConstant, cleanupError)
+	for repositoryIndex := range repositories {
+		repositoryPath := repositories[repositoryIndex]
+		repositoryOptions := options.CleanupOptions
+		repositoryOptions.WorkingDirectory = repositoryPath
+
+		cleanupError := service.Cleanup(command.Context(), repositoryOptions)
+		if cleanupError != nil {
+			logger.Warn(logMessageRepositoryCleanupFailedConstant,
+				zap.String(logFieldRepositoryPathConstant, repositoryPath),
+				zap.Error(cleanupError),
+			)
+		}
 	}
 
 	return nil
 }
 
-func (builder *CommandBuilder) parseOptions(command *cobra.Command) (CleanupOptions, error) {
+type commandOptions struct {
+	CleanupOptions  CleanupOptions
+	RepositoryRoots []string
+}
+
+func (builder *CommandBuilder) parseOptions(command *cobra.Command, arguments []string) (commandOptions, error) {
 	remoteNameValue, _ := command.Flags().GetString(flagRemoteNameConstant)
 	trimmedRemoteName := strings.TrimSpace(remoteNameValue)
 	if len(trimmedRemoteName) == 0 {
@@ -100,10 +128,11 @@ func (builder *CommandBuilder) parseOptions(command *cobra.Command) (CleanupOpti
 		RemoteName:       trimmedRemoteName,
 		PullRequestLimit: limitValue,
 		DryRun:           dryRunValue,
-		WorkingDirectory: builder.WorkingDirectory,
 	}
 
-	return cleanupOptions, nil
+	repositoryRoots := builder.determineRepositoryRoots(arguments)
+
+	return commandOptions{CleanupOptions: cleanupOptions, RepositoryRoots: repositoryRoots}, nil
 }
 
 func (builder *CommandBuilder) resolveLogger() *zap.Logger {
@@ -131,4 +160,34 @@ func (builder *CommandBuilder) resolveExecutor(logger *zap.Logger) (CommandExecu
 	}
 
 	return shellExecutor, nil
+}
+
+func (builder *CommandBuilder) resolveRepositoryDiscoverer() RepositoryDiscoverer {
+	if builder.RepositoryDiscoverer != nil {
+		return builder.RepositoryDiscoverer
+	}
+
+	return audit.NewFilesystemRepositoryDiscoverer()
+}
+
+func (builder *CommandBuilder) determineRepositoryRoots(arguments []string) []string {
+	repositoryRoots := make([]string, 0, len(arguments))
+	for argumentIndex := range arguments {
+		trimmedRoot := strings.TrimSpace(arguments[argumentIndex])
+		if len(trimmedRoot) == 0 {
+			continue
+		}
+		repositoryRoots = append(repositoryRoots, trimmedRoot)
+	}
+
+	if len(repositoryRoots) > 0 {
+		return repositoryRoots
+	}
+
+	trimmedWorkingDirectory := strings.TrimSpace(builder.WorkingDirectory)
+	if len(trimmedWorkingDirectory) > 0 {
+		return []string{trimmedWorkingDirectory}
+	}
+
+	return []string{defaultRepositoryRootConstant}
 }
