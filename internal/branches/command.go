@@ -1,6 +1,8 @@
 package branches
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -99,6 +101,10 @@ func (builder *CommandBuilder) run(command *cobra.Command, arguments []string) e
 				zap.String(logFieldRepositoryPathConstant, repositoryPath),
 				zap.Error(cleanupError),
 			)
+
+			if errors.Is(cleanupError, context.Canceled) || errors.Is(cleanupError, context.DeadlineExceeded) {
+				return cleanupError
+			}
 		}
 	}
 
