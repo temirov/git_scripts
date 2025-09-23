@@ -180,13 +180,28 @@ func (builder *CommandBuilder) resolveLogger() *zap.Logger {
 }
 
 func (builder *CommandBuilder) resolveConfiguration() Configuration {
-	if builder.ConfigurationProvider == nil {
-		return DefaultConfiguration()
+	configuration := DefaultConfiguration()
+	if builder.ConfigurationProvider != nil {
+		configuration = builder.ConfigurationProvider()
 	}
 
-	configuration := builder.ConfigurationProvider()
 	if len(strings.TrimSpace(configuration.Purge.TokenSource)) == 0 {
 		configuration.Purge.TokenSource = defaultTokenSourceValueConstant
+	}
+
+	configuration.Purge.ServiceBaseURL = strings.TrimSpace(configuration.Purge.ServiceBaseURL)
+	if configuration.Purge.PageSize < 0 {
+		configuration.Purge.PageSize = 0
+	}
+
+	trimmedServiceBaseURL := strings.TrimSpace(builder.ServiceBaseURL)
+	if len(trimmedServiceBaseURL) == 0 {
+		trimmedServiceBaseURL = configuration.Purge.ServiceBaseURL
+	}
+	builder.ServiceBaseURL = trimmedServiceBaseURL
+
+	if builder.PageSize <= 0 && configuration.Purge.PageSize > 0 {
+		builder.PageSize = configuration.Purge.PageSize
 	}
 
 	return configuration
