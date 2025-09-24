@@ -8,6 +8,7 @@ import (
 	"syscall"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"go.uber.org/zap"
 
 	"github.com/temirov/git_scripts/internal/audit"
@@ -182,11 +183,11 @@ func (application *Application) initializeConfiguration(command *cobra.Command) 
 
 	application.configurationMetadata = loadedConfiguration
 
-	if command.PersistentFlags().Changed(logLevelFlagNameConstant) {
+	if application.persistentFlagChanged(command, logLevelFlagNameConstant) {
 		application.configuration.LogLevel = application.logLevelFlagValue
 	}
 
-	if command.PersistentFlags().Changed(logFormatFlagNameConstant) {
+	if application.persistentFlagChanged(command, logFormatFlagNameConstant) {
 		application.configuration.LogFormat = application.logFormatFlagValue
 	}
 
@@ -249,4 +250,32 @@ func (application *Application) flushLogger() error {
 	default:
 		return syncError
 	}
+}
+
+func (application *Application) persistentFlagChanged(command *cobra.Command, flagName string) bool {
+	if command == nil {
+		return false
+	}
+
+	flagSetsToInspect := []*pflag.FlagSet{
+		command.PersistentFlags(),
+		command.InheritedFlags(),
+	}
+
+	rootCommand := command.Root()
+	if rootCommand != nil {
+		flagSetsToInspect = append(flagSetsToInspect, rootCommand.PersistentFlags())
+	}
+
+	for _, flagSet := range flagSetsToInspect {
+		if flagSet == nil {
+			continue
+		}
+
+		if flagSet.Changed(flagName) {
+			return true
+		}
+	}
+
+	return false
 }
