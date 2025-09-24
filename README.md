@@ -199,6 +199,8 @@ make release        # Cross-compile binaries into ./dist
 - Go 1.24+
 - git
 - GitHub CLI (`gh`) with an authenticated session (`gh auth login`)
+  - Install the CLI via your platform's package manager or the [official releases](https://cli.github.com/).
+  - Run `gh auth login` (or verify with `gh auth status`) so API calls succeed during branch cleanup and migration commands.
 
 The packages command additionally requires network access and a GitHub Personal Access Token with `read:packages`,
 `write:packages`, and `delete:packages` scopes. Export the token before invoking the command:
