@@ -88,10 +88,20 @@ type ConsoleCommandEventLogger struct {
 
 // NewConsoleCommandEventLogger constructs a console event logger backed by the provided zap logger.
 func NewConsoleCommandEventLogger(logger *zap.Logger) *ConsoleCommandEventLogger {
+	eventLogger := &ConsoleCommandEventLogger{formatter: CommandEventFormatter{}}
+	eventLogger.UpdateLogger(logger)
+	return eventLogger
+}
+
+// UpdateLogger replaces the underlying zap logger used for event emission.
+func (eventLogger *ConsoleCommandEventLogger) UpdateLogger(logger *zap.Logger) {
+	if eventLogger == nil {
+		return
+	}
 	if logger == nil {
 		logger = zap.NewNop()
 	}
-	return &ConsoleCommandEventLogger{logger: logger, formatter: CommandEventFormatter{}}
+	eventLogger.logger = logger
 }
 
 // CommandStarted implements execshell.CommandEventObserver by logging command start notifications.

@@ -86,7 +86,11 @@ func NewApplication() *Application {
 	application := &Application{
 		configurationLoader: configurationLoader,
 		loggerFactory:       utils.NewLoggerFactory(),
+		logger:              zap.NewNop(),
+		eventLogger:         zap.NewNop(),
 	}
+
+	application.commandEventsLogger = ui.NewConsoleCommandEventLogger(application.eventLogger)
 
 	cobraCommand := &cobra.Command{
 		Use:           applicationNameConstant,
@@ -231,7 +235,11 @@ func (application *Application) initializeConfiguration(command *cobra.Command) 
 
 	application.logger = loggerOutputs.DiagnosticLogger
 	application.eventLogger = loggerOutputs.ConsoleLogger
-	application.commandEventsLogger = ui.NewConsoleCommandEventLogger(application.eventLogger)
+	if application.commandEventsLogger == nil {
+		application.commandEventsLogger = ui.NewConsoleCommandEventLogger(application.eventLogger)
+	} else {
+		application.commandEventsLogger.UpdateLogger(application.eventLogger)
+	}
 
 	application.logger.Info(
 		configurationInitializedMessageConstant,
