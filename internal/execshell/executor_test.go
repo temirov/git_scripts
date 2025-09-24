@@ -248,7 +248,7 @@ func TestShellExecutorWrappersSetCommandNames(testInstance *testing.T) {
 				executionResult: execshell.ExecutionResult{ExitCode: 1},
 			}
 
-                        executor, creationError := execshell.NewShellExecutor(logger, recordingRunner, false)
+			executor, creationError := execshell.NewShellExecutor(logger, recordingRunner, false)
 			require.NoError(testInstance, creationError)
 
 			executionError := testCase.invoke(executor)
@@ -259,4 +259,3 @@ func TestShellExecutorWrappersSetCommandNames(testInstance *testing.T) {
 		})
 	}
 }
-
