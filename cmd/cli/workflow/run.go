@@ -69,6 +69,9 @@ func (builder *CommandBuilder) Build() (*cobra.Command, error) {
 
 func (builder *CommandBuilder) run(command *cobra.Command, arguments []string) error {
 	if len(arguments) == 0 {
+		if helpError := displayCommandHelp(command); helpError != nil {
+			return helpError
+		}
 		return errors.New(configurationPathRequiredMessageConstant)
 	}
 
