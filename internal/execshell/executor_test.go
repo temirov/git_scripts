@@ -3,6 +3,7 @@ package execshell_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -14,18 +15,31 @@ import (
 )
 
 const (
-	testExecutionSuccessCaseNameConstant         = "success"
-	testExecutionFailureCaseNameConstant         = "failure_exit_code"
-	testExecutionRunnerErrorCaseNameConstant     = "runner_error"
-	testGitWrapperCaseNameConstant               = "git_wrapper"
-	testGitHubWrapperCaseNameConstant            = "github_wrapper"
-	testCurlWrapperCaseNameConstant              = "curl_wrapper"
-	testCommandArgumentConstant                  = "--version"
-	testWorkingDirectoryConstant                 = "."
-	testStandardErrorOutputConstant              = "failure"
-	testLoggerInitializationCaseNameConstant     = "logger_validation"
-	testRunnerInitializationCaseNameConstant     = "runner_validation"
-	testSuccessfulInitializationCaseNameConstant = "successful_initialization"
+	testExecutionSuccessCaseNameConstant                   = "success"
+	testExecutionFailureCaseNameConstant                   = "failure_exit_code"
+	testExecutionRunnerErrorCaseNameConstant               = "runner_error"
+	testGitWrapperCaseNameConstant                         = "git_wrapper"
+	testGitHubWrapperCaseNameConstant                      = "github_wrapper"
+	testCurlWrapperCaseNameConstant                        = "curl_wrapper"
+	testGitSubcommandConstant                              = "rev-parse"
+	testGitWorktreeFlagConstant                            = "--is-inside-work-tree"
+	testRepositoryWorkingDirectoryConstant                 = "/workspace/repository"
+	testGenericCommandArgumentConstant                     = "--version"
+	testGenericWorkingDirectoryConstant                    = "."
+	testSuccessfulCommandOutputConstant                    = "ok"
+	testStandardErrorOutputConstant                        = "failure"
+	testRunnerFailureMessageConstant                       = "runner failure"
+	testLoggerInitializationCaseNameConstant               = "logger_validation"
+	testRunnerInitializationCaseNameConstant               = "runner_validation"
+	testSuccessfulInitializationCaseNameConstant           = "successful_initialization"
+	testRepositoryAnalysisStartMessageConstant             = "Analyzing repository at /workspace/repository"
+	testRepositoryAnalysisSuccessMessageConstant           = "/workspace/repository is a Git repository"
+	testRepositoryAnalysisFailureMessageTemplateConstant   = "Could not confirm /workspace/repository is a Git repository (exit code %d: %s)"
+	testRepositoryAnalysisExecutionFailureTemplateConstant = "Could not analyze /workspace/repository: %s"
+	testGenericCommandStartMessageConstant                 = "Running git --version (in .)"
+	testGenericCommandSuccessMessageConstant               = "Completed git --version (in .)"
+	testGenericCommandFailureMessageTemplateConstant       = "git --version (in .) failed with exit code %d: %s"
+	testGenericCommandExecutionFailureTemplateConstant     = "git --version (in .) failed: %s"
 )
 
 type recordingCommandRunner struct {
@@ -92,7 +106,7 @@ func TestShellExecutorExecuteBehavior(testInstance *testing.T) {
 		{
 			name: testExecutionSuccessCaseNameConstant,
 			runnerResult: execshell.ExecutionResult{
-				StandardOutput: "ok",
+				StandardOutput: testSuccessfulCommandOutputConstant,
 				ExitCode:       0,
 			},
 			expectedLogCount: 2,
@@ -108,7 +122,7 @@ func TestShellExecutorExecuteBehavior(testInstance *testing.T) {
 		},
 		{
 			name:             testExecutionRunnerErrorCaseNameConstant,
-			runnerError:      errors.New("runner failure"),
+			runnerError:      errors.New(testRunnerFailureMessageConstant),
 			expectErrorType:  execshell.CommandExecutionError{},
 			expectedLogCount: 2,
 		},
@@ -127,7 +141,7 @@ func TestShellExecutorExecuteBehavior(testInstance *testing.T) {
 			shellExecutor, creationError := execshell.NewShellExecutor(logger, recordingRunner, false)
 			require.NoError(testInstance, creationError)
 
-			commandDetails := execshell.CommandDetails{Arguments: []string{testCommandArgumentConstant}, WorkingDirectory: testWorkingDirectoryConstant}
+			commandDetails := execshell.CommandDetails{Arguments: []string{testGitSubcommandConstant, testGitWorktreeFlagConstant}, WorkingDirectory: testRepositoryWorkingDirectoryConstant}
 			executionResult, executionError := shellExecutor.ExecuteGit(context.Background(), commandDetails)
 
 			if testCase.expectErrorType != nil {
@@ -149,33 +163,85 @@ func TestShellExecutorHumanReadableLogging(testInstance *testing.T) {
 		name             string
 		runnerResult     execshell.ExecutionResult
 		runnerError      error
+		commandDetails   execshell.CommandDetails
 		expectedMessages []string
 		expectedLevels   []zapcore.Level
 	}{
 		{
-			name:         testExecutionSuccessCaseNameConstant,
-			runnerResult: execshell.ExecutionResult{StandardOutput: "ok", ExitCode: 0},
+			name:         testExecutionSuccessCaseNameConstant + "_rev_parse",
+			runnerResult: execshell.ExecutionResult{StandardOutput: testSuccessfulCommandOutputConstant, ExitCode: 0},
+			commandDetails: execshell.CommandDetails{
+				Arguments:        []string{testGitSubcommandConstant, testGitWorktreeFlagConstant},
+				WorkingDirectory: testRepositoryWorkingDirectoryConstant,
+			},
 			expectedMessages: []string{
-				"Running git --version (in .)",
-				"Completed git --version (in .)",
+				testRepositoryAnalysisStartMessageConstant,
+				testRepositoryAnalysisSuccessMessageConstant,
 			},
 			expectedLevels: []zapcore.Level{zap.InfoLevel, zap.InfoLevel},
 		},
 		{
-			name:         testExecutionFailureCaseNameConstant,
+			name:         testExecutionFailureCaseNameConstant + "_rev_parse",
 			runnerResult: execshell.ExecutionResult{StandardError: testStandardErrorOutputConstant, ExitCode: 1},
+			commandDetails: execshell.CommandDetails{
+				Arguments:        []string{testGitSubcommandConstant, testGitWorktreeFlagConstant},
+				WorkingDirectory: testRepositoryWorkingDirectoryConstant,
+			},
 			expectedMessages: []string{
-				"Running git --version (in .)",
-				"git --version (in .) failed with exit code 1: failure",
+				testRepositoryAnalysisStartMessageConstant,
+				fmt.Sprintf(testRepositoryAnalysisFailureMessageTemplateConstant, 1, testStandardErrorOutputConstant),
 			},
 			expectedLevels: []zapcore.Level{zap.InfoLevel, zap.WarnLevel},
 		},
 		{
-			name:        testExecutionRunnerErrorCaseNameConstant,
-			runnerError: errors.New("runner failure"),
+			name:        testExecutionRunnerErrorCaseNameConstant + "_rev_parse",
+			runnerError: errors.New(testRunnerFailureMessageConstant),
+			commandDetails: execshell.CommandDetails{
+				Arguments:        []string{testGitSubcommandConstant, testGitWorktreeFlagConstant},
+				WorkingDirectory: testRepositoryWorkingDirectoryConstant,
+			},
 			expectedMessages: []string{
-				"Running git --version (in .)",
-				"git --version (in .) failed: runner failure",
+				testRepositoryAnalysisStartMessageConstant,
+				fmt.Sprintf(testRepositoryAnalysisExecutionFailureTemplateConstant, testRunnerFailureMessageConstant),
+			},
+			expectedLevels: []zapcore.Level{zap.InfoLevel, zap.ErrorLevel},
+		},
+		{
+			name:         testExecutionSuccessCaseNameConstant + "_generic",
+			runnerResult: execshell.ExecutionResult{StandardOutput: testSuccessfulCommandOutputConstant, ExitCode: 0},
+			commandDetails: execshell.CommandDetails{
+				Arguments:        []string{testGenericCommandArgumentConstant},
+				WorkingDirectory: testGenericWorkingDirectoryConstant,
+			},
+			expectedMessages: []string{
+				testGenericCommandStartMessageConstant,
+				testGenericCommandSuccessMessageConstant,
+			},
+			expectedLevels: []zapcore.Level{zap.InfoLevel, zap.InfoLevel},
+		},
+		{
+			name:         testExecutionFailureCaseNameConstant + "_generic",
+			runnerResult: execshell.ExecutionResult{StandardError: testStandardErrorOutputConstant, ExitCode: 1},
+			commandDetails: execshell.CommandDetails{
+				Arguments:        []string{testGenericCommandArgumentConstant},
+				WorkingDirectory: testGenericWorkingDirectoryConstant,
+			},
+			expectedMessages: []string{
+				testGenericCommandStartMessageConstant,
+				fmt.Sprintf(testGenericCommandFailureMessageTemplateConstant, 1, testStandardErrorOutputConstant),
+			},
+			expectedLevels: []zapcore.Level{zap.InfoLevel, zap.WarnLevel},
+		},
+		{
+			name:        testExecutionRunnerErrorCaseNameConstant + "_generic",
+			runnerError: errors.New(testRunnerFailureMessageConstant),
+			commandDetails: execshell.CommandDetails{
+				Arguments:        []string{testGenericCommandArgumentConstant},
+				WorkingDirectory: testGenericWorkingDirectoryConstant,
+			},
+			expectedMessages: []string{
+				testGenericCommandStartMessageConstant,
+				fmt.Sprintf(testGenericCommandExecutionFailureTemplateConstant, testRunnerFailureMessageConstant),
 			},
 			expectedLevels: []zapcore.Level{zap.InfoLevel, zap.ErrorLevel},
 		},
@@ -194,8 +260,7 @@ func TestShellExecutorHumanReadableLogging(testInstance *testing.T) {
 			shellExecutor, creationError := execshell.NewShellExecutor(logger, recordingRunner, true)
 			require.NoError(testInstance, creationError)
 
-			commandDetails := execshell.CommandDetails{Arguments: []string{testCommandArgumentConstant}, WorkingDirectory: testWorkingDirectoryConstant}
-			_, _ = shellExecutor.ExecuteGit(context.Background(), commandDetails)
+			_, _ = shellExecutor.ExecuteGit(context.Background(), testCase.commandDetails)
 
 			capturedLogs := observedLogs.All()
 			require.Len(testInstance, capturedLogs, len(testCase.expectedMessages))
