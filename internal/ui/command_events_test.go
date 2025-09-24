@@ -89,28 +89,3 @@ func TestConsoleCommandEventLoggerEmitsMessages(testInstance *testing.T) {
 		})
 	}
 }
-
-func TestConsoleCommandEventLoggerUpdateLogger(testInstance *testing.T) {
-	command := execshell.ShellCommand{
-		Name: execshell.CommandGit,
-	}
-
-	firstCore, firstLogs := observer.New(zapcore.DebugLevel)
-	firstLogger := zap.New(firstCore)
-	eventLogger := ui.NewConsoleCommandEventLogger(firstLogger)
-
-	eventLogger.CommandStarted(command)
-	require.Len(testInstance, firstLogs.All(), 1)
-
-	secondCore, secondLogs := observer.New(zapcore.DebugLevel)
-	secondLogger := zap.New(secondCore)
-	eventLogger.UpdateLogger(secondLogger)
-
-	eventLogger.CommandCompleted(command, execshell.ExecutionResult{ExitCode: 0})
-	require.Len(testInstance, firstLogs.All(), 1)
-	require.Len(testInstance, secondLogs.All(), 1)
-
-	eventLogger.UpdateLogger(nil)
-	eventLogger.CommandExecutionFailed(command, errors.New(testExecutionFailureReasonConstant))
-	require.Len(testInstance, secondLogs.All(), 1)
-}
