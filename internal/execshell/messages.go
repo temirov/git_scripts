@@ -200,17 +200,6 @@ const (
 	githubBranchProtectionSuccessTemplateConstant                    = "Confirmed branch protection for %s on %s"
 	githubBranchProtectionFailureTemplateConstant                    = "Failed to check branch protection for %s on %s (exit code %d%s)"
 	githubBranchProtectionExecutionFailureTemplateConstant           = "Unable to check branch protection for %s on %s: %s"
-
-	commandStartedMessageTemplateConstant          = "Running %s"
-	commandCompletedMessageTemplateConstant        = "Completed %s"
-	commandFailedExitCodeMessageTemplateConstant   = "%s failed with exit code %d"
-	commandExecutionFailureMessageTemplateConstant = "%s failed: %s"
-	commandLabelTemplateConstant                   = "%s%s"
-	workingDirectorySuffixTemplateConstant         = " (in %s)"
-	commandArgumentsJoinSeparatorConstant          = " "
-	standardErrorSuffixTemplateConstant            = ": %s"
-	unknownFailureMessageConstant                  = "unknown error"
-	emptyStringConstant                            = ""
 )
 
 // CommandMessageFormatter builds human-readable messages for command lifecycle events.
