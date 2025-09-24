@@ -12,6 +12,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/temirov/git_scripts/cmd/cli/repos"
+	workflowcmd "github.com/temirov/git_scripts/cmd/cli/workflow"
 	"github.com/temirov/git_scripts/internal/audit"
 	"github.com/temirov/git_scripts/internal/branches"
 	"github.com/temirov/git_scripts/internal/migrate"
@@ -157,6 +158,16 @@ func NewApplication() *Application {
 	reposCommand, reposBuildError := reposBuilder.Build()
 	if reposBuildError == nil {
 		cobraCommand.AddCommand(reposCommand)
+	}
+
+	workflowBuilder := workflowcmd.CommandBuilder{
+		LoggerProvider: func() *zap.Logger {
+			return application.logger
+		},
+	}
+	workflowCommand, workflowBuildError := workflowBuilder.Build()
+	if workflowBuildError == nil {
+		cobraCommand.AddCommand(workflowCommand)
 	}
 
 	application.rootCommand = cobraCommand

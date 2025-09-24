@@ -89,6 +89,32 @@ The binary exposes the same helpers as the historical shell scripts:
   go run . --config packages.yaml packages purge
   ```
 
+* **Workflow runner** — execute ordered operations described in YAML/JSON files across discovered repositories.
+
+  ```yaml
+  # workflow.yaml
+  steps:
+    - operation: convert-protocol
+      with:
+        from: https
+        to: ssh
+    - operation: migrate-branch
+      with:
+        targets:
+          - repository: canonical/example
+            source_branch: main
+            target_branch: master
+            workflows_directory: .github/workflows
+            push_updates: false
+    - operation: audit-report
+      with:
+        output: ./audit.csv
+  ```
+
+  ```bash
+  go run . workflow run workflow.yaml --roots ~/code --yes
+  ```
+
 ### Building and releasing
 
 `go build` at the repository root produces a single binary that embeds every command:
