@@ -1079,4 +1079,3 @@ func (formatter CommandMessageFormatter) extractDefaultBranchValue(fieldArgument
 	}
 	return value
 }
-
