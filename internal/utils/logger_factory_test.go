@@ -23,6 +23,7 @@ const (
 	testInvalidLogLevelConstant                    = "invalid"
 	testInvalidLogFormatConstant                   = "invalid"
 	testLogMessageConstant                         = "logger_factory_test_message"
+	testConsoleLogMessageConstant                  = "console_event_message"
 )
 
 func TestLoggerFactoryCreateLogger(testInstance *testing.T) {
@@ -32,6 +33,7 @@ func TestLoggerFactoryCreateLogger(testInstance *testing.T) {
 		requestedLogFormat  utils.LogFormat
 		expectError         bool
 		expectStructuredLog bool
+		expectConsoleOutput bool
 	}{
 		{
 			name:                fmt.Sprintf(testLoggerFactoryCaseSupportedFormatConstant, utils.LogLevelDebug, utils.LogFormatStructured),
@@ -39,6 +41,7 @@ func TestLoggerFactoryCreateLogger(testInstance *testing.T) {
 			requestedLogFormat:  utils.LogFormatStructured,
 			expectError:         false,
 			expectStructuredLog: true,
+			expectConsoleOutput: false,
 		},
 		{
 			name:                fmt.Sprintf(testLoggerFactoryCaseSupportedFormatConstant, utils.LogLevelInfo, utils.LogFormatStructured),
@@ -46,6 +49,7 @@ func TestLoggerFactoryCreateLogger(testInstance *testing.T) {
 			requestedLogFormat:  utils.LogFormatStructured,
 			expectError:         false,
 			expectStructuredLog: true,
+			expectConsoleOutput: false,
 		},
 		{
 			name:                fmt.Sprintf(testLoggerFactoryCaseSupportedFormatConstant, utils.LogLevelInfo, utils.LogFormatConsole),
@@ -53,6 +57,7 @@ func TestLoggerFactoryCreateLogger(testInstance *testing.T) {
 			requestedLogFormat:  utils.LogFormatConsole,
 			expectError:         false,
 			expectStructuredLog: false,
+			expectConsoleOutput: true,
 		},
 		{
 			name:               testLoggerFactoryCaseUnsupportedLevelConstant,
@@ -78,13 +83,13 @@ func TestLoggerFactoryCreateLogger(testInstance *testing.T) {
 			originalStderr := os.Stderr
 			os.Stderr = pipeWriter
 
-			logger, creationError := loggerFactory.CreateLogger(testCase.requestedLogLevel, testCase.requestedLogFormat)
+			loggerOutputs, creationError := loggerFactory.CreateLoggerOutputs(testCase.requestedLogLevel, testCase.requestedLogFormat)
 
 			os.Stderr = originalStderr
 
 			if testCase.expectError {
 				require.Error(testInstance, creationError)
-				require.Nil(testInstance, logger)
+				require.Zero(testInstance, loggerOutputs)
 
 				require.NoError(testInstance, pipeWriter.Close())
 				require.NoError(testInstance, pipeReader.Close())
@@ -92,13 +97,16 @@ func TestLoggerFactoryCreateLogger(testInstance *testing.T) {
 			}
 
 			require.NoError(testInstance, creationError)
-			require.NotNil(testInstance, logger)
+			require.NotNil(testInstance, loggerOutputs.DiagnosticLogger)
 
-			logger.Info(testLogMessageConstant)
-			syncError := logger.Sync()
+			loggerOutputs.DiagnosticLogger.Info(testLogMessageConstant)
+			syncError := loggerOutputs.DiagnosticLogger.Sync()
 			if syncError != nil {
 				require.True(testInstance, errors.Is(syncError, syscall.ENOTSUP) || errors.Is(syncError, syscall.EINVAL))
 			}
+
+			loggerOutputs.ConsoleLogger.Info(testConsoleLogMessageConstant)
+			_ = loggerOutputs.ConsoleLogger.Sync()
 
 			require.NoError(testInstance, pipeWriter.Close())
 
@@ -109,8 +117,16 @@ func TestLoggerFactoryCreateLogger(testInstance *testing.T) {
 			trimmedOutput := bytes.TrimSpace(capturedOutput)
 			require.NotEmpty(testInstance, trimmedOutput)
 			require.Contains(testInstance, string(trimmedOutput), testLogMessageConstant)
+			if testCase.expectConsoleOutput {
+				require.Contains(testInstance, string(trimmedOutput), testConsoleLogMessageConstant)
+			} else {
+				require.NotContains(testInstance, string(trimmedOutput), testConsoleLogMessageConstant)
+			}
 
-			isJSONLog := json.Valid(trimmedOutput)
+			outputLines := bytes.Split(trimmedOutput, []byte("\n"))
+			require.NotEmpty(testInstance, outputLines)
+			firstLine := outputLines[0]
+			isJSONLog := json.Valid(firstLine)
 			if testCase.expectStructuredLog {
 				require.True(testInstance, isJSONLog)
 			} else {

@@ -17,6 +17,7 @@ import (
 	"github.com/temirov/git_scripts/internal/branches"
 	"github.com/temirov/git_scripts/internal/migrate"
 	"github.com/temirov/git_scripts/internal/packages"
+	"github.com/temirov/git_scripts/internal/ui"
 	"github.com/temirov/git_scripts/internal/utils"
 )
 
@@ -64,6 +65,8 @@ type Application struct {
 	configurationLoader   *utils.ConfigurationLoader
 	loggerFactory         *utils.LoggerFactory
 	logger                *zap.Logger
+	eventLogger           *zap.Logger
+	commandEventsLogger   *ui.ConsoleCommandEventLogger
 	configuration         ApplicationConfiguration
 	configurationMetadata utils.LoadedConfiguration
 	configurationFilePath string
@@ -108,6 +111,7 @@ func NewApplication() *Application {
 		LoggerProvider: func() *zap.Logger {
 			return application.logger
 		},
+		CommandEventsObserver: application.commandEventsLogger,
 	}
 	auditCommand, auditBuildError := auditBuilder.Build()
 	if auditBuildError == nil {
@@ -118,6 +122,7 @@ func NewApplication() *Application {
 		LoggerProvider: func() *zap.Logger {
 			return application.logger
 		},
+		CommandEventsObserver: application.commandEventsLogger,
 	}
 	branchCleanupCommand, branchCleanupBuildError := branchCleanupBuilder.Build()
 	if branchCleanupBuildError == nil {
@@ -128,6 +133,7 @@ func NewApplication() *Application {
 		LoggerProvider: func() *zap.Logger {
 			return application.logger
 		},
+		CommandEventsObserver: application.commandEventsLogger,
 	}
 	if workingDirectory, workingDirectoryError := os.Getwd(); workingDirectoryError == nil {
 		branchMigrationBuilder.WorkingDirectory = workingDirectory
@@ -154,6 +160,7 @@ func NewApplication() *Application {
 		LoggerProvider: func() *zap.Logger {
 			return application.logger
 		},
+		CommandEventsObserver: application.commandEventsLogger,
 	}
 	reposCommand, reposBuildError := reposBuilder.Build()
 	if reposBuildError == nil {
@@ -164,6 +171,7 @@ func NewApplication() *Application {
 		LoggerProvider: func() *zap.Logger {
 			return application.logger
 		},
+		CommandEventsObserver: application.commandEventsLogger,
 	}
 	workflowCommand, workflowBuildError := workflowBuilder.Build()
 	if workflowBuildError == nil {
@@ -213,7 +221,7 @@ func (application *Application) initializeConfiguration(command *cobra.Command) 
 		application.configuration.LogFormat = application.logFormatFlagValue
 	}
 
-	logger, loggerCreationError := application.loggerFactory.CreateLogger(
+	loggerOutputs, loggerCreationError := application.loggerFactory.CreateLoggerOutputs(
 		utils.LogLevel(application.configuration.LogLevel),
 		utils.LogFormat(application.configuration.LogFormat),
 	)
@@ -221,7 +229,9 @@ func (application *Application) initializeConfiguration(command *cobra.Command) 
 		return fmt.Errorf(loggerCreationErrorTemplateConstant, loggerCreationError)
 	}
 
-	application.logger = logger
+	application.logger = loggerOutputs.DiagnosticLogger
+	application.eventLogger = loggerOutputs.ConsoleLogger
+	application.commandEventsLogger = ui.NewConsoleCommandEventLogger(application.eventLogger)
 
 	application.logger.Info(
 		configurationInitializedMessageConstant,
@@ -257,11 +267,21 @@ func (application *Application) runRootCommand(command *cobra.Command, arguments
 }
 
 func (application *Application) flushLogger() error {
-	if application.logger == nil {
+	if syncError := application.syncLoggerInstance(application.logger); syncError != nil {
+		return syncError
+	}
+	if syncError := application.syncLoggerInstance(application.eventLogger); syncError != nil {
+		return syncError
+	}
+	return nil
+}
+
+func (application *Application) syncLoggerInstance(logger *zap.Logger) error {
+	if logger == nil {
 		return nil
 	}
 
-	syncError := application.logger.Sync()
+	syncError := logger.Sync()
 	switch {
 	case syncError == nil:
 		return nil

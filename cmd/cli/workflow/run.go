@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/temirov/git_scripts/internal/execshell"
 	"github.com/temirov/git_scripts/internal/githubcli"
 	"github.com/temirov/git_scripts/internal/gitrepo"
 	"github.com/temirov/git_scripts/internal/repos/dependencies"
@@ -36,11 +37,12 @@ const (
 
 // CommandBuilder assembles the workflow command hierarchy.
 type CommandBuilder struct {
-	LoggerProvider  LoggerProvider
-	Discoverer      shared.RepositoryDiscoverer
-	GitExecutor     shared.GitExecutor
-	FileSystem      shared.FileSystem
-	PrompterFactory PrompterFactory
+	LoggerProvider        LoggerProvider
+	Discoverer            shared.RepositoryDiscoverer
+	GitExecutor           shared.GitExecutor
+	FileSystem            shared.FileSystem
+	PrompterFactory       PrompterFactory
+	CommandEventsObserver execshell.CommandEventObserver
 }
 
 // Build constructs the workflow command group.
@@ -87,7 +89,7 @@ func (builder *CommandBuilder) run(command *cobra.Command, arguments []string) e
 	}
 
 	logger := resolveLogger(builder.LoggerProvider)
-	gitExecutor, executorError := dependencies.ResolveGitExecutor(builder.GitExecutor, logger)
+	gitExecutor, executorError := dependencies.ResolveGitExecutor(builder.GitExecutor, logger, builder.CommandEventsObserver)
 	if executorError != nil {
 		return executorError
 	}

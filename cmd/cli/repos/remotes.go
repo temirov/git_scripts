@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/temirov/git_scripts/internal/audit"
+	"github.com/temirov/git_scripts/internal/execshell"
 	"github.com/temirov/git_scripts/internal/repos/dependencies"
 	"github.com/temirov/git_scripts/internal/repos/remotes"
 	"github.com/temirov/git_scripts/internal/repos/shared"
@@ -24,12 +25,13 @@ const (
 
 // RemotesCommandBuilder assembles the update-canonical-remote command.
 type RemotesCommandBuilder struct {
-	LoggerProvider  LoggerProvider
-	Discoverer      shared.RepositoryDiscoverer
-	GitExecutor     shared.GitExecutor
-	GitManager      shared.GitRepositoryManager
-	GitHubResolver  shared.GitHubMetadataResolver
-	PrompterFactory PrompterFactory
+	LoggerProvider        LoggerProvider
+	Discoverer            shared.RepositoryDiscoverer
+	GitExecutor           shared.GitExecutor
+	GitManager            shared.GitRepositoryManager
+	GitHubResolver        shared.GitHubMetadataResolver
+	PrompterFactory       PrompterFactory
+	CommandEventsObserver execshell.CommandEventObserver
 }
 
 // Build constructs the update-canonical-remote command.
@@ -53,7 +55,7 @@ func (builder *RemotesCommandBuilder) run(command *cobra.Command, arguments []st
 	roots := determineRepositoryRoots(arguments)
 
 	logger := resolveLogger(builder.LoggerProvider)
-	gitExecutor, executorError := dependencies.ResolveGitExecutor(builder.GitExecutor, logger)
+	gitExecutor, executorError := dependencies.ResolveGitExecutor(builder.GitExecutor, logger, builder.CommandEventsObserver)
 	if executorError != nil {
 		return executorError
 	}
