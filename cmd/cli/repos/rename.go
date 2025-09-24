@@ -6,7 +6,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/temirov/git_scripts/internal/audit"
-	"github.com/temirov/git_scripts/internal/execshell"
 	"github.com/temirov/git_scripts/internal/repos/dependencies"
 	"github.com/temirov/git_scripts/internal/repos/rename"
 	"github.com/temirov/git_scripts/internal/repos/shared"
@@ -27,14 +26,14 @@ const (
 
 // RenameCommandBuilder assembles the rename-folders command.
 type RenameCommandBuilder struct {
-	LoggerProvider        LoggerProvider
-	Discoverer            shared.RepositoryDiscoverer
-	GitExecutor           shared.GitExecutor
-	GitManager            shared.GitRepositoryManager
-	GitHubResolver        shared.GitHubMetadataResolver
-	FileSystem            shared.FileSystem
-	PrompterFactory       PrompterFactory
-	CommandEventsObserver execshell.CommandEventObserver
+	LoggerProvider               LoggerProvider
+	Discoverer                   shared.RepositoryDiscoverer
+	GitExecutor                  shared.GitExecutor
+	GitManager                   shared.GitRepositoryManager
+	GitHubResolver               shared.GitHubMetadataResolver
+	FileSystem                   shared.FileSystem
+	PrompterFactory              PrompterFactory
+	HumanReadableLoggingProvider func() bool
 }
 
 // Build constructs the rename-folders command.
@@ -61,7 +60,11 @@ func (builder *RenameCommandBuilder) run(command *cobra.Command, arguments []str
 	roots := determineRepositoryRoots(arguments)
 
 	logger := resolveLogger(builder.LoggerProvider)
-	gitExecutor, executorError := dependencies.ResolveGitExecutor(builder.GitExecutor, logger, builder.CommandEventsObserver)
+	humanReadableLogging := false
+	if builder.HumanReadableLoggingProvider != nil {
+		humanReadableLogging = builder.HumanReadableLoggingProvider()
+	}
+	gitExecutor, executorError := dependencies.ResolveGitExecutor(builder.GitExecutor, logger, humanReadableLogging)
 	if executorError != nil {
 		return executorError
 	}
