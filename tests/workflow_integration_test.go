@@ -54,6 +54,9 @@ const (
 	workflowIntegrationCSVHeader               = "final_github_repo,folder_name,name_matches,remote_default_branch,local_branch,in_sync,remote_protocol,origin_matches_canonical\n"
 	workflowIntegrationSubtestNameTemplate     = "%d_%s"
 	workflowIntegrationDefaultCaseName         = "protocol_migrate_audit"
+	workflowIntegrationHelpCaseName            = "workflow_help_missing_configuration"
+	workflowIntegrationUsageSnippet            = "workflow run [workflow]"
+	workflowIntegrationMissingConfigMessage    = "workflow configuration path required"
 )
 
 func TestWorkflowRunIntegration(testInstance *testing.T) {
@@ -118,6 +121,47 @@ func TestWorkflowRunIntegration(testInstance *testing.T) {
 			require.Contains(subtest, filteredOutput, expectedAudit)
 
 			verifyWorkflowRepositoryState(subtest, repositoryPath, auditPath)
+		})
+	}
+}
+
+func TestWorkflowRunDisplaysHelpWhenConfigurationMissing(testInstance *testing.T) {
+	workingDirectory, workingDirectoryError := os.Getwd()
+	require.NoError(testInstance, workingDirectoryError)
+	repositoryRoot := filepath.Dir(workingDirectory)
+
+	testCases := []struct {
+		name             string
+		arguments        []string
+		expectedSnippets []string
+	}{
+		{
+			name: workflowIntegrationHelpCaseName,
+			arguments: []string{
+				workflowIntegrationRunSubcommand,
+				workflowIntegrationModulePathConstant,
+				workflowIntegrationLogLevelFlag,
+				workflowIntegrationErrorLevel,
+				workflowIntegrationGroup,
+				workflowIntegrationCommand,
+			},
+			expectedSnippets: []string{
+				integrationHelpUsagePrefixConstant,
+				workflowIntegrationUsageSnippet,
+				workflowIntegrationMissingConfigMessage,
+			},
+		},
+	}
+
+	for testCaseIndex := range testCases {
+		testCase := testCases[testCaseIndex]
+		subtestName := fmt.Sprintf(workflowIntegrationSubtestNameTemplate, testCaseIndex, testCase.name)
+		testInstance.Run(subtestName, func(subtest *testing.T) {
+			outputText, _ := runFailingIntegrationCommand(subtest, repositoryRoot, "", workflowIntegrationTimeout, testCase.arguments)
+			filteredOutput := filterStructuredOutput(outputText)
+			for _, expectedSnippet := range testCase.expectedSnippets {
+				require.Contains(subtest, filteredOutput, expectedSnippet)
+			}
 		})
 	}
 }

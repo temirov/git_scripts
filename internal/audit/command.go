@@ -69,6 +69,9 @@ func (builder *CommandBuilder) parseOptions(command *cobra.Command, arguments []
 	debugFlag, _ := command.Flags().GetBool(flagDebugName)
 
 	if !auditFlag {
+		if helpError := builder.displayCommandHelp(command); helpError != nil {
+			return CommandOptions{}, helpError
+		}
 		return CommandOptions{}, errors.New(errorMissingOperation)
 	}
 
@@ -104,4 +107,11 @@ func (builder *CommandBuilder) resolveGitManager(executor GitExecutor) (GitRepos
 
 func (builder *CommandBuilder) resolveGitHubClient(executor GitExecutor) (GitHubMetadataResolver, error) {
 	return dependencies.ResolveGitHubResolver(builder.GitHubResolver, executor)
+}
+
+func (builder *CommandBuilder) displayCommandHelp(command *cobra.Command) error {
+	if command == nil {
+		return nil
+	}
+	return command.Help()
 }
