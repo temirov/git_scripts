@@ -2,10 +2,12 @@ package tests
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,23 +15,27 @@ import (
 )
 
 const (
-	integrationInfoMessageConstant                   = "\"msg\":\"git_scripts CLI executed\""
-	integrationDebugMessageConstant                  = "\"msg\":\"git_scripts CLI diagnostics\""
-	integrationLogLevelEnvKeyConstant                = "GITSCRIPTS_LOG_LEVEL"
-	integrationConfigFileNameConstant                = "config.yaml"
-	integrationConfigTemplateConstant                = "log_level: %s\n"
-	integrationDefaultCaseNameConstant               = "default_info"
-	integrationConfigCaseNameConstant                = "config_debug"
-	integrationEnvironmentCaseNameConstant           = "environment_error"
-	integrationDebugLevelConstant                    = "debug"
-	integrationErrorLevelConstant                    = "error"
-	integrationCommandTimeout                        = 5 * time.Second
-	integrationConfigFlagTemplateConstant            = "--config=%s"
-	integrationEnvironmentAssignmentTemplateConstant = "%s=%s"
-	integrationSubtestNameTemplateConstant           = "%d_%s"
-	integrationHelpUsagePrefixConstant               = "Usage:"
-	integrationHelpDescriptionSnippetConstant        = "git_scripts ships reusable helpers that integrate Git, GitHub CLI, and related tooling."
-	integrationHelpCaseNameConstant                  = "help_output"
+	integrationInfoMessageConstant                     = "\"msg\":\"git_scripts CLI executed\""
+	integrationDebugMessageConstant                    = "\"msg\":\"git_scripts CLI diagnostics\""
+	integrationLogLevelEnvKeyConstant                  = "GITSCRIPTS_LOG_LEVEL"
+	integrationConfigFileNameConstant                  = "config.yaml"
+	integrationConfigTemplateConstant                  = "log_level: %s\n"
+	integrationDefaultCaseNameConstant                 = "default_info"
+	integrationConfigCaseNameConstant                  = "config_debug"
+	integrationEnvironmentCaseNameConstant             = "environment_error"
+	integrationDebugLevelConstant                      = "debug"
+	integrationErrorLevelConstant                      = "error"
+	integrationCommandTimeout                          = 5 * time.Second
+	integrationConfigFlagTemplateConstant              = "--config=%s"
+	integrationEnvironmentAssignmentTemplateConstant   = "%s=%s"
+	integrationSubtestNameTemplateConstant             = "%d_%s"
+	integrationHelpUsagePrefixConstant                 = "Usage:"
+	integrationHelpDescriptionSnippetConstant          = "git_scripts ships reusable helpers that integrate Git, GitHub CLI, and related tooling."
+	integrationHelpCaseNameConstant                    = "help_output"
+	integrationStructuredLogCaseNameConstant           = "structured_default"
+	integrationConsoleLogCaseNameConstant              = "console_format"
+	integrationConsoleLogFlagConstant                  = "--log-format=console"
+	integrationConfigurationInitializedSnippetConstant = "configuration initialized"
 )
 
 func TestCLIIntegrationLogLevels(testInstance *testing.T) {
@@ -146,6 +152,72 @@ func TestCLIIntegrationDisplaysHelpWhenNoArgumentsProvided(testInstance *testing
 			for _, expectedSnippet := range testCase.expectedSnippets {
 				require.Contains(testInstance, outputText, expectedSnippet)
 			}
+		})
+	}
+}
+
+func TestCLIIntegrationRespectsLogFormatFlag(testInstance *testing.T) {
+	testCases := []struct {
+		name                string
+		additionalArguments []string
+		expectStructured    bool
+	}{
+		{
+			name:                integrationStructuredLogCaseNameConstant,
+			additionalArguments: []string{},
+			expectStructured:    true,
+		},
+		{
+			name:                integrationConsoleLogCaseNameConstant,
+			additionalArguments: []string{integrationConsoleLogFlagConstant},
+			expectStructured:    false,
+		},
+	}
+
+	currentWorkingDirectory, workingDirectoryError := os.Getwd()
+	require.NoError(testInstance, workingDirectoryError)
+	repositoryRootDirectory := filepath.Dir(currentWorkingDirectory)
+
+	for testCaseIndex, testCase := range testCases {
+		testInstance.Run(fmt.Sprintf(integrationSubtestNameTemplateConstant, testCaseIndex, testCase.name), func(testInstance *testing.T) {
+			commandArguments := []string{"run", "."}
+			commandArguments = append(commandArguments, testCase.additionalArguments...)
+
+			executionContext, cancelFunction := context.WithTimeout(context.Background(), integrationCommandTimeout)
+			defer cancelFunction()
+
+			command := exec.CommandContext(executionContext, "go", commandArguments...)
+			command.Dir = repositoryRootDirectory
+			command.Env = os.Environ()
+
+			commandOutput, runError := command.CombinedOutput()
+			outputText := string(commandOutput)
+			require.NoError(testInstance, runError, outputText)
+
+			logLineFound := false
+			outputLines := strings.Split(outputText, "\n")
+			for _, outputLine := range outputLines {
+				trimmedLine := strings.TrimSpace(outputLine)
+				if len(trimmedLine) == 0 {
+					continue
+				}
+
+				if !strings.Contains(trimmedLine, integrationConfigurationInitializedSnippetConstant) {
+					continue
+				}
+
+				logLineFound = true
+				isStructuredLog := json.Valid([]byte(trimmedLine))
+				if testCase.expectStructured {
+					require.True(testInstance, isStructuredLog, trimmedLine)
+				} else {
+					require.False(testInstance, isStructuredLog, trimmedLine)
+				}
+
+				break
+			}
+
+			require.True(testInstance, logLineFound, outputText)
 		})
 	}
 }
