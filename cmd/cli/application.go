@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"syscall"
 
 	"github.com/spf13/cobra"
@@ -17,7 +18,6 @@ import (
 	"github.com/temirov/git_scripts/internal/branches"
 	"github.com/temirov/git_scripts/internal/migrate"
 	"github.com/temirov/git_scripts/internal/packages"
-	"github.com/temirov/git_scripts/internal/ui"
 	"github.com/temirov/git_scripts/internal/utils"
 )
 
@@ -65,8 +65,6 @@ type Application struct {
 	configurationLoader   *utils.ConfigurationLoader
 	loggerFactory         *utils.LoggerFactory
 	logger                *zap.Logger
-	eventLogger           *zap.Logger
-	commandEventsLogger   *ui.ConsoleCommandEventLogger
 	configuration         ApplicationConfiguration
 	configurationMetadata utils.LoadedConfiguration
 	configurationFilePath string
@@ -87,10 +85,7 @@ func NewApplication() *Application {
 		configurationLoader: configurationLoader,
 		loggerFactory:       utils.NewLoggerFactory(),
 		logger:              zap.NewNop(),
-		eventLogger:         zap.NewNop(),
 	}
-
-	application.commandEventsLogger = ui.NewConsoleCommandEventLogger(application.eventLogger)
 
 	cobraCommand := &cobra.Command{
 		Use:           applicationNameConstant,
@@ -115,7 +110,7 @@ func NewApplication() *Application {
 		LoggerProvider: func() *zap.Logger {
 			return application.logger
 		},
-		CommandEventsObserver: application.commandEventsLogger,
+		HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
 	}
 	auditCommand, auditBuildError := auditBuilder.Build()
 	if auditBuildError == nil {
@@ -126,7 +121,7 @@ func NewApplication() *Application {
 		LoggerProvider: func() *zap.Logger {
 			return application.logger
 		},
-		CommandEventsObserver: application.commandEventsLogger,
+		HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
 	}
 	branchCleanupCommand, branchCleanupBuildError := branchCleanupBuilder.Build()
 	if branchCleanupBuildError == nil {
@@ -137,7 +132,7 @@ func NewApplication() *Application {
 		LoggerProvider: func() *zap.Logger {
 			return application.logger
 		},
-		CommandEventsObserver: application.commandEventsLogger,
+		HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
 	}
 	if workingDirectory, workingDirectoryError := os.Getwd(); workingDirectoryError == nil {
 		branchMigrationBuilder.WorkingDirectory = workingDirectory
@@ -164,7 +159,7 @@ func NewApplication() *Application {
 		LoggerProvider: func() *zap.Logger {
 			return application.logger
 		},
-		CommandEventsObserver: application.commandEventsLogger,
+		HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
 	}
 	reposCommand, reposBuildError := reposBuilder.Build()
 	if reposBuildError == nil {
@@ -175,7 +170,7 @@ func NewApplication() *Application {
 		LoggerProvider: func() *zap.Logger {
 			return application.logger
 		},
-		CommandEventsObserver: application.commandEventsLogger,
+		HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
 	}
 	workflowCommand, workflowBuildError := workflowBuilder.Build()
 	if workflowBuildError == nil {
@@ -234,12 +229,6 @@ func (application *Application) initializeConfiguration(command *cobra.Command) 
 	}
 
 	application.logger = loggerOutputs.DiagnosticLogger
-	application.eventLogger = loggerOutputs.ConsoleLogger
-	if application.commandEventsLogger == nil {
-		application.commandEventsLogger = ui.NewConsoleCommandEventLogger(application.eventLogger)
-	} else {
-		application.commandEventsLogger.UpdateLogger(application.eventLogger)
-	}
 
 	application.logger.Info(
 		configurationInitializedMessageConstant,
@@ -249,6 +238,11 @@ func (application *Application) initializeConfiguration(command *cobra.Command) 
 	)
 
 	return nil
+}
+
+func (application *Application) humanReadableLoggingEnabled() bool {
+	logFormatValue := strings.TrimSpace(application.configuration.LogFormat)
+	return strings.EqualFold(logFormatValue, string(utils.LogFormatConsole))
 }
 
 func (application *Application) runRootCommand(command *cobra.Command, arguments []string) error {
@@ -276,9 +270,6 @@ func (application *Application) runRootCommand(command *cobra.Command, arguments
 
 func (application *Application) flushLogger() error {
 	if syncError := application.syncLoggerInstance(application.logger); syncError != nil {
-		return syncError
-	}
-	if syncError := application.syncLoggerInstance(application.eventLogger); syncError != nil {
 		return syncError
 	}
 	return nil
