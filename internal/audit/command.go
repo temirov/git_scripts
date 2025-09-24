@@ -6,7 +6,6 @@ import (
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 
-	"github.com/temirov/git_scripts/internal/execshell"
 	"github.com/temirov/git_scripts/internal/repos/dependencies"
 )
 
@@ -15,12 +14,12 @@ type LoggerProvider func() *zap.Logger
 
 // CommandBuilder assembles the audit cobra command with configurable dependencies.
 type CommandBuilder struct {
-	LoggerProvider        LoggerProvider
-	Discoverer            RepositoryDiscoverer
-	GitExecutor           GitExecutor
-	GitManager            GitRepositoryManager
-	GitHubResolver        GitHubMetadataResolver
-	CommandEventsObserver execshell.CommandEventObserver
+	LoggerProvider               LoggerProvider
+	Discoverer                   RepositoryDiscoverer
+	GitExecutor                  GitExecutor
+	GitManager                   GitRepositoryManager
+	GitHubResolver               GitHubMetadataResolver
+	HumanReadableLoggingProvider func() bool
 }
 
 // Build constructs the cobra command for repository audit workflows.
@@ -100,7 +99,11 @@ func (builder *CommandBuilder) resolveLogger() *zap.Logger {
 }
 
 func (builder *CommandBuilder) resolveGitExecutor(logger *zap.Logger) (GitExecutor, error) {
-	return dependencies.ResolveGitExecutor(builder.GitExecutor, logger, builder.CommandEventsObserver)
+	humanReadableLogging := false
+	if builder.HumanReadableLoggingProvider != nil {
+		humanReadableLogging = builder.HumanReadableLoggingProvider()
+	}
+	return dependencies.ResolveGitExecutor(builder.GitExecutor, logger, humanReadableLogging)
 }
 
 func (builder *CommandBuilder) resolveGitManager(executor GitExecutor) (GitRepositoryManager, error) {

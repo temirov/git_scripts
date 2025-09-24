@@ -1,10 +1,6 @@
 package repos
 
-import (
-	"github.com/spf13/cobra"
-
-	"github.com/temirov/git_scripts/internal/execshell"
-)
+import "github.com/spf13/cobra"
 
 const (
 	groupUseConstant      = "repos"
@@ -14,8 +10,8 @@ const (
 
 // CommandGroupBuilder assembles the repos command group.
 type CommandGroupBuilder struct {
-	LoggerProvider        LoggerProvider
-	CommandEventsObserver execshell.CommandEventObserver
+	LoggerProvider               LoggerProvider
+	HumanReadableLoggingProvider func() bool
 }
 
 // Build constructs the repos command hierarchy.
@@ -26,19 +22,19 @@ func (builder *CommandGroupBuilder) Build() (*cobra.Command, error) {
 		Long:  groupLongDescription,
 	}
 
-	renameBuilder := RenameCommandBuilder{LoggerProvider: builder.LoggerProvider, CommandEventsObserver: builder.CommandEventsObserver}
+	renameBuilder := RenameCommandBuilder{LoggerProvider: builder.LoggerProvider, HumanReadableLoggingProvider: builder.HumanReadableLoggingProvider}
 	renameCommand, renameError := renameBuilder.Build()
 	if renameError == nil {
 		command.AddCommand(renameCommand)
 	}
 
-	remotesBuilder := RemotesCommandBuilder{LoggerProvider: builder.LoggerProvider, CommandEventsObserver: builder.CommandEventsObserver}
+	remotesBuilder := RemotesCommandBuilder{LoggerProvider: builder.LoggerProvider, HumanReadableLoggingProvider: builder.HumanReadableLoggingProvider}
 	remotesCommand, remotesError := remotesBuilder.Build()
 	if remotesError == nil {
 		command.AddCommand(remotesCommand)
 	}
 
-	protocolBuilder := ProtocolCommandBuilder{LoggerProvider: builder.LoggerProvider, CommandEventsObserver: builder.CommandEventsObserver}
+	protocolBuilder := ProtocolCommandBuilder{LoggerProvider: builder.LoggerProvider, HumanReadableLoggingProvider: builder.HumanReadableLoggingProvider}
 	protocolCommand, protocolError := protocolBuilder.Build()
 	if protocolError == nil {
 		command.AddCommand(protocolCommand)
