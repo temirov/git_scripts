@@ -116,6 +116,8 @@ func Execute(executionContext context.Context, dependencies Dependencies, option
 }
 
 func (executor *Executor) printPlan(executionContext context.Context, oldAbsolutePath string, newAbsolutePath string, requireClean bool) {
+	caseOnlyRename := isCaseOnlyRename(oldAbsolutePath, newAbsolutePath)
+
 	switch {
 	case oldAbsolutePath == newAbsolutePath:
 		executor.printfOutput(planSkipAlreadyMessage, oldAbsolutePath)
@@ -126,12 +128,12 @@ func (executor *Executor) printPlan(executionContext context.Context, oldAbsolut
 	case !executor.parentExists(newAbsolutePath):
 		executor.printfOutput(planSkipParentMissingMessage, filepath.Dir(newAbsolutePath))
 		return
-	case executor.targetExists(newAbsolutePath):
+	case executor.targetExists(newAbsolutePath) && !caseOnlyRename:
 		executor.printfOutput(planSkipExistsMessage, newAbsolutePath)
 		return
 	}
 
-	if isCaseOnlyRename(oldAbsolutePath, newAbsolutePath) {
+	if caseOnlyRename {
 		executor.printfOutput(planCaseOnlyMessage, oldAbsolutePath, newAbsolutePath)
 		return
 	}
@@ -140,6 +142,8 @@ func (executor *Executor) printPlan(executionContext context.Context, oldAbsolut
 }
 
 func (executor *Executor) validatePrerequisites(executionContext context.Context, oldAbsolutePath string, newAbsolutePath string, requireClean bool) bool {
+	caseOnlyRename := isCaseOnlyRename(oldAbsolutePath, newAbsolutePath)
+
 	if oldAbsolutePath == newAbsolutePath {
 		executor.printfError(errorAlreadyNamedMessage, oldAbsolutePath)
 		return false
@@ -155,7 +159,7 @@ func (executor *Executor) validatePrerequisites(executionContext context.Context
 		return false
 	}
 
-	if executor.targetExists(newAbsolutePath) {
+	if executor.targetExists(newAbsolutePath) && !caseOnlyRename {
 		executor.printfError(errorTargetExistsMessage, newAbsolutePath)
 		return false
 	}
