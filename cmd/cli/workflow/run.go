@@ -6,11 +6,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/temirov/git_scripts/internal/execshell"
 	"github.com/temirov/git_scripts/internal/githubcli"
 	"github.com/temirov/git_scripts/internal/gitrepo"
 	"github.com/temirov/git_scripts/internal/repos/dependencies"
 	"github.com/temirov/git_scripts/internal/repos/shared"
+	"github.com/temirov/git_scripts/internal/utils"
 	"github.com/temirov/git_scripts/internal/workflow"
 )
 
@@ -37,12 +37,12 @@ const (
 
 // CommandBuilder assembles the workflow command hierarchy.
 type CommandBuilder struct {
-	LoggerProvider        LoggerProvider
-	Discoverer            shared.RepositoryDiscoverer
-	GitExecutor           shared.GitExecutor
-	FileSystem            shared.FileSystem
-	PrompterFactory       PrompterFactory
-	CommandEventsObserver execshell.CommandEventObserver
+	LoggerProvider               LoggerProvider
+	Discoverer                   shared.RepositoryDiscoverer
+	GitExecutor                  shared.GitExecutor
+	FileSystem                   shared.FileSystem
+	PrompterFactory              PrompterFactory
+	HumanReadableLoggingProvider func() bool
 }
 
 // Build constructs the workflow command group.
@@ -89,7 +89,11 @@ func (builder *CommandBuilder) run(command *cobra.Command, arguments []string) e
 	}
 
 	logger := resolveLogger(builder.LoggerProvider)
-	gitExecutor, executorError := dependencies.ResolveGitExecutor(builder.GitExecutor, logger, builder.CommandEventsObserver)
+	humanReadableLogging := false
+	if builder.HumanReadableLoggingProvider != nil {
+		humanReadableLogging = builder.HumanReadableLoggingProvider()
+	}
+	gitExecutor, executorError := dependencies.ResolveGitExecutor(builder.GitExecutor, logger, humanReadableLogging)
 	if executorError != nil {
 		return executorError
 	}
@@ -116,8 +120,8 @@ func (builder *CommandBuilder) run(command *cobra.Command, arguments []string) e
 		GitHubClient:         gitHubClient,
 		FileSystem:           fileSystem,
 		Prompter:             prompter,
-		Output:               command.OutOrStdout(),
-		Errors:               command.ErrOrStderr(),
+		Output:               utils.NewFlushingWriter(command.OutOrStdout()),
+		Errors:               utils.NewFlushingWriter(command.ErrOrStderr()),
 	}
 
 	executor := workflow.NewExecutor(operations, workflowDependencies)

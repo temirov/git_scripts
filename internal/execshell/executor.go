@@ -64,9 +64,10 @@ type CommandRunner interface {
 
 // ShellExecutor orchestrates running shell commands with logging.
 type ShellExecutor struct {
-	commandRunner  CommandRunner
-	logger         *zap.Logger
-	eventsObserver CommandEventObserver
+	commandRunner        CommandRunner
+	logger               *zap.Logger
+	humanReadableLogging bool
+	messageFormatter     CommandMessageFormatter
 }
 
 var (
@@ -110,18 +111,19 @@ func (executionError CommandExecutionError) Unwrap() error {
 }
 
 // NewShellExecutor builds an executor for the provided runner and logger.
-func NewShellExecutor(logger *zap.Logger, commandRunner CommandRunner, eventsObserver CommandEventObserver) (*ShellExecutor, error) {
+func NewShellExecutor(logger *zap.Logger, commandRunner CommandRunner, humanReadableLogging bool) (*ShellExecutor, error) {
 	if logger == nil {
 		return nil, ErrLoggerNotConfigured
 	}
 	if commandRunner == nil {
 		return nil, ErrCommandRunnerNotConfigured
 	}
-	if eventsObserver == nil {
-		eventsObserver = noopCommandEventObserver{}
-	}
-
-	return &ShellExecutor{commandRunner: commandRunner, logger: logger, eventsObserver: eventsObserver}, nil
+	return &ShellExecutor{
+		commandRunner:        commandRunner,
+		logger:               logger,
+		humanReadableLogging: humanReadableLogging,
+		messageFormatter:     CommandMessageFormatter{},
+	}, nil
 }
 
 // Execute runs the provided shell command and logs lifecycle events.
@@ -130,39 +132,50 @@ func (executor *ShellExecutor) Execute(executionContext context.Context, command
 		return ExecutionResult{}, ErrCommandNameMissing
 	}
 
-	executor.logger.Debug(commandStartMessageConstant,
-		zap.String(commandNameFieldNameConstant, string(command.Name)),
-		zap.Strings(commandArgumentsFieldNameConstant, command.Details.Arguments),
-		zap.String(workingDirectoryFieldNameConstant, command.Details.WorkingDirectory),
-	)
-
-	executor.eventsObserver.CommandStarted(command)
+	if executor.humanReadableLogging {
+		executor.logger.Info(executor.messageFormatter.BuildStartedMessage(command))
+	} else {
+		executor.logger.Debug(commandStartMessageConstant,
+			zap.String(commandNameFieldNameConstant, string(command.Name)),
+			zap.Strings(commandArgumentsFieldNameConstant, command.Details.Arguments),
+			zap.String(workingDirectoryFieldNameConstant, command.Details.WorkingDirectory),
+		)
+	}
 
 	executionResult, runnerError := executor.commandRunner.Run(executionContext, command)
 	if runnerError != nil {
-		executor.logger.Error(commandRunnerErrorMessageConstant,
-			zap.String(commandNameFieldNameConstant, string(command.Name)),
-			zap.Error(runnerError),
-		)
-		executor.eventsObserver.CommandExecutionFailed(command, runnerError)
+		if executor.humanReadableLogging {
+			executor.logger.Error(executor.messageFormatter.BuildExecutionFailureMessage(command, runnerError))
+		} else {
+			executor.logger.Error(commandRunnerErrorMessageConstant,
+				zap.String(commandNameFieldNameConstant, string(command.Name)),
+				zap.Error(runnerError),
+			)
+		}
 		return ExecutionResult{}, CommandExecutionError{Command: command, Cause: runnerError}
 	}
 
 	if executionResult.ExitCode != 0 {
-		executor.logger.Warn(commandFailureMessageConstant,
-			zap.String(commandNameFieldNameConstant, string(command.Name)),
-			zap.Int(exitCodeFieldNameConstant, executionResult.ExitCode),
-			zap.String(standardErrorFieldNameConstant, executionResult.StandardError),
-		)
-		executor.eventsObserver.CommandCompleted(command, executionResult)
+		if executor.humanReadableLogging {
+			executor.logger.Warn(executor.messageFormatter.BuildFailureMessage(command, executionResult))
+		} else {
+			executor.logger.Warn(commandFailureMessageConstant,
+				zap.String(commandNameFieldNameConstant, string(command.Name)),
+				zap.Int(exitCodeFieldNameConstant, executionResult.ExitCode),
+				zap.String(standardErrorFieldNameConstant, executionResult.StandardError),
+			)
+		}
 		return ExecutionResult{}, CommandFailedError{Command: command, Result: executionResult}
 	}
 
-	executor.logger.Debug(commandSuccessMessageConstant,
-		zap.String(commandNameFieldNameConstant, string(command.Name)),
-		zap.Int(exitCodeFieldNameConstant, executionResult.ExitCode),
-	)
-	executor.eventsObserver.CommandCompleted(command, executionResult)
+	if executor.humanReadableLogging {
+		executor.logger.Info(executor.messageFormatter.BuildSuccessMessage(command))
+	} else {
+		executor.logger.Debug(commandSuccessMessageConstant,
+			zap.String(commandNameFieldNameConstant, string(command.Name)),
+			zap.Int(exitCodeFieldNameConstant, executionResult.ExitCode),
+		)
+	}
 	return executionResult, nil
 }
 
