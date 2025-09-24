@@ -92,7 +92,7 @@ func TestPullRequestCleanupIntegration(testInstance *testing.T) {
 
 	commandRunner := execshell.NewOSCommandRunner()
 	commandLogger := zap.NewNop()
-	shellExecutor, executorError := execshell.NewShellExecutor(commandLogger, commandRunner)
+	shellExecutor, executorError := execshell.NewShellExecutor(commandLogger, commandRunner, nil)
 	require.NoError(testInstance, executorError)
 
 	cleanupCommandBuilder := branches.CommandBuilder{

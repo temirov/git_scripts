@@ -38,6 +38,26 @@ func (runner *recordingCommandRunner) Run(executionContext context.Context, comm
 	return runner.executionResult, runner.executionError
 }
 
+type commandEventRecording struct {
+	startedCommands           []execshell.ShellCommand
+	completedCommandResults   []execshell.ExecutionResult
+	executionFailureInstances []error
+}
+
+func (recording *commandEventRecording) CommandStarted(command execshell.ShellCommand) {
+	recording.startedCommands = append(recording.startedCommands, command)
+}
+
+func (recording *commandEventRecording) CommandCompleted(command execshell.ShellCommand, result execshell.ExecutionResult) {
+	_ = command
+	recording.completedCommandResults = append(recording.completedCommandResults, result)
+}
+
+func (recording *commandEventRecording) CommandExecutionFailed(command execshell.ShellCommand, failure error) {
+	_ = command
+	recording.executionFailureInstances = append(recording.executionFailureInstances, failure)
+}
+
 func TestShellExecutorInitializationValidation(testInstance *testing.T) {
 	testCases := []struct {
 		name          string
@@ -68,7 +88,7 @@ func TestShellExecutorInitializationValidation(testInstance *testing.T) {
 
 	for _, testCase := range testCases {
 		testInstance.Run(testCase.name, func(testInstance *testing.T) {
-			executor, creationError := execshell.NewShellExecutor(testCase.logger, testCase.runner)
+			executor, creationError := execshell.NewShellExecutor(testCase.logger, testCase.runner, nil)
 			if testCase.expectSuccess {
 				require.NoError(testInstance, creationError)
 				require.NotNil(testInstance, executor)
@@ -123,7 +143,7 @@ func TestShellExecutorExecuteBehavior(testInstance *testing.T) {
 				executionError:  testCase.runnerError,
 			}
 
-			shellExecutor, creationError := execshell.NewShellExecutor(logger, recordingRunner)
+			shellExecutor, creationError := execshell.NewShellExecutor(logger, recordingRunner, nil)
 			require.NoError(testInstance, creationError)
 
 			commandDetails := execshell.CommandDetails{Arguments: []string{testCommandArgumentConstant}, WorkingDirectory: testWorkingDirectoryConstant}
@@ -184,7 +204,7 @@ func TestShellExecutorWrappersSetCommandNames(testInstance *testing.T) {
 				executionResult: execshell.ExecutionResult{ExitCode: 1},
 			}
 
-			executor, creationError := execshell.NewShellExecutor(logger, recordingRunner)
+			executor, creationError := execshell.NewShellExecutor(logger, recordingRunner, nil)
 			require.NoError(testInstance, creationError)
 
 			executionError := testCase.invoke(executor)
@@ -192,6 +212,62 @@ func TestShellExecutorWrappersSetCommandNames(testInstance *testing.T) {
 			require.Len(testInstance, recordingRunner.recordedCommands, 1)
 			recordedCommand := recordingRunner.recordedCommands[0]
 			require.Equal(testInstance, testCase.expectedCommand, recordedCommand.Name)
+		})
+	}
+}
+
+func TestShellExecutorNotifiesCommandEvents(testInstance *testing.T) {
+	testCases := []struct {
+		name                    string
+		runnerResult            execshell.ExecutionResult
+		runnerError             error
+		expectCompletedCount    int
+		expectFailureEventCount int
+	}{
+		{
+			name: "success_event",
+			runnerResult: execshell.ExecutionResult{
+				StandardOutput: "ok",
+				ExitCode:       0,
+			},
+			expectCompletedCount:    1,
+			expectFailureEventCount: 0,
+		},
+		{
+			name: "non_zero_exit_event",
+			runnerResult: execshell.ExecutionResult{
+				StandardError: "failure",
+				ExitCode:      2,
+			},
+			expectCompletedCount:    1,
+			expectFailureEventCount: 0,
+		},
+		{
+			name:                    "runner_failure_event",
+			runnerError:             errors.New("runner failure"),
+			expectCompletedCount:    0,
+			expectFailureEventCount: 1,
+		},
+	}
+
+	for _, testCase := range testCases {
+		testInstance.Run(testCase.name, func(testInstance *testing.T) {
+			eventRecording := &commandEventRecording{}
+			recordingRunner := &recordingCommandRunner{executionResult: testCase.runnerResult, executionError: testCase.runnerError}
+			executor, creationError := execshell.NewShellExecutor(zap.NewNop(), recordingRunner, eventRecording)
+			require.NoError(testInstance, creationError)
+
+			_, executionError := executor.Execute(context.Background(), execshell.ShellCommand{Name: execshell.CommandGit})
+			if testCase.runnerError != nil {
+				require.Error(testInstance, executionError)
+			}
+
+			require.Len(testInstance, eventRecording.startedCommands, 1)
+			require.Len(testInstance, eventRecording.completedCommandResults, testCase.expectCompletedCount)
+			require.Len(testInstance, eventRecording.executionFailureInstances, testCase.expectFailureEventCount)
+			if testCase.expectCompletedCount > 0 {
+				require.Equal(testInstance, testCase.runnerResult.ExitCode, eventRecording.completedCommandResults[0].ExitCode)
+			}
 		})
 	}
 }

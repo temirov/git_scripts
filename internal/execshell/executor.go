@@ -15,10 +15,10 @@ const (
 	loggerNotConfiguredMessageConstant        = "shell executor logger not configured"
 	commandRunnerNotConfiguredMessageConstant = "shell executor command runner not configured"
 	commandNameMissingMessageConstant         = "shell command name not provided"
-	commandStartMessageConstant               = "starting external command"
-	commandSuccessMessageConstant             = "external command completed"
-	commandFailureMessageConstant             = "external command reported failure"
-	commandRunnerErrorMessageConstant         = "external command execution error"
+	commandStartMessageConstant               = "command execution starting"
+	commandSuccessMessageConstant             = "command execution completed"
+	commandFailureMessageConstant             = "command returned non-zero status"
+	commandRunnerErrorMessageConstant         = "command execution error"
 	commandNameFieldNameConstant              = "command"
 	commandArgumentsFieldNameConstant         = "arguments"
 	workingDirectoryFieldNameConstant         = "working_directory"
@@ -64,8 +64,9 @@ type CommandRunner interface {
 
 // ShellExecutor orchestrates running shell commands with logging.
 type ShellExecutor struct {
-	commandRunner CommandRunner
-	logger        *zap.Logger
+	commandRunner  CommandRunner
+	logger         *zap.Logger
+	eventsObserver CommandEventObserver
 }
 
 var (
@@ -109,15 +110,18 @@ func (executionError CommandExecutionError) Unwrap() error {
 }
 
 // NewShellExecutor builds an executor for the provided runner and logger.
-func NewShellExecutor(logger *zap.Logger, commandRunner CommandRunner) (*ShellExecutor, error) {
+func NewShellExecutor(logger *zap.Logger, commandRunner CommandRunner, eventsObserver CommandEventObserver) (*ShellExecutor, error) {
 	if logger == nil {
 		return nil, ErrLoggerNotConfigured
 	}
 	if commandRunner == nil {
 		return nil, ErrCommandRunnerNotConfigured
 	}
+	if eventsObserver == nil {
+		eventsObserver = noopCommandEventObserver{}
+	}
 
-	return &ShellExecutor{commandRunner: commandRunner, logger: logger}, nil
+	return &ShellExecutor{commandRunner: commandRunner, logger: logger, eventsObserver: eventsObserver}, nil
 }
 
 // Execute runs the provided shell command and logs lifecycle events.
@@ -126,11 +130,13 @@ func (executor *ShellExecutor) Execute(executionContext context.Context, command
 		return ExecutionResult{}, ErrCommandNameMissing
 	}
 
-	executor.logger.Info(commandStartMessageConstant,
+	executor.logger.Debug(commandStartMessageConstant,
 		zap.String(commandNameFieldNameConstant, string(command.Name)),
 		zap.Strings(commandArgumentsFieldNameConstant, command.Details.Arguments),
 		zap.String(workingDirectoryFieldNameConstant, command.Details.WorkingDirectory),
 	)
+
+	executor.eventsObserver.CommandStarted(command)
 
 	executionResult, runnerError := executor.commandRunner.Run(executionContext, command)
 	if runnerError != nil {
@@ -138,6 +144,7 @@ func (executor *ShellExecutor) Execute(executionContext context.Context, command
 			zap.String(commandNameFieldNameConstant, string(command.Name)),
 			zap.Error(runnerError),
 		)
+		executor.eventsObserver.CommandExecutionFailed(command, runnerError)
 		return ExecutionResult{}, CommandExecutionError{Command: command, Cause: runnerError}
 	}
 
@@ -147,13 +154,15 @@ func (executor *ShellExecutor) Execute(executionContext context.Context, command
 			zap.Int(exitCodeFieldNameConstant, executionResult.ExitCode),
 			zap.String(standardErrorFieldNameConstant, executionResult.StandardError),
 		)
+		executor.eventsObserver.CommandCompleted(command, executionResult)
 		return ExecutionResult{}, CommandFailedError{Command: command, Result: executionResult}
 	}
 
-	executor.logger.Info(commandSuccessMessageConstant,
+	executor.logger.Debug(commandSuccessMessageConstant,
 		zap.String(commandNameFieldNameConstant, string(command.Name)),
 		zap.Int(exitCodeFieldNameConstant, executionResult.ExitCode),
 	)
+	executor.eventsObserver.CommandCompleted(command, executionResult)
 	return executionResult, nil
 }
 
