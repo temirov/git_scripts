@@ -67,11 +67,12 @@ type LoggerProvider func() *zap.Logger
 
 // CommandBuilder assembles the Cobra command hierarchy for branch migration.
 type CommandBuilder struct {
-	LoggerProvider       LoggerProvider
-	Executor             CommandExecutor
-	WorkingDirectory     string
-	RepositoryDiscoverer RepositoryDiscoverer
-	ServiceProvider      ServiceProvider
+	LoggerProvider        LoggerProvider
+	Executor              CommandExecutor
+	WorkingDirectory      string
+	RepositoryDiscoverer  RepositoryDiscoverer
+	ServiceProvider       ServiceProvider
+	CommandEventsObserver execshell.CommandEventObserver
 }
 
 // Build constructs the branch command with the migrate subcommand.
@@ -248,7 +249,7 @@ func (builder *CommandBuilder) resolveExecutor(logger *zap.Logger) (CommandExecu
 	}
 
 	commandRunner := execshell.NewOSCommandRunner()
-	shellExecutor, creationError := execshell.NewShellExecutor(logger, commandRunner)
+	shellExecutor, creationError := execshell.NewShellExecutor(logger, commandRunner, builder.CommandEventsObserver)
 	if creationError != nil {
 		return nil, creationError
 	}
