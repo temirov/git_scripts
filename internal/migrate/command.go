@@ -11,10 +11,10 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
-	"github.com/temirov/git_scripts/internal/audit"
 	"github.com/temirov/git_scripts/internal/execshell"
 	"github.com/temirov/git_scripts/internal/githubcli"
 	"github.com/temirov/git_scripts/internal/gitrepo"
+	"github.com/temirov/git_scripts/internal/repos/discovery"
 )
 
 const (
@@ -259,7 +259,7 @@ func (builder *CommandBuilder) resolveRepositoryDiscoverer() RepositoryDiscovere
 	if builder.RepositoryDiscoverer != nil {
 		return builder.RepositoryDiscoverer
 	}
-	return audit.NewFilesystemRepositoryDiscoverer()
+	return discovery.NewFilesystemRepositoryDiscoverer()
 }
 
 func (builder *CommandBuilder) resolveService(dependencies ServiceDependencies) (MigrationExecutor, error) {

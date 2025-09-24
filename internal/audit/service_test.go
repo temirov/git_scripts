@@ -4,12 +4,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/fs"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -47,7 +43,6 @@ type stubGitManager struct {
 	cleanWorktree bool
 	branchName    string
 	remoteURL     string
-	setError      error
 }
 
 func (manager stubGitManager) CheckCleanWorktree(ctx context.Context, repositoryPath string) (bool, error) {
@@ -63,7 +58,7 @@ func (manager stubGitManager) GetRemoteURL(ctx context.Context, repositoryPath s
 }
 
 func (manager stubGitManager) SetRemoteURL(ctx context.Context, repositoryPath string, remoteName string, remoteURL string) error {
-	return manager.setError
+	return nil
 }
 
 type stubGitHubResolver struct {
@@ -78,55 +73,6 @@ func (resolver stubGitHubResolver) ResolveRepoMetadata(ctx context.Context, repo
 	return resolver.metadata, nil
 }
 
-type stubFileSystem struct {
-	existingPaths map[string]bool
-	renameError   error
-}
-
-func (fileSystem stubFileSystem) Stat(path string) (fs.FileInfo, error) {
-	if fileSystem.existingPaths[path] {
-		return stubFileInfo{nameValue: filepath.Base(path)}, nil
-	}
-	return nil, os.ErrNotExist
-}
-
-func (fileSystem stubFileSystem) Rename(oldPath string, newPath string) error {
-	return fileSystem.renameError
-}
-
-func (fileSystem stubFileSystem) Abs(path string) (string, error) {
-	return path, nil
-}
-
-type stubFileInfo struct {
-	nameValue string
-}
-
-func (info stubFileInfo) Name() string  { return info.nameValue }
-func (stubFileInfo) Size() int64        { return 0 }
-func (stubFileInfo) Mode() fs.FileMode  { return 0 }
-func (stubFileInfo) ModTime() time.Time { return time.Time{} }
-func (stubFileInfo) IsDir() bool        { return true }
-func (stubFileInfo) Sys() any           { return nil }
-
-type stubPrompter struct {
-	response bool
-	err      error
-}
-
-func (prompter stubPrompter) Confirm(prompt string) (bool, error) {
-	if prompter.err != nil {
-		return false, prompter.err
-	}
-	return prompter.response, nil
-}
-
-type fixedClock struct{}
-
-func (fixedClock) Now() time.Time {
-	return time.Unix(0, 0)
-}
-
 func TestServiceRunBehaviors(testInstance *testing.T) {
 	testCases := []struct {
 		name            string
@@ -135,8 +81,6 @@ func TestServiceRunBehaviors(testInstance *testing.T) {
 		executorOutputs map[string]execshell.ExecutionResult
 		gitManager      audit.GitRepositoryManager
 		githubResolver  audit.GitHubMetadataResolver
-		fileSystem      audit.FileSystem
-		prompter        audit.ConfirmationPrompter
 		expectedOutput  string
 		expectedError   string
 	}{
@@ -144,7 +88,7 @@ func TestServiceRunBehaviors(testInstance *testing.T) {
 			name: "audit_report",
 			options: audit.CommandOptions{
 				AuditReport: true,
-				Clock:       fixedClock{},
+				Roots:       []string{"/tmp/example"},
 			},
 			discoverer: stubDiscoverer{repositories: []string{"/tmp/example"}},
 			executorOutputs: map[string]execshell.ExecutionResult{
@@ -161,50 +105,15 @@ func TestServiceRunBehaviors(testInstance *testing.T) {
 					DefaultBranch: "main",
 				},
 			},
-			fileSystem:     stubFileSystem{existingPaths: map[string]bool{"/tmp": true, "/tmp/example": true}},
-			prompter:       stubPrompter{response: true},
 			expectedOutput: "final_github_repo,folder_name,name_matches,remote_default_branch,local_branch,in_sync,remote_protocol,origin_matches_canonical\ncanonical/example,example,yes,main,main,n/a,https,no\n",
 			expectedError:  "",
 		},
 		{
-			name: "rename_dry_run",
+			name: "audit_debug",
 			options: audit.CommandOptions{
-				RenameRepositories:   true,
-				DryRun:               true,
-				RequireCleanWorktree: true,
-				Clock:                fixedClock{},
-			},
-			discoverer: stubDiscoverer{repositories: []string{"/tmp/legacy"}},
-			executorOutputs: map[string]execshell.ExecutionResult{
-				"rev-parse --is-inside-work-tree": {StandardOutput: "true"},
-			},
-			gitManager: stubGitManager{
-				cleanWorktree: true,
-				branchName:    "main",
-				remoteURL:     "https://github.com/origin/example.git",
-			},
-			githubResolver: stubGitHubResolver{
-				metadata: githubcli.RepositoryMetadata{
-					NameWithOwner: "origin/example",
-					DefaultBranch: "main",
-				},
-			},
-			fileSystem: stubFileSystem{
-				existingPaths: map[string]bool{
-					"/tmp":         true,
-					"/tmp/example": false,
-				},
-			},
-			prompter:       stubPrompter{response: true},
-			expectedOutput: "PLAN-OK: /tmp/legacy → /tmp/example\n",
-			expectedError:  "",
-		},
-		{
-			name: "update_remote_dry_run",
-			options: audit.CommandOptions{
-				UpdateRemotes: true,
-				DryRun:        true,
-				Clock:         fixedClock{},
+				AuditReport: true,
+				DebugOutput: true,
+				Roots:       []string{"/tmp/example"},
 			},
 			discoverer: stubDiscoverer{repositories: []string{"/tmp/example"}},
 			executorOutputs: map[string]execshell.ExecutionResult{
@@ -221,38 +130,8 @@ func TestServiceRunBehaviors(testInstance *testing.T) {
 					DefaultBranch: "main",
 				},
 			},
-			fileSystem:     stubFileSystem{existingPaths: map[string]bool{"/tmp": true, "/tmp/example": true}},
-			prompter:       stubPrompter{response: true},
-			expectedOutput: "PLAN-UPDATE-REMOTE: /tmp/example origin https://github.com/origin/example.git → https://github.com/canonical/example.git\n",
-			expectedError:  "",
-		},
-		{
-			name: "protocol_convert_dry_run",
-			options: audit.CommandOptions{
-				DryRun:       true,
-				ProtocolFrom: audit.RemoteProtocolHTTPS,
-				ProtocolTo:   audit.RemoteProtocolSSH,
-				Clock:        fixedClock{},
-			},
-			discoverer: stubDiscoverer{repositories: []string{"/tmp/example"}},
-			executorOutputs: map[string]execshell.ExecutionResult{
-				"rev-parse --is-inside-work-tree": {StandardOutput: "true"},
-			},
-			gitManager: stubGitManager{
-				cleanWorktree: true,
-				branchName:    "main",
-				remoteURL:     "https://github.com/origin/example.git",
-			},
-			githubResolver: stubGitHubResolver{
-				metadata: githubcli.RepositoryMetadata{
-					NameWithOwner: "origin/example",
-					DefaultBranch: "main",
-				},
-			},
-			fileSystem:     stubFileSystem{existingPaths: map[string]bool{"/tmp": true, "/tmp/example": true}},
-			prompter:       stubPrompter{response: true},
-			expectedOutput: "PLAN-CONVERT: /tmp/example origin https://github.com/origin/example.git → ssh://git@github.com/origin/example.git\n",
-			expectedError:  "",
+			expectedOutput: "final_github_repo,folder_name,name_matches,remote_default_branch,local_branch,in_sync,remote_protocol,origin_matches_canonical\ncanonical/example,example,yes,main,main,n/a,https,no\n",
+			expectedError:  "DEBUG: discovered 1 candidate repos under: /tmp/example\nDEBUG: checking /tmp/example\n",
 		},
 	}
 
@@ -266,11 +145,8 @@ func TestServiceRunBehaviors(testInstance *testing.T) {
 				testCase.gitManager,
 				stubGitExecutor{outputs: testCase.executorOutputs},
 				testCase.githubResolver,
-				testCase.fileSystem,
-				testCase.prompter,
 				outputBuffer,
 				errorBuffer,
-				testCase.options.Clock,
 			)
 
 			runError := service.Run(context.Background(), testCase.options)

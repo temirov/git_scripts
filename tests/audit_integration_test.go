@@ -1,12 +1,10 @@
 package tests
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -21,10 +19,7 @@ const (
 	auditIntegrationRunSubcommand               = "run"
 	auditIntegrationModulePathConstant          = "."
 	auditIntegrationAuditSubcommand             = "audit"
-	auditIntegrationDryRunFlag                  = "--dry-run"
 	auditIntegrationAuditFlag                   = "--audit"
-	auditIntegrationRenameFlag                  = "--rename"
-	auditIntegrationRequireCleanFlag            = "--require-clean"
 	auditIntegrationGitExecutable               = "git"
 	auditIntegrationInitFlag                    = "init"
 	auditIntegrationInitialBranchFlag           = "--initial-branch=main"
@@ -36,7 +31,6 @@ const (
 	auditIntegrationStubScript                  = "#!/bin/sh\nif [ \"$1\" = \"repo\" ] && [ \"$2\" = \"view\" ]; then\n  cat <<'EOF'\n{\"nameWithOwner\":\"canonical/example\",\"defaultBranchRef\":{\"name\":\"main\"},\"description\":\"\"}\nEOF\n  exit 0\nfi\nexit 0\n"
 	auditIntegrationCSVOutput                   = "final_github_repo,folder_name,name_matches,remote_default_branch,local_branch,in_sync,remote_protocol,origin_matches_canonical\ncanonical/example,legacy,no,main,,n/a,https,no\n"
 	auditIntegrationAuditCaseNameConstant       = "audit_csv"
-	auditIntegrationRenameCaseNameConstant      = "rename_plan"
 	auditIntegrationSubtestNameTemplateConstant = "%d_%s"
 )
 
@@ -76,23 +70,8 @@ func TestAuditCommandIntegration(testInstance *testing.T) {
 		auditIntegrationErrorLevel,
 		auditIntegrationAuditSubcommand,
 		auditIntegrationAuditFlag,
-		auditIntegrationDryRunFlag,
 		repositoryPath,
 	}
-
-	renameCommandArguments := []string{
-		auditIntegrationRunSubcommand,
-		auditIntegrationModulePathConstant,
-		auditIntegrationLogLevelFlag,
-		auditIntegrationErrorLevel,
-		auditIntegrationAuditSubcommand,
-		auditIntegrationRenameFlag,
-		auditIntegrationRequireCleanFlag,
-		auditIntegrationDryRunFlag,
-		repositoryPath,
-	}
-
-	expectedRename := fmt.Sprintf("PLAN-OK: %s → %s\n", repositoryPath, filepath.Join(filepath.Dir(repositoryPath), "example"))
 
 	testCases := []struct {
 		name           string
@@ -104,51 +83,12 @@ func TestAuditCommandIntegration(testInstance *testing.T) {
 			arguments:      auditCommandArguments,
 			expectedOutput: auditIntegrationCSVOutput,
 		},
-		{
-			name:           auditIntegrationRenameCaseNameConstant,
-			arguments:      renameCommandArguments,
-			expectedOutput: expectedRename,
-		},
 	}
 
 	for testCaseIndex, testCase := range testCases {
 		testInstance.Run(fmt.Sprintf(auditIntegrationSubtestNameTemplateConstant, testCaseIndex, testCase.name), func(subtest *testing.T) {
-			subtestOutput := runCommand(subtest, repositoryRoot, extendedPath, testCase.arguments)
-			require.Equal(subtest, testCase.expectedOutput, filterCommandOutput(subtestOutput))
+			subtestOutput := runIntegrationCommand(subtest, repositoryRoot, extendedPath, auditIntegrationTimeout, testCase.arguments)
+			require.Equal(subtest, testCase.expectedOutput, filterStructuredOutput(subtestOutput))
 		})
 	}
-}
-
-func runCommand(testInstance *testing.T, repositoryRoot string, pathVariable string, arguments []string) string {
-	executionContext, cancel := context.WithTimeout(context.Background(), auditIntegrationTimeout)
-	defer cancel()
-
-	command := exec.CommandContext(executionContext, auditIntegrationCommand, arguments...)
-	command.Dir = repositoryRoot
-	environment := append([]string{}, os.Environ()...)
-	environment = append(environment, "PATH="+pathVariable)
-	command.Env = environment
-
-	outputBytes, runError := command.CombinedOutput()
-	require.NoError(testInstance, runError, string(outputBytes))
-	return string(outputBytes)
-}
-
-func filterCommandOutput(rawOutput string) string {
-	lines := strings.Split(rawOutput, "\n")
-	var filtered []string
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if len(trimmed) == 0 {
-			continue
-		}
-		if strings.HasPrefix(trimmed, "{") {
-			continue
-		}
-		filtered = append(filtered, line)
-	}
-	if len(filtered) == 0 {
-		return ""
-	}
-	return strings.Join(filtered, "\n") + "\n"
 }

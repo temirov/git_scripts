@@ -9,8 +9,8 @@ import (
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 
-	"github.com/temirov/git_scripts/internal/audit"
 	"github.com/temirov/git_scripts/internal/execshell"
+	"github.com/temirov/git_scripts/internal/repos/discovery"
 )
 
 const (
@@ -173,7 +173,7 @@ func (builder *CommandBuilder) resolveRepositoryDiscoverer() RepositoryDiscovere
 		return builder.RepositoryDiscoverer
 	}
 
-	return audit.NewFilesystemRepositoryDiscoverer()
+	return discovery.NewFilesystemRepositoryDiscoverer()
 }
 
 func (builder *CommandBuilder) determineRepositoryRoots(arguments []string) []string {

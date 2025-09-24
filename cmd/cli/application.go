@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 
+	"github.com/temirov/git_scripts/cmd/cli/repos"
 	"github.com/temirov/git_scripts/internal/audit"
 	"github.com/temirov/git_scripts/internal/branches"
 	"github.com/temirov/git_scripts/internal/migrate"
@@ -145,6 +146,16 @@ func NewApplication() *Application {
 	packagesCommand, packagesBuildError := packagesBuilder.Build()
 	if packagesBuildError == nil {
 		cobraCommand.AddCommand(packagesCommand)
+	}
+
+	reposBuilder := repos.CommandGroupBuilder{
+		LoggerProvider: func() *zap.Logger {
+			return application.logger
+		},
+	}
+	reposCommand, reposBuildError := reposBuilder.Build()
+	if reposBuildError == nil {
+		cobraCommand.AddCommand(reposCommand)
 	}
 
 	application.rootCommand = cobraCommand

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -29,6 +30,7 @@ const (
 	packagesIntegrationConfigFlagTemplateConstant       = "--config=%s"
 	packagesIntegrationPackagesCommandNameConstant      = "packages"
 	packagesIntegrationPurgeCommandNameConstant         = "purge"
+	packagesIntegrationCommandTimeout                   = 10 * time.Second
 	packagesIntegrationPageSizeConstant                 = 3
 	packagesIntegrationTaggedVersionIDConstant          = 101
 	packagesIntegrationFirstUntaggedVersionIDConstant   = 202
@@ -224,7 +226,7 @@ func TestPackagesCommandIntegration(testInstance *testing.T) {
 			}
 
 			pathVariable := os.Getenv("PATH")
-			_ = runCommand(subtest, repositoryRoot, pathVariable, arguments)
+			_ = runIntegrationCommand(subtest, repositoryRoot, pathVariable, packagesIntegrationCommandTimeout, arguments)
 
 			listRequests := serverState.snapshotListRequests()
 			require.Len(subtest, listRequests, 2)
