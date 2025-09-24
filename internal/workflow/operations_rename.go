@@ -3,6 +3,7 @@ package workflow
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -46,8 +47,10 @@ func (operation *RenameOperation) Execute(executionContext context.Context, envi
 			continue
 		}
 
+		originalPath := repository.Path
+
 		options := rename.Options{
-			RepositoryPath:       repository.Path,
+			RepositoryPath:       originalPath,
 			DesiredFolderName:    desiredName,
 			DryRun:               environment.DryRun,
 			RequireCleanWorktree: operation.RequireCleanWorktree,
@@ -60,7 +63,11 @@ func (operation *RenameOperation) Execute(executionContext context.Context, envi
 			continue
 		}
 
-		newPath := filepath.Join(filepath.Dir(repository.Path), desiredName)
+		newPath := filepath.Join(filepath.Dir(originalPath), desiredName)
+		if !renameCompleted(environment.FileSystem, originalPath, newPath) {
+			continue
+		}
+
 		if updateError := state.UpdateRepositoryPath(repositoryIndex, newPath); updateError != nil {
 			return updateError
 		}
@@ -71,4 +78,22 @@ func (operation *RenameOperation) Execute(executionContext context.Context, envi
 	}
 
 	return nil
+}
+
+func renameCompleted(fileSystem shared.FileSystem, originalPath string, newPath string) bool {
+	if fileSystem == nil {
+		return false
+	}
+
+	newInfo, newStatError := fileSystem.Stat(newPath)
+	if newStatError != nil {
+		return false
+	}
+
+	originalInfo, originalStatError := fileSystem.Stat(originalPath)
+	if originalStatError != nil {
+		return true
+	}
+
+	return os.SameFile(originalInfo, newInfo)
 }
