@@ -41,10 +41,11 @@ type LoggerProvider func() *zap.Logger
 
 // CommandBuilder assembles the Cobra command for branch cleanup.
 type CommandBuilder struct {
-	LoggerProvider       LoggerProvider
-	Executor             CommandExecutor
-	WorkingDirectory     string
-	RepositoryDiscoverer RepositoryDiscoverer
+	LoggerProvider        LoggerProvider
+	Executor              CommandExecutor
+	WorkingDirectory      string
+	RepositoryDiscoverer  RepositoryDiscoverer
+	CommandEventsObserver execshell.CommandEventObserver
 }
 
 // Build constructs the pr-cleanup command.
@@ -160,7 +161,7 @@ func (builder *CommandBuilder) resolveExecutor(logger *zap.Logger) (CommandExecu
 	}
 
 	commandRunner := execshell.NewOSCommandRunner()
-	shellExecutor, creationError := execshell.NewShellExecutor(logger, commandRunner)
+	shellExecutor, creationError := execshell.NewShellExecutor(logger, commandRunner, builder.CommandEventsObserver)
 	if creationError != nil {
 		return nil, creationError
 	}

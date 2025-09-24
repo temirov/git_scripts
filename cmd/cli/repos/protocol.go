@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/temirov/git_scripts/internal/audit"
+	"github.com/temirov/git_scripts/internal/execshell"
 	"github.com/temirov/git_scripts/internal/repos/dependencies"
 	conversion "github.com/temirov/git_scripts/internal/repos/protocol"
 	"github.com/temirov/git_scripts/internal/repos/shared"
@@ -33,12 +34,13 @@ const (
 
 // ProtocolCommandBuilder assembles the convert-remote-protocol command.
 type ProtocolCommandBuilder struct {
-	LoggerProvider  LoggerProvider
-	Discoverer      shared.RepositoryDiscoverer
-	GitExecutor     shared.GitExecutor
-	GitManager      shared.GitRepositoryManager
-	GitHubResolver  shared.GitHubMetadataResolver
-	PrompterFactory PrompterFactory
+	LoggerProvider        LoggerProvider
+	Discoverer            shared.RepositoryDiscoverer
+	GitExecutor           shared.GitExecutor
+	GitManager            shared.GitRepositoryManager
+	GitHubResolver        shared.GitHubMetadataResolver
+	PrompterFactory       PrompterFactory
+	CommandEventsObserver execshell.CommandEventObserver
 }
 
 // Build constructs the convert-remote-protocol command.
@@ -85,7 +87,7 @@ func (builder *ProtocolCommandBuilder) run(command *cobra.Command, arguments []s
 	roots := determineRepositoryRoots(arguments)
 
 	logger := resolveLogger(builder.LoggerProvider)
-	gitExecutor, executorError := dependencies.ResolveGitExecutor(builder.GitExecutor, logger)
+	gitExecutor, executorError := dependencies.ResolveGitExecutor(builder.GitExecutor, logger, builder.CommandEventsObserver)
 	if executorError != nil {
 		return executorError
 	}

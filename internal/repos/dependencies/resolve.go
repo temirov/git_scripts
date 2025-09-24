@@ -27,13 +27,13 @@ func ResolveFileSystem(existing shared.FileSystem) shared.FileSystem {
 }
 
 // ResolveGitExecutor returns the provided executor or constructs a shell-backed default.
-func ResolveGitExecutor(existing shared.GitExecutor, logger *zap.Logger) (shared.GitExecutor, error) {
+func ResolveGitExecutor(existing shared.GitExecutor, logger *zap.Logger, eventsObserver execshell.CommandEventObserver) (shared.GitExecutor, error) {
 	if existing != nil {
 		return existing, nil
 	}
 
 	commandRunner := execshell.NewOSCommandRunner()
-	shellExecutor, creationError := execshell.NewShellExecutor(logger, commandRunner)
+	shellExecutor, creationError := execshell.NewShellExecutor(logger, commandRunner, eventsObserver)
 	if creationError != nil {
 		return nil, creationError
 	}

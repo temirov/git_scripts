@@ -108,7 +108,7 @@ func TestMigrationIntegration(testInstance *testing.T) {
 
 			logger := zap.NewNop()
 			commandRunner := execshell.NewOSCommandRunner()
-			executor, creationError := execshell.NewShellExecutor(logger, commandRunner)
+			executor, creationError := execshell.NewShellExecutor(logger, commandRunner, nil)
 			require.NoError(subtest, creationError)
 			repositoryManager, managerError := gitrepo.NewRepositoryManager(executor)
 			require.NoError(subtest, managerError)
