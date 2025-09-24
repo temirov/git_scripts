@@ -67,6 +67,9 @@ func (builder *ProtocolCommandBuilder) run(command *cobra.Command, arguments []s
 	toValue, _ := command.Flags().GetString(protocolToFlagName)
 
 	if len(strings.TrimSpace(fromValue)) == 0 || len(strings.TrimSpace(toValue)) == 0 {
+		if helpError := displayCommandHelp(command); helpError != nil {
+			return helpError
+		}
 		return errors.New(protocolErrorMissingPair)
 	}
 

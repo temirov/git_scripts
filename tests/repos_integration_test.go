@@ -12,35 +12,38 @@ import (
 )
 
 const (
-	reposIntegrationTimeout             = 10 * time.Second
-	reposIntegrationLogLevelFlag        = "--log-level"
-	reposIntegrationErrorLevel          = "error"
-	reposIntegrationRunSubcommand       = "run"
-	reposIntegrationModulePathConstant  = "."
-	reposIntegrationGroup               = "repos"
-	reposIntegrationRenameCommand       = "rename-folders"
-	reposIntegrationRemotesCommand      = "update-canonical-remote"
-	reposIntegrationProtocolCommand     = "convert-remote-protocol"
-	reposIntegrationDryRunFlag          = "--dry-run"
-	reposIntegrationYesFlag             = "--yes"
-	reposIntegrationFromFlag            = "--from"
-	reposIntegrationToFlag              = "--to"
-	reposIntegrationHTTPSProtocol       = "https"
-	reposIntegrationSSHProtocol         = "ssh"
-	reposIntegrationGitExecutable       = "git"
-	reposIntegrationInitFlag            = "init"
-	reposIntegrationInitialBranchFlag   = "--initial-branch=main"
-	reposIntegrationRemoteSubcommand    = "remote"
-	reposIntegrationAddSubcommand       = "add"
-	reposIntegrationGetURLSubcommand    = "get-url"
-	reposIntegrationOriginRemoteName    = "origin"
-	reposIntegrationOriginURL           = "https://github.com/origin/example.git"
-	reposIntegrationStubExecutableName  = "gh"
-	reposIntegrationStubScript          = "#!/bin/sh\nif [ \"$1\" = \"repo\" ] && [ \"$2\" = \"view\" ]; then\n  cat <<'EOF'\n{\"nameWithOwner\":\"canonical/example\",\"defaultBranchRef\":{\"name\":\"main\"},\"description\":\"\"}\nEOF\n  exit 0\nfi\nexit 0\n"
-	reposIntegrationSubtestNameTemplate = "%d_%s"
-	reposIntegrationRenameCaseName      = "rename_plan"
-	reposIntegrationRemoteCaseName      = "update_canonical_remote"
-	reposIntegrationProtocolCaseName    = "convert_protocol"
+	reposIntegrationTimeout                     = 10 * time.Second
+	reposIntegrationLogLevelFlag                = "--log-level"
+	reposIntegrationErrorLevel                  = "error"
+	reposIntegrationRunSubcommand               = "run"
+	reposIntegrationModulePathConstant          = "."
+	reposIntegrationGroup                       = "repos"
+	reposIntegrationRenameCommand               = "rename-folders"
+	reposIntegrationRemotesCommand              = "update-canonical-remote"
+	reposIntegrationProtocolCommand             = "convert-remote-protocol"
+	reposIntegrationDryRunFlag                  = "--dry-run"
+	reposIntegrationYesFlag                     = "--yes"
+	reposIntegrationFromFlag                    = "--from"
+	reposIntegrationToFlag                      = "--to"
+	reposIntegrationHTTPSProtocol               = "https"
+	reposIntegrationSSHProtocol                 = "ssh"
+	reposIntegrationGitExecutable               = "git"
+	reposIntegrationInitFlag                    = "init"
+	reposIntegrationInitialBranchFlag           = "--initial-branch=main"
+	reposIntegrationRemoteSubcommand            = "remote"
+	reposIntegrationAddSubcommand               = "add"
+	reposIntegrationGetURLSubcommand            = "get-url"
+	reposIntegrationOriginRemoteName            = "origin"
+	reposIntegrationOriginURL                   = "https://github.com/origin/example.git"
+	reposIntegrationStubExecutableName          = "gh"
+	reposIntegrationStubScript                  = "#!/bin/sh\nif [ \"$1\" = \"repo\" ] && [ \"$2\" = \"view\" ]; then\n  cat <<'EOF'\n{\"nameWithOwner\":\"canonical/example\",\"defaultBranchRef\":{\"name\":\"main\"},\"description\":\"\"}\nEOF\n  exit 0\nfi\nexit 0\n"
+	reposIntegrationSubtestNameTemplate         = "%d_%s"
+	reposIntegrationRenameCaseName              = "rename_plan"
+	reposIntegrationRemoteCaseName              = "update_canonical_remote"
+	reposIntegrationProtocolCaseName            = "convert_protocol"
+	reposIntegrationProtocolHelpCaseName        = "protocol_help_missing_flags"
+	reposIntegrationProtocolUsageSnippet        = "convert-remote-protocol [root ...]"
+	reposIntegrationProtocolMissingFlagsMessage = "specify both --from and --to"
 )
 
 func TestReposCommandIntegration(testInstance *testing.T) {
@@ -145,6 +148,46 @@ func TestReposCommandIntegration(testInstance *testing.T) {
 			expectedOutput := testCase.expectedOutput(repositoryPath)
 			require.Equal(subtest, expectedOutput, filterStructuredOutput(rawOutput))
 			testCase.verify(subtest, repositoryPath)
+		})
+	}
+}
+
+func TestReposProtocolCommandDisplaysHelpWhenProtocolsMissing(testInstance *testing.T) {
+	workingDirectory, workingDirectoryError := os.Getwd()
+	require.NoError(testInstance, workingDirectoryError)
+	repositoryRoot := filepath.Dir(workingDirectory)
+
+	testCases := []struct {
+		name             string
+		arguments        []string
+		expectedSnippets []string
+	}{
+		{
+			name: reposIntegrationProtocolHelpCaseName,
+			arguments: []string{
+				reposIntegrationRunSubcommand,
+				reposIntegrationModulePathConstant,
+				reposIntegrationLogLevelFlag,
+				reposIntegrationErrorLevel,
+				reposIntegrationGroup,
+				reposIntegrationProtocolCommand,
+			},
+			expectedSnippets: []string{
+				integrationHelpUsagePrefixConstant,
+				reposIntegrationProtocolUsageSnippet,
+				reposIntegrationProtocolMissingFlagsMessage,
+			},
+		},
+	}
+
+	for testCaseIndex, testCase := range testCases {
+		subtestName := fmt.Sprintf(reposIntegrationSubtestNameTemplate, testCaseIndex, testCase.name)
+		testInstance.Run(subtestName, func(subtest *testing.T) {
+			outputText, _ := runFailingIntegrationCommand(subtest, repositoryRoot, "", reposIntegrationTimeout, testCase.arguments)
+			filteredOutput := filterStructuredOutput(outputText)
+			for _, expectedSnippet := range testCase.expectedSnippets {
+				require.Contains(subtest, filteredOutput, expectedSnippet)
+			}
 		})
 	}
 }

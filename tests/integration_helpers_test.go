@@ -9,7 +9,30 @@ import (
 	"time"
 )
 
+const (
+	integrationUnexpectedSuccessMessageConstant = "command succeeded unexpectedly"
+	integrationUnexpectedSuccessFormatConstant  = "%s\n%s"
+	integrationCommandFailureFormatConstant     = "command failed: %v\n%s"
+)
+
 func runIntegrationCommand(testInstance *testing.T, repositoryRoot string, pathVariable string, timeout time.Duration, arguments []string) string {
+	testInstance.Helper()
+	outputText, commandError := executeIntegrationCommand(testInstance, repositoryRoot, pathVariable, timeout, arguments)
+	requireNoError(testInstance, commandError, outputText)
+	return outputText
+}
+
+func runFailingIntegrationCommand(testInstance *testing.T, repositoryRoot string, pathVariable string, timeout time.Duration, arguments []string) (string, error) {
+	testInstance.Helper()
+	outputText, commandError := executeIntegrationCommand(testInstance, repositoryRoot, pathVariable, timeout, arguments)
+	if commandError == nil {
+		testInstance.Fatalf(integrationUnexpectedSuccessFormatConstant, integrationUnexpectedSuccessMessageConstant, outputText)
+	}
+	return outputText, commandError
+}
+
+func executeIntegrationCommand(testInstance *testing.T, repositoryRoot string, pathVariable string, timeout time.Duration, arguments []string) (string, error) {
+	testInstance.Helper()
 	executionContext, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -23,9 +46,7 @@ func runIntegrationCommand(testInstance *testing.T, repositoryRoot string, pathV
 
 	outputBytes, runError := command.CombinedOutput()
 	outputText := string(outputBytes)
-	testInstance.Helper()
-	requireNoError(testInstance, runError, outputText)
-	return outputText
+	return outputText, runError
 }
 
 func filterStructuredOutput(rawOutput string) string {
@@ -50,6 +71,6 @@ func filterStructuredOutput(rawOutput string) string {
 func requireNoError(testInstance *testing.T, err error, output string) {
 	testInstance.Helper()
 	if err != nil {
-		testInstance.Fatalf("command failed: %v\n%s", err, output)
+		testInstance.Fatalf(integrationCommandFailureFormatConstant, err, output)
 	}
 }
