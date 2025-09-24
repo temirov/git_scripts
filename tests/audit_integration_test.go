@@ -31,6 +31,9 @@ const (
 	auditIntegrationStubScript                  = "#!/bin/sh\nif [ \"$1\" = \"repo\" ] && [ \"$2\" = \"view\" ]; then\n  cat <<'EOF'\n{\"nameWithOwner\":\"canonical/example\",\"defaultBranchRef\":{\"name\":\"main\"},\"description\":\"\"}\nEOF\n  exit 0\nfi\nexit 0\n"
 	auditIntegrationCSVOutput                   = "final_github_repo,folder_name,name_matches,remote_default_branch,local_branch,in_sync,remote_protocol,origin_matches_canonical\ncanonical/example,legacy,no,main,,n/a,https,no\n"
 	auditIntegrationAuditCaseNameConstant       = "audit_csv"
+	auditIntegrationHelpCaseNameConstant        = "audit_help_missing_flag"
+	auditIntegrationHelpUsageSnippetConstant    = "audit [flags]"
+	auditIntegrationMissingAuditMessageConstant = "specify --audit"
 	auditIntegrationSubtestNameTemplateConstant = "%d_%s"
 )
 
@@ -89,6 +92,45 @@ func TestAuditCommandIntegration(testInstance *testing.T) {
 		testInstance.Run(fmt.Sprintf(auditIntegrationSubtestNameTemplateConstant, testCaseIndex, testCase.name), func(subtest *testing.T) {
 			subtestOutput := runIntegrationCommand(subtest, repositoryRoot, extendedPath, auditIntegrationTimeout, testCase.arguments)
 			require.Equal(subtest, testCase.expectedOutput, filterStructuredOutput(subtestOutput))
+		})
+	}
+}
+
+func TestAuditCommandDisplaysHelpWhenAuditFlagMissing(testInstance *testing.T) {
+	workingDirectory, workingDirectoryError := os.Getwd()
+	require.NoError(testInstance, workingDirectoryError)
+	repositoryRoot := filepath.Dir(workingDirectory)
+
+	testCases := []struct {
+		name             string
+		arguments        []string
+		expectedSnippets []string
+	}{
+		{
+			name: auditIntegrationHelpCaseNameConstant,
+			arguments: []string{
+				auditIntegrationRunSubcommand,
+				auditIntegrationModulePathConstant,
+				auditIntegrationLogLevelFlag,
+				auditIntegrationErrorLevel,
+				auditIntegrationAuditSubcommand,
+			},
+			expectedSnippets: []string{
+				integrationHelpUsagePrefixConstant,
+				auditIntegrationHelpUsageSnippetConstant,
+				auditIntegrationMissingAuditMessageConstant,
+			},
+		},
+	}
+
+	for testCaseIndex, testCase := range testCases {
+		subtestName := fmt.Sprintf(auditIntegrationSubtestNameTemplateConstant, testCaseIndex, testCase.name)
+		testInstance.Run(subtestName, func(subtest *testing.T) {
+			outputText, _ := runFailingIntegrationCommand(subtest, repositoryRoot, "", auditIntegrationTimeout, testCase.arguments)
+			filteredOutput := filterStructuredOutput(outputText)
+			for _, expectedSnippet := range testCase.expectedSnippets {
+				require.Contains(subtest, filteredOutput, expectedSnippet)
+			}
 		})
 	}
 }

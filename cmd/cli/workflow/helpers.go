@@ -55,3 +55,10 @@ func resolvePrompter(factory PrompterFactory, command *cobra.Command) shared.Con
 	}
 	return prompt.NewIOConfirmationPrompter(command.InOrStdin(), command.OutOrStdout())
 }
+
+func displayCommandHelp(command *cobra.Command) error {
+	if command == nil {
+		return nil
+	}
+	return command.Help()
+}
