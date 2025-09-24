@@ -16,8 +16,8 @@ const (
 
 const (
 	genericStartTemplateConstant            = "Running %s"
-        genericSuccessTemplateConstant          = "Completed %s"
-        genericFailureTemplateConstant          = "%s failed with exit code %d%s"
+	genericSuccessTemplateConstant          = "Completed %s"
+	genericFailureTemplateConstant          = "%s failed with exit code %d%s"
 	genericExecutionFailureTemplateConstant = "%s failed: %s"
 	commandLabelTemplateConstant            = "%s%s"
 	workingDirectorySuffixTemplateConstant  = " (in %s)"
