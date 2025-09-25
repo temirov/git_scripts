@@ -17,9 +17,9 @@ import (
 const (
 	integrationInfoMessageConstant                     = "\"msg\":\"git_scripts CLI executed\""
 	integrationDebugMessageConstant                    = "\"msg\":\"git_scripts CLI diagnostics\""
-	integrationLogLevelEnvKeyConstant                  = "GITSCRIPTS_LOG_LEVEL"
+	integrationLogLevelEnvKeyConstant                  = "GITSCRIPTS_COMMON_LOG_LEVEL"
 	integrationConfigFileNameConstant                  = "config.yaml"
-	integrationConfigTemplateConstant                  = "log_level: %s\n"
+	integrationConfigTemplateConstant                  = "common:\n  log_level: %s\n"
 	integrationDefaultCaseNameConstant                 = "default_info"
 	integrationConfigCaseNameConstant                  = "config_debug"
 	integrationEnvironmentCaseNameConstant             = "environment_error"

@@ -31,8 +31,9 @@ const (
 	logLevelFlagUsageConstant               = "Override the configured log level."
 	logFormatFlagNameConstant               = "log-format"
 	logFormatFlagUsageConstant              = "Override the configured log format (structured or console)."
-	logLevelConfigKeyConstant               = "log_level"
-	logFormatConfigKeyConstant              = "log_format"
+	commonConfigurationKeyConstant          = "common"
+	commonLogLevelConfigKeyConstant         = commonConfigurationKeyConstant + ".log_level"
+	commonLogFormatConfigKeyConstant        = commonConfigurationKeyConstant + ".log_format"
 	environmentPrefixConstant               = "GITSCRIPTS"
 	configurationNameConstant               = "config"
 	configurationTypeConstant               = "yaml"
@@ -54,9 +55,19 @@ const (
 
 // ApplicationConfiguration describes the persisted configuration for the CLI entrypoint.
 type ApplicationConfiguration struct {
-	LogLevel  string                 `mapstructure:"log_level"`
-	LogFormat string                 `mapstructure:"log_format"`
-	Packages  packages.Configuration `mapstructure:"packages"`
+	Common ApplicationCommonConfiguration `mapstructure:"common"`
+	Tools  ApplicationToolsConfiguration  `mapstructure:"tools"`
+}
+
+// ApplicationCommonConfiguration stores logging configuration shared across commands.
+type ApplicationCommonConfiguration struct {
+	LogLevel  string `mapstructure:"log_level"`
+	LogFormat string `mapstructure:"log_format"`
+}
+
+// ApplicationToolsConfiguration holds configuration for CLI subcommands grouped by tool family.
+type ApplicationToolsConfiguration struct {
+	Packages packages.Configuration `mapstructure:"packages"`
 }
 
 // Application wires the Cobra root command, configuration loader, and structured logger.
@@ -147,7 +158,7 @@ func NewApplication() *Application {
 			return application.logger
 		},
 		ConfigurationProvider: func() packages.Configuration {
-			return application.configuration.Packages
+			return application.configuration.Tools.Packages
 		},
 	}
 	packagesCommand, packagesBuildError := packagesBuilder.Build()
@@ -198,8 +209,8 @@ func Execute() error {
 
 func (application *Application) initializeConfiguration(command *cobra.Command) error {
 	defaultValues := map[string]any{
-		logLevelConfigKeyConstant:  string(utils.LogLevelInfo),
-		logFormatConfigKeyConstant: string(utils.LogFormatStructured),
+		commonLogLevelConfigKeyConstant:  string(utils.LogLevelInfo),
+		commonLogFormatConfigKeyConstant: string(utils.LogFormatStructured),
 	}
 	for configurationKey, configurationValue := range packages.DefaultConfigurationValues() {
 		defaultValues[configurationKey] = configurationValue
@@ -213,16 +224,16 @@ func (application *Application) initializeConfiguration(command *cobra.Command) 
 	application.configurationMetadata = loadedConfiguration
 
 	if application.persistentFlagChanged(command, logLevelFlagNameConstant) {
-		application.configuration.LogLevel = application.logLevelFlagValue
+		application.configuration.Common.LogLevel = application.logLevelFlagValue
 	}
 
 	if application.persistentFlagChanged(command, logFormatFlagNameConstant) {
-		application.configuration.LogFormat = application.logFormatFlagValue
+		application.configuration.Common.LogFormat = application.logFormatFlagValue
 	}
 
 	loggerOutputs, loggerCreationError := application.loggerFactory.CreateLoggerOutputs(
-		utils.LogLevel(application.configuration.LogLevel),
-		utils.LogFormat(application.configuration.LogFormat),
+		utils.LogLevel(application.configuration.Common.LogLevel),
+		utils.LogFormat(application.configuration.Common.LogFormat),
 	)
 	if loggerCreationError != nil {
 		return fmt.Errorf(loggerCreationErrorTemplateConstant, loggerCreationError)
@@ -232,8 +243,8 @@ func (application *Application) initializeConfiguration(command *cobra.Command) 
 
 	application.logger.Info(
 		configurationInitializedMessageConstant,
-		zap.String(configurationLogLevelFieldConstant, application.configuration.LogLevel),
-		zap.String(configurationLogFormatFieldConstant, application.configuration.LogFormat),
+		zap.String(configurationLogLevelFieldConstant, application.configuration.Common.LogLevel),
+		zap.String(configurationLogFormatFieldConstant, application.configuration.Common.LogFormat),
 		zap.String(configurationFileFieldConstant, application.configurationMetadata.ConfigFileUsed),
 	)
 
@@ -241,7 +252,7 @@ func (application *Application) initializeConfiguration(command *cobra.Command) 
 }
 
 func (application *Application) humanReadableLoggingEnabled() bool {
-	logFormatValue := strings.TrimSpace(application.configuration.LogFormat)
+	logFormatValue := strings.TrimSpace(application.configuration.Common.LogFormat)
 	return strings.EqualFold(logFormatValue, string(utils.LogFormatConsole))
 }
 
