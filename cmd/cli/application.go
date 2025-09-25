@@ -72,15 +72,16 @@ type ApplicationToolsConfiguration struct {
 
 // Application wires the Cobra root command, configuration loader, and structured logger.
 type Application struct {
-	rootCommand           *cobra.Command
-	configurationLoader   *utils.ConfigurationLoader
-	loggerFactory         *utils.LoggerFactory
-	logger                *zap.Logger
-	configuration         ApplicationConfiguration
-	configurationMetadata utils.LoadedConfiguration
-	configurationFilePath string
-	logLevelFlagValue     string
-	logFormatFlagValue    string
+	rootCommand            *cobra.Command
+	configurationLoader    *utils.ConfigurationLoader
+	loggerFactory          *utils.LoggerFactory
+	logger                 *zap.Logger
+	configuration          ApplicationConfiguration
+	configurationMetadata  utils.LoadedConfiguration
+	configurationFilePath  string
+	logLevelFlagValue      string
+	logFormatFlagValue     string
+	commandContextAccessor utils.CommandContextAccessor
 }
 
 // NewApplication assembles a fully wired CLI application instance.
@@ -93,9 +94,10 @@ func NewApplication() *Application {
 	)
 
 	application := &Application{
-		configurationLoader: configurationLoader,
-		loggerFactory:       utils.NewLoggerFactory(),
-		logger:              zap.NewNop(),
+		configurationLoader:    configurationLoader,
+		loggerFactory:          utils.NewLoggerFactory(),
+		logger:                 zap.NewNop(),
+		commandContextAccessor: utils.NewCommandContextAccessor(),
 	}
 
 	cobraCommand := &cobra.Command{
@@ -247,6 +249,17 @@ func (application *Application) initializeConfiguration(command *cobra.Command) 
 		zap.String(configurationLogFormatFieldConstant, application.configuration.Common.LogFormat),
 		zap.String(configurationFileFieldConstant, application.configurationMetadata.ConfigFileUsed),
 	)
+
+	if command != nil {
+		updatedContext := application.commandContextAccessor.WithConfigurationFilePath(
+			command.Context(),
+			application.configurationMetadata.ConfigFileUsed,
+		)
+		command.SetContext(updatedContext)
+		if rootCommand := command.Root(); rootCommand != nil {
+			rootCommand.SetContext(updatedContext)
+		}
+	}
 
 	return nil
 }
