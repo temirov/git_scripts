@@ -137,10 +137,10 @@ go run . packages purge \
   --dry-run
 ```
 
-Persist defaults in a configuration file to avoid long flag lists:
+Persist defaults and workflow plans in a single configuration file to avoid long flag lists and keep the runner in sync:
 
 ```yaml
-# packages.yaml
+# config.yaml
 common:
   log_level: info
   log_format: structured
@@ -152,18 +152,6 @@ tools:
       owner_type: org
       token_source: env:GITHUB_PACKAGES_TOKEN
       page_size: 50
-```
-
-```shell
-go run . --config packages.yaml packages purge --dry-run=false
-```
-
-### Workflow bundling
-
-Define ordered steps in YAML or JSON and execute them with `workflow run`:
-
-```yaml
-# workflow.yaml
 steps:
   - operation: convert-protocol
     with:
@@ -186,17 +174,25 @@ steps:
       output: ./audit.csv
 ```
 
-Run the workflow:
-
 ```shell
-go run . workflow run workflow.yaml --roots ~/Development --dry-run
-# Execute with confirmations suppressed
-go run . workflow run workflow.yaml --roots ~/Development --yes
+go run . packages purge --dry-run=false
 ```
 
-`workflow run` reuses the same repository discovery, prompting, and logging infrastructure as the standalone commands. Pass
-additional roots on the command line to override the configuration file and combine `--dry-run`/`--yes` for non-interactive
-execution.
+Specify `--config path/to/override.yaml` when you need to load an alternate configuration.
+
+### Workflow bundling
+
+Define ordered steps in YAML or JSON and execute them with `workflow run`:
+
+```shell
+go run . workflow run --roots ~/Development --dry-run
+# Execute with confirmations suppressed
+go run . workflow run --roots ~/Development --yes
+```
+
+`workflow run` reads the `steps` array from `config.yaml`, reusing the same repository discovery, prompting, and logging
+infrastructure as the standalone commands. Pass additional roots on the command line to override the configuration file and
+combine `--dry-run`/`--yes` for non-interactive execution.
 
 ## Development and testing
 
