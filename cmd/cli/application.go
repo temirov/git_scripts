@@ -51,6 +51,10 @@ const (
 	logFieldArgumentsConstant               = "arguments"
 	loggerNotInitializedMessageConstant     = "logger not initialized"
 	defaultConfigurationSearchPathConstant  = "."
+	toolsConfigurationKeyConstant           = "tools"
+	branchCleanupConfigurationKeyConstant   = toolsConfigurationKeyConstant + ".branch_cleanup"
+	reposConfigurationKeyConstant           = toolsConfigurationKeyConstant + ".repos"
+	workflowConfigurationKeyConstant        = toolsConfigurationKeyConstant + ".workflow"
 )
 
 // ApplicationConfiguration describes the persisted configuration for the CLI entrypoint.
@@ -67,7 +71,10 @@ type ApplicationCommonConfiguration struct {
 
 // ApplicationToolsConfiguration holds configuration for CLI subcommands grouped by tool family.
 type ApplicationToolsConfiguration struct {
-	Packages packages.Configuration `mapstructure:"packages"`
+	Packages      packages.Configuration           `mapstructure:"packages"`
+	BranchCleanup branches.CommandConfiguration    `mapstructure:"branch_cleanup"`
+	Repos         repos.ToolsConfiguration         `mapstructure:"repos"`
+	Workflow      workflowcmd.CommandConfiguration `mapstructure:"workflow"`
 }
 
 // Application wires the Cobra root command, configuration loader, and structured logger.
@@ -135,6 +142,9 @@ func NewApplication() *Application {
 			return application.logger
 		},
 		HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
+		ConfigurationProvider: func() branches.CommandConfiguration {
+			return application.configuration.Tools.BranchCleanup
+		},
 	}
 	branchCleanupCommand, branchCleanupBuildError := branchCleanupBuilder.Build()
 	if branchCleanupBuildError == nil {
@@ -184,6 +194,9 @@ func NewApplication() *Application {
 			return application.logger
 		},
 		HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
+		ConfigurationProvider: func() repos.RemotesConfiguration {
+			return application.configuration.Tools.Repos.Remotes
+		},
 	}
 	remotesCommand, remotesBuildError := remotesBuilder.Build()
 	if remotesBuildError == nil {
@@ -195,6 +208,9 @@ func NewApplication() *Application {
 			return application.logger
 		},
 		HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
+		ConfigurationProvider: func() repos.ProtocolConfiguration {
+			return application.configuration.Tools.Repos.Protocol
+		},
 	}
 	protocolCommand, protocolBuildError := protocolBuilder.Build()
 	if protocolBuildError == nil {
@@ -206,6 +222,9 @@ func NewApplication() *Application {
 			return application.logger
 		},
 		HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
+		ConfigurationProvider: func() workflowcmd.CommandConfiguration {
+			return application.configuration.Tools.Workflow
+		},
 	}
 	workflowCommand, workflowBuildError := workflowBuilder.Build()
 	if workflowBuildError == nil {
@@ -237,6 +256,15 @@ func (application *Application) initializeConfiguration(command *cobra.Command) 
 		commonLogFormatConfigKeyConstant: string(utils.LogFormatStructured),
 	}
 	for configurationKey, configurationValue := range packages.DefaultConfigurationValues() {
+		defaultValues[configurationKey] = configurationValue
+	}
+	for configurationKey, configurationValue := range branches.DefaultConfigurationValues(branchCleanupConfigurationKeyConstant) {
+		defaultValues[configurationKey] = configurationValue
+	}
+	for configurationKey, configurationValue := range repos.DefaultConfigurationValues(reposConfigurationKeyConstant) {
+		defaultValues[configurationKey] = configurationValue
+	}
+	for configurationKey, configurationValue := range workflowcmd.DefaultConfigurationValues(workflowConfigurationKeyConstant) {
 		defaultValues[configurationKey] = configurationValue
 	}
 

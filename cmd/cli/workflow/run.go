@@ -41,6 +41,7 @@ type CommandBuilder struct {
 	FileSystem                   shared.FileSystem
 	PrompterFactory              PrompterFactory
 	HumanReadableLoggingProvider func() bool
+	ConfigurationProvider        func() CommandConfiguration
 }
 
 // Build constructs the workflow-run command.
@@ -80,12 +81,12 @@ func (builder *CommandBuilder) run(command *cobra.Command, arguments []string) e
 	}
 
 	configurationPath := configurationPathCandidate
-	configuration, configurationError := workflow.LoadConfiguration(configurationPath)
+	workflowConfiguration, configurationError := workflow.LoadConfiguration(configurationPath)
 	if configurationError != nil {
 		return fmt.Errorf(loadConfigurationErrorTemplateConstant, configurationError)
 	}
 
-	operations, operationsError := workflow.BuildOperations(configuration)
+	operations, operationsError := workflow.BuildOperations(workflowConfiguration)
 	if operationsError != nil {
 		return fmt.Errorf(buildOperationsErrorTemplateConstant, operationsError)
 	}
@@ -128,12 +129,32 @@ func (builder *CommandBuilder) run(command *cobra.Command, arguments []string) e
 
 	executor := workflow.NewExecutor(operations, workflowDependencies)
 
+	commandConfiguration := builder.resolveConfiguration()
+
 	rootValues, _ := command.Flags().GetStringSlice(rootsFlagNameConstant)
-	dryRun, _ := command.Flags().GetBool(dryRunFlagNameConstant)
-	assumeYes, _ := command.Flags().GetBool(assumeYesFlagNameConstant)
+	preferFlagRoots := command != nil && command.Flags().Changed(rootsFlagNameConstant)
+	roots := determineRoots(rootValues, commandConfiguration.Roots, preferFlagRoots)
+
+	dryRun := commandConfiguration.DryRun
+	if command != nil && command.Flags().Changed(dryRunFlagNameConstant) {
+		dryRun, _ = command.Flags().GetBool(dryRunFlagNameConstant)
+	}
+
+	assumeYes := commandConfiguration.AssumeYes
+	if command != nil && command.Flags().Changed(assumeYesFlagNameConstant) {
+		assumeYes, _ = command.Flags().GetBool(assumeYesFlagNameConstant)
+	}
 
 	runtimeOptions := workflow.RuntimeOptions{DryRun: dryRun, AssumeYes: assumeYes}
-	roots := determineRoots(rootValues)
 
 	return executor.Execute(command.Context(), roots, runtimeOptions)
+}
+
+func (builder *CommandBuilder) resolveConfiguration() CommandConfiguration {
+	if builder.ConfigurationProvider == nil {
+		return DefaultCommandConfiguration()
+	}
+
+	provided := builder.ConfigurationProvider()
+	return provided.sanitize()
 }

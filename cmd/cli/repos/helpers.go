@@ -20,19 +20,30 @@ type LoggerProvider func() *zap.Logger
 // PrompterFactory creates confirmation prompters scoped to a Cobra command.
 type PrompterFactory func(*cobra.Command) shared.ConfirmationPrompter
 
-func determineRepositoryRoots(arguments []string) []string {
-	roots := make([]string, 0, len(arguments))
-	for _, argument := range arguments {
-		trimmed := strings.TrimSpace(argument)
-		if len(trimmed) == 0 {
+func determineRepositoryRoots(arguments []string, configuredRoots []string) []string {
+	roots := trimRoots(arguments)
+	if len(roots) > 0 {
+		return roots
+	}
+
+	configured := trimRoots(configuredRoots)
+	if len(configured) > 0 {
+		return configured
+	}
+
+	return []string{defaultRepositoryRootConstant}
+}
+
+func trimRoots(raw []string) []string {
+	trimmed := make([]string, 0, len(raw))
+	for _, argument := range raw {
+		candidate := strings.TrimSpace(argument)
+		if len(candidate) == 0 {
 			continue
 		}
-		roots = append(roots, trimmed)
+		trimmed = append(trimmed, candidate)
 	}
-	if len(roots) == 0 {
-		return []string{defaultRepositoryRootConstant}
-	}
-	return roots
+	return trimmed
 }
 
 func resolveLogger(provider LoggerProvider) *zap.Logger {

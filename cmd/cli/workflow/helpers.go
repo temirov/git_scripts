@@ -1,8 +1,6 @@
 package workflow
 
 import (
-	"strings"
-
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 
@@ -20,19 +18,25 @@ type LoggerProvider func() *zap.Logger
 // PrompterFactory constructs confirmation prompters scoped to a command.
 type PrompterFactory func(*cobra.Command) shared.ConfirmationPrompter
 
-func determineRoots(raw []string) []string {
-	trimmedRoots := make([]string, 0, len(raw))
-	for index := range raw {
-		trimmed := strings.TrimSpace(raw[index])
-		if len(trimmed) == 0 {
-			continue
+func determineRoots(flagValues []string, configured []string, preferFlag bool) []string {
+	if preferFlag {
+		trimmed := sanitizeRoots(flagValues)
+		if len(trimmed) > 0 {
+			return trimmed
 		}
-		trimmedRoots = append(trimmedRoots, trimmed)
 	}
-	if len(trimmedRoots) == 0 {
-		return []string{defaultWorkflowRootConstant}
+
+	configuredRoots := sanitizeRoots(configured)
+	if len(configuredRoots) > 0 {
+		return configuredRoots
 	}
-	return trimmedRoots
+
+	trimmed := sanitizeRoots(flagValues)
+	if len(trimmed) > 0 {
+		return trimmed
+	}
+
+	return []string{defaultWorkflowRootConstant}
 }
 
 func resolveLogger(provider LoggerProvider) *zap.Logger {

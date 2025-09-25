@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -26,6 +27,10 @@ const (
 	repositoryTwoPathConstant       = "/tmp/repository-two"
 	cleanupBranchNameConstant       = "feature/shared"
 	repositoryLogFieldNameConstant  = "repository"
+	configurationRemoteNameConstant = "configured-remote"
+	configurationRootConstant       = "/tmp/config-root"
+	flagOverrideRemoteConstant      = "override-remote"
+	flagOverrideLimitValueConstant  = 7
 )
 
 type fakeRepositoryDiscoverer struct {
@@ -203,6 +208,126 @@ func TestCommandRunScenarios(testInstance *testing.T) {
 
 			if testCase.verify != nil {
 				testCase.verify(subTest, fakeExecutorInstance, observedLogs.All())
+			}
+		})
+	}
+}
+
+func TestCommandConfigurationPrecedence(testInstance *testing.T) {
+	remoteBranches := []string{cleanupBranchNameConstant}
+	remoteOutput := buildRemoteOutput(remoteBranches)
+
+	pullRequestJSON, jsonError := buildPullRequestJSON(remoteBranches)
+	require.NoError(testInstance, jsonError)
+
+	defaultLimitValue := branches.DefaultCommandConfiguration().PullRequestLimit
+
+	testCases := []struct {
+		name           string
+		configuration  branches.CommandConfiguration
+		arguments      []string
+		expectedRoots  []string
+		expectedRemote string
+		expectedLimit  int
+		expectDryRun   bool
+	}{
+		{
+			name: "configuration_values_apply",
+			configuration: branches.CommandConfiguration{
+				RemoteName:       configurationRemoteNameConstant,
+				PullRequestLimit: 12,
+				DryRun:           false,
+				RepositoryRoots:  []string{configurationRootConstant},
+			},
+			arguments:      []string{},
+			expectedRoots:  []string{configurationRootConstant},
+			expectedRemote: configurationRemoteNameConstant,
+			expectedLimit:  12,
+			expectDryRun:   false,
+		},
+		{
+			name: "flags_override_configuration",
+			configuration: branches.CommandConfiguration{
+				RemoteName:       configurationRemoteNameConstant,
+				PullRequestLimit: 25,
+				DryRun:           false,
+				RepositoryRoots:  []string{configurationRootConstant},
+			},
+			arguments: []string{
+				commandRemoteFlagConstant,
+				flagOverrideRemoteConstant,
+				commandLimitFlagConstant,
+				strconv.Itoa(flagOverrideLimitValueConstant),
+				commandDryRunFlagConstant,
+				repositoryTwoPathConstant,
+			},
+			expectedRoots:  []string{repositoryTwoPathConstant},
+			expectedRemote: flagOverrideRemoteConstant,
+			expectedLimit:  flagOverrideLimitValueConstant,
+			expectDryRun:   true,
+		},
+		{
+			name:           "defaults_fill_missing_configuration",
+			configuration:  branches.CommandConfiguration{},
+			arguments:      []string{},
+			expectedRoots:  []string{defaultRootArgumentConstant},
+			expectedRemote: branches.DefaultCommandConfiguration().RemoteName,
+			expectedLimit:  defaultLimitValue,
+			expectDryRun:   false,
+		},
+	}
+
+	for testCaseIndex := range testCases {
+		testCase := testCases[testCaseIndex]
+		testInstance.Run(fmt.Sprintf(subtestNameTemplateConstant, testCaseIndex, testCase.name), func(subtest *testing.T) {
+			fakeExecutorInstance := &fakeCommandExecutor{}
+
+			gitListArguments := []string{gitListRemoteSubcommandConstant, gitHeadsFlagConstant, testCase.expectedRemote}
+			registerResponse(fakeExecutorInstance, gitCommandLabelConstant, gitListArguments, execshell.ExecutionResult{StandardOutput: remoteOutput, ExitCode: 0}, nil)
+
+			githubListArguments := []string{
+				githubPullRequestSubcommandConstant,
+				githubListSubcommandConstant,
+				githubStateFlagConstant,
+				githubClosedStateConstant,
+				githubJSONFlagConstant,
+				pullRequestJSONFieldNameConstant,
+				githubLimitFlagConstant,
+				strconv.Itoa(testCase.expectedLimit),
+			}
+			registerResponse(fakeExecutorInstance, githubCommandLabelConstant, githubListArguments, execshell.ExecutionResult{StandardOutput: pullRequestJSON, ExitCode: 0}, nil)
+
+			if !testCase.expectDryRun {
+				registerResponse(fakeExecutorInstance, gitCommandLabelConstant, []string{gitPushSubcommandConstant, testCase.expectedRemote, gitDeleteFlagConstant, cleanupBranchNameConstant}, execshell.ExecutionResult{ExitCode: 0}, nil)
+				registerResponse(fakeExecutorInstance, gitCommandLabelConstant, []string{gitBranchSubcommandConstant, gitForceDeleteFlagConstant, cleanupBranchNameConstant}, execshell.ExecutionResult{ExitCode: 0}, nil)
+			}
+
+			fakeDiscoverer := &fakeRepositoryDiscoverer{repositories: []string{repositoryOnePathConstant}}
+
+			builder := branches.CommandBuilder{
+				LoggerProvider:       func() *zap.Logger { return zap.NewNop() },
+				Executor:             fakeExecutorInstance,
+				RepositoryDiscoverer: fakeDiscoverer,
+				ConfigurationProvider: func() branches.CommandConfiguration {
+					return testCase.configuration
+				},
+			}
+
+			command, buildError := builder.Build()
+			require.NoError(subtest, buildError)
+
+			command.SetContext(context.Background())
+			command.SetArgs(testCase.arguments)
+
+			executionError := command.Execute()
+			require.NoError(subtest, executionError)
+
+			require.Equal(subtest, testCase.expectedRoots, fakeDiscoverer.receivedRoots)
+
+			if testCase.expectDryRun {
+				for _, executed := range fakeExecutorInstance.executedCommands {
+					require.NotEqual(subtest, gitPushSubcommandConstant, executed.arguments[0])
+				}
 			}
 		})
 	}
