@@ -150,9 +150,9 @@ func NewApplication() *Application {
 	if workingDirectory, workingDirectoryError := os.Getwd(); workingDirectoryError == nil {
 		branchMigrationBuilder.WorkingDirectory = workingDirectory
 	}
-	branchCommand, branchBuildError := branchMigrationBuilder.Build()
-	if branchBuildError == nil {
-		cobraCommand.AddCommand(branchCommand)
+	branchMigrationCommand, branchMigrationBuildError := branchMigrationBuilder.Build()
+	if branchMigrationBuildError == nil {
+		cobraCommand.AddCommand(branchMigrationCommand)
 	}
 
 	packagesBuilder := packages.CommandBuilder{
@@ -168,15 +168,37 @@ func NewApplication() *Application {
 		cobraCommand.AddCommand(packagesCommand)
 	}
 
-	reposBuilder := repos.CommandGroupBuilder{
+	renameBuilder := repos.RenameCommandBuilder{
 		LoggerProvider: func() *zap.Logger {
 			return application.logger
 		},
 		HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
 	}
-	reposCommand, reposBuildError := reposBuilder.Build()
-	if reposBuildError == nil {
-		cobraCommand.AddCommand(reposCommand)
+	renameCommand, renameBuildError := renameBuilder.Build()
+	if renameBuildError == nil {
+		cobraCommand.AddCommand(renameCommand)
+	}
+
+	remotesBuilder := repos.RemotesCommandBuilder{
+		LoggerProvider: func() *zap.Logger {
+			return application.logger
+		},
+		HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
+	}
+	remotesCommand, remotesBuildError := remotesBuilder.Build()
+	if remotesBuildError == nil {
+		cobraCommand.AddCommand(remotesCommand)
+	}
+
+	protocolBuilder := repos.ProtocolCommandBuilder{
+		LoggerProvider: func() *zap.Logger {
+			return application.logger
+		},
+		HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
+	}
+	protocolCommand, protocolBuildError := protocolBuilder.Build()
+	if protocolBuildError == nil {
+		cobraCommand.AddCommand(protocolCommand)
 	}
 
 	workflowBuilder := workflowcmd.CommandBuilder{

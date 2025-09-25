@@ -14,9 +14,9 @@ import (
 )
 
 const (
-	commandUseConstant                          = "pr-cleanup [root ...]"
+	commandUseConstant                          = "repo-prs-purge [root ...]"
 	commandShortDescriptionConstant             = "Remove remote and local branches for closed pull requests"
-	commandLongDescriptionConstant              = "pr-cleanup removes remote and local Git branches whose pull requests are already closed."
+	commandLongDescriptionConstant              = "repo-prs-purge removes remote and local Git branches whose pull requests are already closed."
 	flagRemoteNameConstant                      = "remote"
 	flagRemoteDescriptionConstant               = "Name of the remote containing pull request branches"
 	flagLimitNameConstant                       = "limit"
@@ -39,7 +39,7 @@ type RepositoryDiscoverer interface {
 // LoggerProvider supplies a zap logger instance.
 type LoggerProvider func() *zap.Logger
 
-// CommandBuilder assembles the Cobra command for branch cleanup.
+// CommandBuilder assembles the repo-prs-purge Cobra command.
 type CommandBuilder struct {
 	LoggerProvider               LoggerProvider
 	Executor                     CommandExecutor
@@ -48,7 +48,7 @@ type CommandBuilder struct {
 	HumanReadableLoggingProvider func() bool
 }
 
-// Build constructs the pr-cleanup command.
+// Build constructs the repo-prs-purge command.
 func (builder *CommandBuilder) Build() (*cobra.Command, error) {
 	command := &cobra.Command{
 		Use:   commandUseConstant,

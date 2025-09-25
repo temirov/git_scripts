@@ -14,9 +14,9 @@ import (
 )
 
 const (
-	protocolUseConstant          = "convert-remote-protocol [root ...]"
+	protocolUseConstant          = "protocol-convert [root ...]"
 	protocolShortDescription     = "Convert repository origin remotes between protocols"
-	protocolLongDescription      = "convert-remote-protocol updates origin remotes to use the requested Git protocol."
+	protocolLongDescription      = "protocol-convert updates origin remotes to use the requested Git protocol."
 	protocolDryRunFlagName       = "dry-run"
 	protocolDryRunDescription    = "Preview protocol conversions without making changes"
 	protocolAssumeYesFlagName    = "yes"
@@ -31,7 +31,7 @@ const (
 	protocolErrorInvalidValue    = "unsupported protocol value: %s"
 )
 
-// ProtocolCommandBuilder assembles the convert-remote-protocol command.
+// ProtocolCommandBuilder assembles the protocol-convert command.
 type ProtocolCommandBuilder struct {
 	LoggerProvider               LoggerProvider
 	Discoverer                   shared.RepositoryDiscoverer
@@ -42,7 +42,7 @@ type ProtocolCommandBuilder struct {
 	HumanReadableLoggingProvider func() bool
 }
 
-// Build constructs the convert-remote-protocol command.
+// Build constructs the protocol-convert command.
 func (builder *ProtocolCommandBuilder) Build() (*cobra.Command, error) {
 	command := &cobra.Command{
 		Use:   protocolUseConstant,

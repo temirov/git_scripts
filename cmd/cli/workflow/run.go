@@ -16,12 +16,9 @@ import (
 )
 
 const (
-	groupUseConstant                          = "workflow"
-	groupShortDescriptionConstant             = "Execute declarative repository workflows"
-	groupLongDescriptionConstant              = "workflow runs ordered operations described in a configuration file."
-	runUseConstant                            = "run [workflow]"
-	runShortDescriptionConstant               = "Run a workflow configuration file"
-	runLongDescriptionConstant                = "workflow run executes operations defined in a YAML or JSON configuration file across discovered repositories."
+	commandUseConstant                        = "workflow-run [workflow]"
+	commandShortDescriptionConstant           = "Run a workflow configuration file"
+	commandLongDescriptionConstant            = "workflow-run executes operations defined in a YAML or JSON configuration file across discovered repositories."
 	rootsFlagNameConstant                     = "roots"
 	rootsFlagDescriptionConstant              = "Root directories containing repositories"
 	dryRunFlagNameConstant                    = "dry-run"
@@ -29,14 +26,14 @@ const (
 	assumeYesFlagNameConstant                 = "yes"
 	assumeYesFlagShorthandConstant            = "y"
 	assumeYesFlagDescriptionConstant          = "Automatically confirm prompts"
-	configurationPathRequiredMessageConstant  = "workflow configuration path required; provide a positional argument or --config flag"
+	configurationPathRequiredMessageConstant  = "workflow-run configuration path required; provide a positional argument or --config flag"
 	loadConfigurationErrorTemplateConstant    = "unable to load workflow configuration: %w"
 	buildOperationsErrorTemplateConstant      = "unable to build workflow operations: %w"
 	gitRepositoryManagerErrorTemplateConstant = "unable to construct repository manager: %w"
 	gitHubClientErrorTemplateConstant         = "unable to construct GitHub client: %w"
 )
 
-// CommandBuilder assembles the workflow command hierarchy.
+// CommandBuilder assembles the workflow-run command.
 type CommandBuilder struct {
 	LoggerProvider               LoggerProvider
 	Discoverer                   shared.RepositoryDiscoverer
@@ -46,28 +43,20 @@ type CommandBuilder struct {
 	HumanReadableLoggingProvider func() bool
 }
 
-// Build constructs the workflow command group.
+// Build constructs the workflow-run command.
 func (builder *CommandBuilder) Build() (*cobra.Command, error) {
-	groupCommand := &cobra.Command{
-		Use:   groupUseConstant,
-		Short: groupShortDescriptionConstant,
-		Long:  groupLongDescriptionConstant,
-	}
-
-	runCommand := &cobra.Command{
-		Use:   runUseConstant,
-		Short: runShortDescriptionConstant,
-		Long:  runLongDescriptionConstant,
+	command := &cobra.Command{
+		Use:   commandUseConstant,
+		Short: commandShortDescriptionConstant,
+		Long:  commandLongDescriptionConstant,
 		RunE:  builder.run,
 	}
 
-	runCommand.Flags().StringSlice(rootsFlagNameConstant, nil, rootsFlagDescriptionConstant)
-	runCommand.Flags().Bool(dryRunFlagNameConstant, false, dryRunFlagDescriptionConstant)
-	runCommand.Flags().BoolP(assumeYesFlagNameConstant, assumeYesFlagShorthandConstant, false, assumeYesFlagDescriptionConstant)
+	command.Flags().StringSlice(rootsFlagNameConstant, nil, rootsFlagDescriptionConstant)
+	command.Flags().Bool(dryRunFlagNameConstant, false, dryRunFlagDescriptionConstant)
+	command.Flags().BoolP(assumeYesFlagNameConstant, assumeYesFlagShorthandConstant, false, assumeYesFlagDescriptionConstant)
 
-	groupCommand.AddCommand(runCommand)
-
-	return groupCommand, nil
+	return command, nil
 }
 
 func (builder *CommandBuilder) run(command *cobra.Command, arguments []string) error {

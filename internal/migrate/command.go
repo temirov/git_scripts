@@ -18,12 +18,9 @@ import (
 )
 
 const (
-	branchCommandUseConstant                     = "branch"
-	branchCommandShortDescriptionConstant        = "Manage repository branches"
-	branchCommandLongDescriptionConstant         = "Branch utilities for Git repositories."
-	migrateCommandUseConstant                    = "migrate [root ...]"
-	migrateCommandShortDescriptionConstant       = "Migrate repository defaults from main to master"
-	migrateCommandLongDescriptionConstant        = "branch migrate retargets workflows, updates GitHub configuration, and evaluates safety gates before switching the default branch."
+	commandUseConstant                           = "branch-migrate [root ...]"
+	commandShortDescriptionConstant              = "Migrate repository defaults from main to master"
+	commandLongDescriptionConstant               = "branch-migrate retargets workflows, updates GitHub configuration, and evaluates safety gates before switching the default branch."
 	migrateCommandExecutionErrorTemplateConstant = "branch migration failed: %w"
 	debugFlagNameConstant                        = "debug"
 	debugFlagDescriptionConstant                 = "Enable verbose debug logging for migration diagnostics"
@@ -65,7 +62,7 @@ type commandOptions struct {
 // LoggerProvider supplies a zap logger instance.
 type LoggerProvider func() *zap.Logger
 
-// CommandBuilder assembles the Cobra command hierarchy for branch migration.
+// CommandBuilder assembles the branch-migrate Cobra command.
 type CommandBuilder struct {
 	LoggerProvider               LoggerProvider
 	Executor                     CommandExecutor
@@ -75,28 +72,20 @@ type CommandBuilder struct {
 	HumanReadableLoggingProvider func() bool
 }
 
-// Build constructs the branch command with the migrate subcommand.
+// Build constructs the branch-migrate command.
 func (builder *CommandBuilder) Build() (*cobra.Command, error) {
-	branchCommand := &cobra.Command{
-		Use:   branchCommandUseConstant,
-		Short: branchCommandShortDescriptionConstant,
-		Long:  branchCommandLongDescriptionConstant,
-	}
-
-	migrateCommand := &cobra.Command{
-		Use:           migrateCommandUseConstant,
-		Short:         migrateCommandShortDescriptionConstant,
-		Long:          migrateCommandLongDescriptionConstant,
+	command := &cobra.Command{
+		Use:           commandUseConstant,
+		Short:         commandShortDescriptionConstant,
+		Long:          commandLongDescriptionConstant,
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE:          builder.runMigrate,
 	}
 
-	migrateCommand.Flags().Bool(debugFlagNameConstant, false, debugFlagDescriptionConstant)
+	command.Flags().Bool(debugFlagNameConstant, false, debugFlagDescriptionConstant)
 
-	branchCommand.AddCommand(migrateCommand)
-
-	return branchCommand, nil
+	return command, nil
 }
 
 func (builder *CommandBuilder) runMigrate(command *cobra.Command, arguments []string) error {
