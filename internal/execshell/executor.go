@@ -135,7 +135,7 @@ func (executor *ShellExecutor) Execute(executionContext context.Context, command
 	if executor.humanReadableLogging {
 		executor.logger.Info(executor.messageFormatter.BuildStartedMessage(command))
 	} else {
-		executor.logger.Debug(commandStartMessageConstant,
+		executor.logger.Info(commandStartMessageConstant,
 			zap.String(commandNameFieldNameConstant, string(command.Name)),
 			zap.Strings(commandArgumentsFieldNameConstant, command.Details.Arguments),
 			zap.String(workingDirectoryFieldNameConstant, command.Details.WorkingDirectory),
@@ -171,7 +171,7 @@ func (executor *ShellExecutor) Execute(executionContext context.Context, command
 	if executor.humanReadableLogging {
 		executor.logger.Info(executor.messageFormatter.BuildSuccessMessage(command))
 	} else {
-		executor.logger.Debug(commandSuccessMessageConstant,
+		executor.logger.Info(commandSuccessMessageConstant,
 			zap.String(commandNameFieldNameConstant, string(command.Name)),
 			zap.Int(exitCodeFieldNameConstant, executionResult.ExitCode),
 		)
