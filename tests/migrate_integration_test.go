@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -20,12 +21,13 @@ import (
 
 const (
 	integrationRepositoryIdentifierConstant  = "integration/test"
-	integrationRemoteURLConstant             = "git@github.com:integration/test.git"
 	integrationWorkflowDirectoryConstant     = ".github/workflows"
 	integrationWorkflowFileNameConstant      = "ci.yml"
 	integrationWorkflowInitialContent        = "on:\n  push:\n    branches:\n      - main\n"
 	integrationWorkflowCommitMessageConstant = "CI: switch workflow branch filters to master"
-	migrationDefaultCaseNameConstant         = "main_to_master"
+	migrationRetainBranchCaseNameConstant    = "retain_source_branch_with_open_pr"
+	migrationDeleteBranchCaseNameConstant    = "delete_source_branch_when_safe"
+	migrationSkipDeletionCaseNameConstant    = "skip_deletion_when_not_safe"
 	migrationSubtestNameTemplateConstant     = "%d_%s"
 )
 
@@ -76,14 +78,63 @@ func (operations *recordingGitHubOperations) CheckBranchProtection(_ context.Con
 
 func TestMigrationIntegration(testInstance *testing.T) {
 	testCases := []struct {
-		name string
+		name                    string
+		pullRequests            []githubcli.PullRequest
+		branchProtectionEnabled bool
+		deleteSourceBranch      bool
+		expectSafe              bool
+		expectedBlockingReasons []string
+		expectedRetargeted      []int
+		expectLocalBranch       bool
+		expectRemoteBranch      bool
 	}{
-		{name: migrationDefaultCaseNameConstant},
+		{
+			name:                    migrationRetainBranchCaseNameConstant,
+			pullRequests:            []githubcli.PullRequest{{Number: 12}},
+			branchProtectionEnabled: false,
+			deleteSourceBranch:      false,
+			expectSafe:              false,
+			expectedBlockingReasons: []string{"open pull requests still target source branch"},
+			expectedRetargeted:      []int{12},
+			expectLocalBranch:       true,
+			expectRemoteBranch:      true,
+		},
+		{
+			name:                    migrationDeleteBranchCaseNameConstant,
+			pullRequests:            nil,
+			branchProtectionEnabled: false,
+			deleteSourceBranch:      true,
+			expectSafe:              true,
+			expectedBlockingReasons: nil,
+			expectedRetargeted:      nil,
+			expectLocalBranch:       false,
+			expectRemoteBranch:      false,
+		},
+		{
+			name:                    migrationSkipDeletionCaseNameConstant,
+			pullRequests:            []githubcli.PullRequest{{Number: 34}},
+			branchProtectionEnabled: false,
+			deleteSourceBranch:      true,
+			expectSafe:              false,
+			expectedBlockingReasons: []string{"open pull requests still target source branch"},
+			expectedRetargeted:      []int{34},
+			expectLocalBranch:       true,
+			expectRemoteBranch:      true,
+		},
 	}
 
-	for testCaseIndex, testCase := range testCases {
-		testInstance.Run(fmt.Sprintf(migrationSubtestNameTemplateConstant, testCaseIndex, testCase.name), func(subtest *testing.T) {
-			repositoryDirectory := subtest.TempDir()
+	for testCaseIndex := range testCases {
+		testCase := testCases[testCaseIndex]
+		subtestName := fmt.Sprintf(migrationSubtestNameTemplateConstant, testCaseIndex, testCase.name)
+		testInstance.Run(subtestName, func(subtest *testing.T) {
+			testRoot := subtest.TempDir()
+			repositoryDirectory := filepath.Join(testRoot, "repository")
+			require.NoError(subtest, os.MkdirAll(repositoryDirectory, 0o755))
+
+			remoteDirectory := filepath.Join(testRoot, "remote.git")
+			initializeBareGitRepository(subtest, remoteDirectory)
+			remotePath, remotePathError := filepath.Abs(remoteDirectory)
+			require.NoError(subtest, remotePathError)
 
 			runMigrationGitCommand(subtest, repositoryDirectory, "init")
 			runMigrationGitCommand(subtest, repositoryDirectory, "config", "user.name", "Integration User")
@@ -95,7 +146,6 @@ func TestMigrationIntegration(testInstance *testing.T) {
 			runMigrationGitCommand(subtest, repositoryDirectory, "add", "README.md")
 			runMigrationGitCommand(subtest, repositoryDirectory, "commit", "-m", "initial commit")
 
-			runMigrationGitCommand(subtest, repositoryDirectory, "remote", "add", "origin", integrationRemoteURLConstant)
 			runMigrationGitCommand(subtest, repositoryDirectory, "branch", "master")
 			runMigrationGitCommand(subtest, repositoryDirectory, "checkout", "master")
 
@@ -105,6 +155,9 @@ func TestMigrationIntegration(testInstance *testing.T) {
 			require.NoError(subtest, os.WriteFile(workflowPath, []byte(integrationWorkflowInitialContent), 0o644))
 			runMigrationGitCommand(subtest, repositoryDirectory, "add", integrationWorkflowDirectoryConstant)
 			runMigrationGitCommand(subtest, repositoryDirectory, "commit", "-m", "add workflow")
+
+			runMigrationGitCommand(subtest, repositoryDirectory, "remote", "add", "origin", remotePath)
+			runMigrationGitCommand(subtest, repositoryDirectory, "push", "origin", "main:main")
 
 			logger := zap.NewNop()
 			commandRunner := execshell.NewOSCommandRunner()
@@ -120,7 +173,8 @@ func TestMigrationIntegration(testInstance *testing.T) {
 					SourceBranch: "main",
 					SourcePath:   "/docs",
 				},
-				pullRequests: []githubcli.PullRequest{{Number: 12}},
+				pullRequests:            append([]githubcli.PullRequest{}, testCase.pullRequests...),
+				branchProtectionEnabled: testCase.branchProtectionEnabled,
 			}
 
 			service, serviceError := migrate.NewService(migrate.ServiceDependencies{
@@ -139,6 +193,7 @@ func TestMigrationIntegration(testInstance *testing.T) {
 				SourceBranch:         migrate.BranchMain,
 				TargetBranch:         migrate.BranchMaster,
 				PushUpdates:          false,
+				DeleteSourceBranch:   testCase.deleteSourceBranch,
 			}
 
 			result, migrationError := service.Execute(context.Background(), options)
@@ -148,9 +203,15 @@ func TestMigrationIntegration(testInstance *testing.T) {
 			require.Contains(subtest, result.WorkflowOutcome.UpdatedFiles[0], integrationWorkflowFileNameConstant)
 			require.True(subtest, result.PagesConfigurationUpdated)
 			require.True(subtest, result.DefaultBranchUpdated)
-			require.ElementsMatch(subtest, []int{12}, result.RetargetedPullRequests)
-			require.False(subtest, result.SafetyStatus.SafeToDelete)
-			require.Contains(subtest, result.SafetyStatus.BlockingReasons, "open pull requests still target source branch")
+			require.ElementsMatch(subtest, testCase.expectedRetargeted, result.RetargetedPullRequests)
+			require.Equal(subtest, testCase.expectSafe, result.SafetyStatus.SafeToDelete)
+			if len(testCase.expectedBlockingReasons) > 0 {
+				for _, expectedReason := range testCase.expectedBlockingReasons {
+					require.Contains(subtest, result.SafetyStatus.BlockingReasons, expectedReason)
+				}
+			} else {
+				require.Empty(subtest, result.SafetyStatus.BlockingReasons)
+			}
 
 			contentBytes, readError := os.ReadFile(workflowPath)
 			require.NoError(subtest, readError)
@@ -164,8 +225,11 @@ func TestMigrationIntegration(testInstance *testing.T) {
 
 			require.NotNil(subtest, githubOperations.updatedPagesConfig)
 			require.Equal(subtest, string(migrate.BranchMaster), githubOperations.updatedPagesConfig.SourceBranch)
-			require.Equal(subtest, []int{12}, githubOperations.retargetedPullRequests)
+			require.ElementsMatch(subtest, testCase.expectedRetargeted, githubOperations.retargetedPullRequests)
 			require.Equal(subtest, string(migrate.BranchMaster), githubOperations.defaultBranchTarget)
+
+			require.Equal(subtest, testCase.expectLocalBranch, branchExists(subtest, repositoryDirectory, "main"))
+			require.Equal(subtest, testCase.expectRemoteBranch, remoteBranchExists(subtest, remotePath, "main"))
 		})
 	}
 }
@@ -174,7 +238,31 @@ func runMigrationGitCommand(testInstance *testing.T, repositoryPath string, argu
 	testInstance.Helper()
 	command := exec.Command("git", arguments...)
 	command.Dir = repositoryPath
+	command.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
 	outputBytes, commandError := command.CombinedOutput()
 	require.NoError(testInstance, commandError, string(outputBytes))
 	return string(bytes.TrimSpace(outputBytes))
+}
+
+func branchExists(testInstance *testing.T, repositoryPath string, branchName string) bool {
+	testInstance.Helper()
+	output := runMigrationGitCommand(testInstance, repositoryPath, "branch", "--list", branchName)
+	return len(strings.TrimSpace(output)) > 0
+}
+
+func remoteBranchExists(testInstance *testing.T, remoteGitDirectory string, branchName string) bool {
+	testInstance.Helper()
+	command := exec.Command("git", "--git-dir", remoteGitDirectory, "branch", "--list", branchName)
+	command.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	outputBytes, commandError := command.CombinedOutput()
+	require.NoError(testInstance, commandError, string(outputBytes))
+	return len(strings.TrimSpace(string(bytes.TrimSpace(outputBytes)))) > 0
+}
+
+func initializeBareGitRepository(testInstance *testing.T, repositoryPath string) {
+	testInstance.Helper()
+	command := exec.Command("git", "init", "--bare", repositoryPath)
+	command.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	outputBytes, commandError := command.CombinedOutput()
+	require.NoError(testInstance, commandError, string(outputBytes))
 }

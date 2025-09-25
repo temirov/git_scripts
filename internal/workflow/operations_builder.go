@@ -103,14 +103,6 @@ func buildBranchMigrationOperation(options map[string]any) (Operation, error) {
 	targets := make([]BranchMigrationTarget, 0, len(targetEntries))
 	for targetIndex := range targetEntries {
 		targetReader := newOptionReader(targetEntries[targetIndex])
-		repositoryValue, _, repositoryError := targetReader.stringValue(optionRepositoryKeyConstant)
-		if repositoryError != nil {
-			return nil, repositoryError
-		}
-		pathValue, _, pathError := targetReader.stringValue(optionPathKeyConstant)
-		if pathError != nil {
-			return nil, pathError
-		}
 		remoteNameValue, remoteNameExists, remoteNameError := targetReader.stringValue(optionRemoteNameKeyConstant)
 		if remoteNameError != nil {
 			return nil, remoteNameError
@@ -123,23 +115,21 @@ func buildBranchMigrationOperation(options map[string]any) (Operation, error) {
 		if targetError != nil {
 			return nil, targetError
 		}
-		workflowsDirectoryValue, workflowsExists, workflowsError := targetReader.stringValue(optionWorkflowsDirectoryKeyConstant)
-		if workflowsError != nil {
-			return nil, workflowsError
+		pushToRemoteValue, pushToRemoteExists, pushToRemoteError := targetReader.boolValue(optionPushToRemoteKeyConstant)
+		if pushToRemoteError != nil {
+			return nil, pushToRemoteError
 		}
-		pushUpdatesValue, pushUpdatesExists, pushUpdatesError := targetReader.boolValue(optionPushUpdatesKeyConstant)
-		if pushUpdatesError != nil {
-			return nil, pushUpdatesError
+		deleteSourceBranchValue, deleteSourceBranchExists, deleteSourceBranchError := targetReader.boolValue(optionDeleteSourceBranchKeyConstant)
+		if deleteSourceBranchError != nil {
+			return nil, deleteSourceBranchError
 		}
 
 		targets = append(targets, BranchMigrationTarget{
-			RepositoryIdentifier: strings.TrimSpace(repositoryValue),
-			RepositoryPath:       normalizePathCandidate(pathValue),
-			RemoteName:           defaultRemoteName(remoteNameExists, remoteNameValue),
-			SourceBranch:         defaultSourceBranch(sourceExists, sourceBranchValue),
-			TargetBranch:         defaultTargetBranch(targetExists, targetBranchValue),
-			WorkflowsDirectory:   defaultWorkflowsDirectory(workflowsExists, workflowsDirectoryValue),
-			PushUpdates:          defaultPushUpdates(pushUpdatesExists, pushUpdatesValue),
+			RemoteName:         defaultRemoteName(remoteNameExists, remoteNameValue),
+			SourceBranch:       defaultSourceBranch(sourceExists, sourceBranchValue),
+			TargetBranch:       defaultTargetBranch(targetExists, targetBranchValue),
+			PushToRemote:       defaultPushToRemote(pushToRemoteExists, pushToRemoteValue),
+			DeleteSourceBranch: defaultDeleteSourceBranch(deleteSourceBranchExists, deleteSourceBranchValue),
 		})
 	}
 
@@ -199,19 +189,16 @@ func defaultTargetBranch(explicit bool, value string) string {
 	return defaultMigrationTargetBranchConstant
 }
 
-func defaultWorkflowsDirectory(explicit bool, value string) string {
-	if explicit {
-		trimmed := strings.TrimSpace(value)
-		if len(trimmed) > 0 {
-			return trimmed
-		}
-	}
-	return defaultMigrationWorkflowsDirectoryConstant
-}
-
-func defaultPushUpdates(explicit bool, value bool) bool {
+func defaultPushToRemote(explicit bool, value bool) bool {
 	if explicit {
 		return value
 	}
 	return true
+}
+
+func defaultDeleteSourceBranch(explicit bool, value bool) bool {
+	if explicit {
+		return value
+	}
+	return false
 }
