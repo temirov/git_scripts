@@ -25,6 +25,9 @@ const (
 	gitCommitCommandNameConstant               = "commit"
 	gitMessageFlagConstant                     = "-m"
 	gitPushCommandNameConstant                 = "push"
+	gitBranchCommandNameConstant               = "branch"
+	gitDeleteForceFlagConstant                 = "-D"
+	gitPushDeleteFlagConstant                  = "--delete"
 	workflowCommitMessageTemplateConstant      = "CI: switch workflow branch filters to %s"
 	cleanWorktreeRequiredMessageConstant       = "repository worktree must be clean before migration"
 	repositoryManagerMissingMessageConstant    = "repository manager not configured"
@@ -39,6 +42,9 @@ const (
 	pullRequestListErrorTemplateConstant       = "unable to list pull requests: %w"
 	pullRequestRetargetErrorTemplateConstant   = "unable to retarget pull request #%d: %w"
 	branchProtectionCheckErrorTemplateConstant = "unable to determine branch protection: %w"
+	localBranchDeleteErrorTemplateConstant     = "unable to delete local source branch: %w"
+	remoteBranchDeleteErrorTemplateConstant    = "unable to delete remote source branch: %w"
+	branchDeletionSkippedMessageConstant       = "Skipping source branch deletion because safety gates blocked deletion"
 )
 
 // InvalidInputError describes migration option validation failures.
@@ -70,6 +76,7 @@ type MigrationOptions struct {
 	TargetBranch         BranchName
 	PushUpdates          bool
 	EnableDebugLogging   bool
+	DeleteSourceBranch   bool
 }
 
 // WorkflowOutcome captures workflow rewrite results.
@@ -221,6 +228,20 @@ func (service *Service) Execute(executionContext context.Context, options Migrat
 		SafetyStatus:              safetyStatus,
 	}
 
+	if options.DeleteSourceBranch {
+		if !result.SafetyStatus.SafeToDelete {
+			service.logger.Warn(
+				branchDeletionSkippedMessageConstant,
+				zap.String(repositoryPathFieldNameConstant, options.RepositoryPath),
+				zap.String(sourceBranchFieldNameConstant, string(options.SourceBranch)),
+			)
+		} else {
+			if deletionError := service.deleteSourceBranch(executionContext, options); deletionError != nil {
+				return MigrationResult{}, deletionError
+			}
+		}
+	}
+
 	return result, nil
 }
 
@@ -284,6 +305,26 @@ func (service *Service) pushWorkflowChanges(executionContext context.Context, op
 	}); pushError != nil {
 		return fmt.Errorf(workflowPushErrorTemplateConstant, pushError)
 	}
+	return nil
+}
+
+func (service *Service) deleteSourceBranch(executionContext context.Context, options MigrationOptions) error {
+	deleteLocalArguments := []string{gitBranchCommandNameConstant, gitDeleteForceFlagConstant, string(options.SourceBranch)}
+	if _, deleteLocalError := service.gitExecutor.ExecuteGit(executionContext, execshell.CommandDetails{
+		Arguments:        deleteLocalArguments,
+		WorkingDirectory: options.RepositoryPath,
+	}); deleteLocalError != nil {
+		return fmt.Errorf(localBranchDeleteErrorTemplateConstant, deleteLocalError)
+	}
+
+	deleteRemoteArguments := []string{gitPushCommandNameConstant, options.RepositoryRemoteName, gitPushDeleteFlagConstant, string(options.SourceBranch)}
+	if _, deleteRemoteError := service.gitExecutor.ExecuteGit(executionContext, execshell.CommandDetails{
+		Arguments:        deleteRemoteArguments,
+		WorkingDirectory: options.RepositoryPath,
+	}); deleteRemoteError != nil {
+		return fmt.Errorf(remoteBranchDeleteErrorTemplateConstant, deleteRemoteError)
+	}
+
 	return nil
 }
 

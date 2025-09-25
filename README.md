@@ -158,13 +158,11 @@ steps:
   - operation: migrate-branch
     with:
       targets:
-        - repository: canonical/example
-          path: ./services/example
-          remote_name: origin
+        - remote_name: origin
           source_branch: main
           target_branch: master
-          workflows_directory: .github/workflows
-          push_updates: true
+          push_to_remote: true
+          delete_source_branch: false
   - operation: audit-report
     with:
       output: ./audit.csv

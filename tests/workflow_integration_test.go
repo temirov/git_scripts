@@ -217,7 +217,7 @@ func initializeWorkflowRepository(testInstance *testing.T, repositoryPath string
 }
 
 func buildWorkflowConfiguration(auditPath string) string {
-	return fmt.Sprintf("steps:\n  - operation: convert-protocol\n    with:\n      from: https\n      to: ssh\n  - operation: migrate-branch\n    with:\n      targets:\n        - repository: canonical/example\n          remote_name: origin\n          source_branch: main\n          target_branch: master\n          workflows_directory: .github/workflows\n          push_updates: false\n  - operation: audit-report\n    with:\n      output: %s\n", auditPath)
+	return fmt.Sprintf("steps:\n  - operation: convert-protocol\n    with:\n      from: https\n      to: ssh\n  - operation: migrate-branch\n    with:\n      targets:\n        - remote_name: origin\n          source_branch: main\n          target_branch: master\n          push_to_remote: false\n          delete_source_branch: false\n  - operation: audit-report\n    with:\n      output: %s\n", auditPath)
 }
 
 func buildWorkflowStubScript(stateFilePath string) string {

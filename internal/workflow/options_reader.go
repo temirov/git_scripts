@@ -2,7 +2,6 @@ package workflow
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 )
 
@@ -11,13 +10,11 @@ const (
 	optionToKeyConstant                 = "to"
 	optionRequireCleanKeyConstant       = "require_clean"
 	optionTargetsKeyConstant            = "targets"
-	optionRepositoryKeyConstant         = "repository"
-	optionPathKeyConstant               = "path"
 	optionRemoteNameKeyConstant         = "remote_name"
 	optionSourceBranchKeyConstant       = "source_branch"
 	optionTargetBranchKeyConstant       = "target_branch"
-	optionWorkflowsDirectoryKeyConstant = "workflows_directory"
-	optionPushUpdatesKeyConstant        = "push_updates"
+	optionPushToRemoteKeyConstant       = "push_to_remote"
+	optionDeleteSourceBranchKeyConstant = "delete_source_branch"
 	optionOutputPathKeyConstant         = "output"
 )
 
@@ -88,11 +85,4 @@ func (reader optionReader) mapSlice(key string) ([]map[string]any, bool, error) 
 		maps = append(maps, entry)
 	}
 	return maps, true, nil
-}
-
-func normalizePathCandidate(value string) string {
-	if len(value) == 0 {
-		return ""
-	}
-	return filepath.Clean(value)
 }
