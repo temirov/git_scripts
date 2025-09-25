@@ -102,6 +102,7 @@ func TestShellExecutorExecuteBehavior(testInstance *testing.T) {
 		runnerError      error
 		expectErrorType  any
 		expectedLogCount int
+		expectedLevels   []zapcore.Level
 	}{
 		{
 			name: testExecutionSuccessCaseNameConstant,
@@ -110,6 +111,7 @@ func TestShellExecutorExecuteBehavior(testInstance *testing.T) {
 				ExitCode:       0,
 			},
 			expectedLogCount: 2,
+			expectedLevels:   []zapcore.Level{zap.InfoLevel, zap.InfoLevel},
 		},
 		{
 			name: testExecutionFailureCaseNameConstant,
@@ -119,12 +121,14 @@ func TestShellExecutorExecuteBehavior(testInstance *testing.T) {
 			},
 			expectErrorType:  execshell.CommandFailedError{},
 			expectedLogCount: 2,
+			expectedLevels:   []zapcore.Level{zap.InfoLevel, zap.WarnLevel},
 		},
 		{
 			name:             testExecutionRunnerErrorCaseNameConstant,
 			runnerError:      errors.New(testRunnerFailureMessageConstant),
 			expectErrorType:  execshell.CommandExecutionError{},
 			expectedLogCount: 2,
+			expectedLevels:   []zapcore.Level{zap.InfoLevel, zap.ErrorLevel},
 		},
 	}
 
@@ -153,7 +157,11 @@ func TestShellExecutorExecuteBehavior(testInstance *testing.T) {
 				require.Equal(testInstance, testCase.runnerResult.StandardOutput, executionResult.StandardOutput)
 			}
 
-			require.Len(testInstance, observerLogs.All(), testCase.expectedLogCount)
+			capturedLogs := observerLogs.All()
+			require.Len(testInstance, capturedLogs, testCase.expectedLogCount)
+			for logIndex := range capturedLogs {
+				require.Equal(testInstance, testCase.expectedLevels[logIndex], capturedLogs[logIndex].Level)
+			}
 		})
 	}
 }
