@@ -18,6 +18,7 @@ const (
 	workflowIntegrationRunSubcommand           = "run"
 	workflowIntegrationModulePathConstant      = "."
 	workflowIntegrationLogLevelFlag            = "--log-level"
+	workflowIntegrationConfigFlag              = "--config"
 	workflowIntegrationErrorLevel              = "error"
 	workflowIntegrationGroup                   = "workflow"
 	workflowIntegrationCommand                 = "run"
@@ -54,9 +55,10 @@ const (
 	workflowIntegrationCSVHeader               = "final_github_repo,folder_name,name_matches,remote_default_branch,local_branch,in_sync,remote_protocol,origin_matches_canonical\n"
 	workflowIntegrationSubtestNameTemplate     = "%d_%s"
 	workflowIntegrationDefaultCaseName         = "protocol_migrate_audit"
+	workflowIntegrationConfigFlagCaseName      = "config_flag_without_positional"
 	workflowIntegrationHelpCaseName            = "workflow_help_missing_configuration"
 	workflowIntegrationUsageSnippet            = "workflow run [workflow]"
-	workflowIntegrationMissingConfigMessage    = "workflow configuration path required"
+	workflowIntegrationMissingConfigMessage    = "workflow configuration path required; provide a positional argument or --config flag"
 )
 
 func TestWorkflowRunIntegration(testInstance *testing.T) {
@@ -65,9 +67,20 @@ func TestWorkflowRunIntegration(testInstance *testing.T) {
 	repositoryRoot := filepath.Dir(workingDirectory)
 
 	testCases := []struct {
-		name string
+		name                         string
+		includePositionalWorkflowArg bool
+		includeConfigFlag            bool
 	}{
-		{name: workflowIntegrationDefaultCaseName},
+		{
+			name:                         workflowIntegrationDefaultCaseName,
+			includePositionalWorkflowArg: true,
+			includeConfigFlag:            false,
+		},
+		{
+			name:                         workflowIntegrationConfigFlagCaseName,
+			includePositionalWorkflowArg: false,
+			includeConfigFlag:            true,
+		},
 	}
 
 	for testCaseIndex := range testCases {
@@ -101,13 +114,26 @@ func TestWorkflowRunIntegration(testInstance *testing.T) {
 				workflowIntegrationModulePathConstant,
 				workflowIntegrationLogLevelFlag,
 				workflowIntegrationErrorLevel,
+			}
+
+			if testCase.includeConfigFlag {
+				commandArguments = append(commandArguments, workflowIntegrationConfigFlag, configPath)
+			}
+
+			commandArguments = append(commandArguments,
 				workflowIntegrationGroup,
 				workflowIntegrationCommand,
-				configPath,
+			)
+
+			if testCase.includePositionalWorkflowArg {
+				commandArguments = append(commandArguments, configPath)
+			}
+
+			commandArguments = append(commandArguments,
 				workflowIntegrationRootsFlag,
 				tempDirectory,
 				workflowIntegrationYesFlag,
-			}
+			)
 
 			rawOutput := runIntegrationCommand(subtest, repositoryRoot, extendedPath, workflowIntegrationTimeout, commandArguments)
 			filteredOutput := filterStructuredOutput(rawOutput)

@@ -3,6 +3,7 @@ package workflow
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -28,7 +29,7 @@ const (
 	assumeYesFlagNameConstant                 = "yes"
 	assumeYesFlagShorthandConstant            = "y"
 	assumeYesFlagDescriptionConstant          = "Automatically confirm prompts"
-	configurationPathRequiredMessageConstant  = "workflow configuration path required"
+	configurationPathRequiredMessageConstant  = "workflow configuration path required; provide a positional argument or --config flag"
 	loadConfigurationErrorTemplateConstant    = "unable to load workflow configuration: %w"
 	buildOperationsErrorTemplateConstant      = "unable to build workflow operations: %w"
 	gitRepositoryManagerErrorTemplateConstant = "unable to construct repository manager: %w"
@@ -70,14 +71,26 @@ func (builder *CommandBuilder) Build() (*cobra.Command, error) {
 }
 
 func (builder *CommandBuilder) run(command *cobra.Command, arguments []string) error {
-	if len(arguments) == 0 {
+	contextAccessor := utils.NewCommandContextAccessor()
+
+	configurationPathCandidate := ""
+	if len(arguments) > 0 {
+		configurationPathCandidate = strings.TrimSpace(arguments[0])
+	} else {
+		configurationPathFromContext, configurationPathAvailable := contextAccessor.ConfigurationFilePath(command.Context())
+		if configurationPathAvailable {
+			configurationPathCandidate = strings.TrimSpace(configurationPathFromContext)
+		}
+	}
+
+	if len(configurationPathCandidate) == 0 {
 		if helpError := displayCommandHelp(command); helpError != nil {
 			return helpError
 		}
 		return errors.New(configurationPathRequiredMessageConstant)
 	}
 
-	configurationPath := arguments[0]
+	configurationPath := configurationPathCandidate
 	configuration, configurationError := workflow.LoadConfiguration(configurationPath)
 	if configurationError != nil {
 		return fmt.Errorf(loadConfigurationErrorTemplateConstant, configurationError)
