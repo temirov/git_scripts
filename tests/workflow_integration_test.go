@@ -56,6 +56,7 @@ const (
 	workflowIntegrationSubtestNameTemplate     = "%d_%s"
 	workflowIntegrationDefaultCaseName         = "protocol_migrate_audit"
 	workflowIntegrationConfigFlagCaseName      = "config_flag_without_positional"
+	workflowIntegrationRepositoryConfigCase    = "repository_root_configuration"
 	workflowIntegrationHelpCaseName            = "workflow_help_missing_configuration"
 	workflowIntegrationUsageSnippet            = "workflow run [workflow]"
 	workflowIntegrationMissingConfigMessage    = "workflow configuration path required; provide a positional argument or --config flag"
@@ -70,16 +71,25 @@ func TestWorkflowRunIntegration(testInstance *testing.T) {
 		name                         string
 		includePositionalWorkflowArg bool
 		includeConfigFlag            bool
+		useRepositoryRootConfig      bool
 	}{
 		{
 			name:                         workflowIntegrationDefaultCaseName,
 			includePositionalWorkflowArg: true,
 			includeConfigFlag:            false,
+			useRepositoryRootConfig:      false,
 		},
 		{
 			name:                         workflowIntegrationConfigFlagCaseName,
 			includePositionalWorkflowArg: false,
 			includeConfigFlag:            true,
+			useRepositoryRootConfig:      false,
+		},
+		{
+			name:                         workflowIntegrationRepositoryConfigCase,
+			includePositionalWorkflowArg: false,
+			includeConfigFlag:            false,
+			useRepositoryRootConfig:      true,
 		},
 	}
 
@@ -102,10 +112,23 @@ func TestWorkflowRunIntegration(testInstance *testing.T) {
 			stubScript := buildWorkflowStubScript(stateFilePath)
 			require.NoError(subtest, os.WriteFile(stubPath, []byte(stubScript), 0o755))
 
-			configPath := filepath.Join(tempDirectory, workflowIntegrationConfigFileName)
+			configDirectory := tempDirectory
+			configFileName := workflowIntegrationConfigFileName
+			if testCase.useRepositoryRootConfig {
+				configDirectory = repositoryRoot
+				configFileName = integrationConfigFileNameConstant
+			}
+
+			configPath := filepath.Join(configDirectory, configFileName)
 			auditPath := filepath.Join(tempDirectory, workflowIntegrationAuditFileName)
 			workflowConfig := buildWorkflowConfiguration(auditPath)
 			require.NoError(subtest, os.WriteFile(configPath, []byte(workflowConfig), 0o644))
+
+			if testCase.useRepositoryRootConfig {
+				subtest.Cleanup(func() {
+					require.NoError(subtest, os.Remove(configPath))
+				})
+			}
 
 			extendedPath := stubDirectory + string(os.PathListSeparator) + os.Getenv("PATH")
 
