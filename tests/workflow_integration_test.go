@@ -2,6 +2,7 @@ package tests
 
 import (
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -120,13 +121,42 @@ func TestWorkflowRunIntegration(testInstance *testing.T) {
 			}
 
 			configPath := filepath.Join(configDirectory, configFileName)
+			var (
+				hadExistingRepositoryConfig bool
+				originalConfigContent       []byte
+				originalConfigMode          os.FileMode
+			)
+
+			if testCase.useRepositoryRootConfig {
+				existingInfo, existingErr := os.Stat(configPath)
+				if existingErr == nil {
+					hadExistingRepositoryConfig = true
+					originalConfigMode = existingInfo.Mode()
+
+					originalConfigContent, existingErr = os.ReadFile(configPath)
+					require.NoError(subtest, existingErr)
+				} else if !errors.Is(existingErr, os.ErrNotExist) {
+					require.NoError(subtest, existingErr)
+				}
+			}
+
 			auditPath := filepath.Join(tempDirectory, workflowIntegrationAuditFileName)
 			workflowConfig := buildWorkflowConfiguration(auditPath)
 			require.NoError(subtest, os.WriteFile(configPath, []byte(workflowConfig), 0o644))
 
 			if testCase.useRepositoryRootConfig {
 				subtest.Cleanup(func() {
-					require.NoError(subtest, os.Remove(configPath))
+					if hadExistingRepositoryConfig {
+						require.NoError(subtest, os.WriteFile(configPath, originalConfigContent, originalConfigMode))
+						return
+					}
+
+					removeErr := os.Remove(configPath)
+					if errors.Is(removeErr, os.ErrNotExist) {
+						return
+					}
+
+					require.NoError(subtest, removeErr)
 				})
 			}
 
