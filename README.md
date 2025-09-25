@@ -6,18 +6,18 @@ A Go-based command-line interface that automates routine Git and GitHub maintena
 
 You can run the CLI in two complementary ways depending on how much orchestration you need:
 
-- **Direct commands with persisted defaults** – invoke subcommands such as `repos`, `packages`, and `audit` from the shell,
+- **Direct commands with persisted defaults** – invoke commands such as `repo-folders-rename`, `protocol-convert`, `packages`, and `audit` from the shell,
   optionally loading shared flags (for example, log level or default owners) via [`--config` files](#configuration-and-logging).
   This mode mirrors the examples throughout the [command catalog](#command-catalog) and is ideal when you want immediate,
   one-off execution.
-- **Workflow runner with YAML/JSON steps** – describe ordered operations in declarative workflow files and let `workflow run`
+- **Workflow runner with YAML/JSON steps** – describe ordered operations in declarative workflow files and let `workflow-run`
   drive them. The [`Workflow bundling`](#workflow-bundling) section shows the domain-specific language (DSL) and how the
   runner reuses discovery, prompting, and logging across steps.
 
 | Choose this mode | When it shines | Example |
 | --- | --- | --- |
-| Direct commands | You need a focused, ad-hoc action with minimal setup, such as renaming directories or auditing repositories | [`repos rename-folders`](#repository-maintenance-git-scripts-repos-) and [`audit`](#audit-reports) examples |
-| Workflow runner | You want to bundle several operations together, share discovery across them, or hand off a repeatable plan to teammates | [`workflow run` with a YAML plan](#workflow-bundling) |
+| Direct commands | You need a focused, ad-hoc action with minimal setup, such as renaming directories or auditing repositories | [`repo-folders-rename`](#repository-maintenance-commands) and [`audit`](#audit-reports) examples |
+| Workflow runner | You want to bundle several operations together, share discovery across them, or hand off a repeatable plan to teammates | [`workflow-run` with a YAML plan](#workflow-bundling) |
 
 ## Feature highlights
 
@@ -76,42 +76,42 @@ go run . audit --audit ~/Development
 `audit --audit` scans each repository beneath the provided roots (defaults to the current directory) and writes a CSV summary to
 stdout. Add `--debug` to log discovery progress and inspection diagnostics.
 
-### Repository maintenance (`git-scripts repos ...`)
+### Repository maintenance commands
 
 *Rename directories to the canonical GitHub name*
 
 ```shell
-go run . repos rename-folders --dry-run ~/Development
+go run . repo-folders-rename --dry-run ~/Development
 # Apply the plan with confirmations
-go run . repos rename-folders --yes ~/Development
+go run . repo-folders-rename --yes ~/Development
 # Require clean worktrees before renaming
-go run . repos rename-folders --yes --require-clean ~/Development
+go run . repo-folders-rename --yes --require-clean ~/Development
 ```
 
 *Update `origin` to the canonical GitHub remote*
 
 ```shell
-go run . repos update-canonical-remote --dry-run ~/Development
+go run . repo-remote-update --dry-run ~/Development
 # Automatically confirm updates
-go run . repos update-canonical-remote --yes ~/Development
+go run . repo-remote-update --yes ~/Development
 ```
 
 *Convert `origin` between Git protocols*
 
 ```shell
-go run . repos convert-remote-protocol --from https --to git --dry-run ~/Development
+go run . protocol-convert --from https --to git --dry-run ~/Development
 # Apply conversions without interactive prompts
-go run . repos convert-remote-protocol --from https --to ssh --yes ~/Development
+go run . protocol-convert --from https --to ssh --yes ~/Development
 # Operate on a single repository path
-go run . repos convert-remote-protocol --from ssh --to https --yes ~/Development/project-repo
+go run . protocol-convert --from ssh --to https --yes ~/Development/project-repo
 ```
 
 ### Pull-request branch cleanup
 
 ```shell
-go run . pr-cleanup --remote origin --limit 100 ~/Development
+go run . repo-prs-purge --remote origin --limit 100 ~/Development
 # Preview deletions without mutating remotes or local branches
-go run . pr-cleanup --dry-run ~/Development
+go run . repo-prs-purge --dry-run ~/Development
 ```
 
 The command deletes branches whose pull requests are already closed. Provide one or more repository roots or rely on the current
@@ -120,10 +120,10 @@ working directory.
 ### Default-branch migration
 
 ```shell
-go run . branch migrate --debug ~/Development/project-repo
+go run . branch-migrate --debug ~/Development/project-repo
 ```
 
-`branch migrate` rewrites workflows, retargets GitHub Pages, pushes branch updates, and flips the default branch from `main` to
+`branch-migrate` rewrites workflows, retargets GitHub Pages, pushes branch updates, and flips the default branch from `main` to
 `master`. Debug logging surfaces detailed progress for each safety gate and API call.
 
 ### GitHub Packages maintenance
@@ -182,15 +182,15 @@ Specify `--config path/to/override.yaml` when you need to load an alternate conf
 
 ### Workflow bundling
 
-Define ordered steps in YAML or JSON and execute them with `workflow run`:
+Define ordered steps in YAML or JSON and execute them with `workflow-run`:
 
 ```shell
-go run . workflow run --roots ~/Development --dry-run
+go run . workflow-run --roots ~/Development --dry-run
 # Execute with confirmations suppressed
-go run . workflow run --roots ~/Development --yes
+go run . workflow-run --roots ~/Development --yes
 ```
 
-`workflow run` reads the `steps` array from `config.yaml`, reusing the same repository discovery, prompting, and logging
+`workflow-run` reads the `steps` array from `config.yaml`, reusing the same repository discovery, prompting, and logging
 infrastructure as the standalone commands. Pass additional roots on the command line to override the configuration file and
 combine `--dry-run`/`--yes` for non-interactive execution.
 

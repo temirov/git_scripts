@@ -20,7 +20,6 @@ const (
 	debugFlagArgumentConstant              = "--debug"
 	multiRootFirstArgumentConstant         = "root-one"
 	multiRootSecondArgumentConstant        = "root-two"
-	migrateCommandNameConstant             = "migrate"
 	repositoryOnePathConstant              = "/tmp/repository-one"
 	repositoryTwoPathConstant              = "/tmp/repository-two"
 	repositoryOneRemoteConstant            = "git@github.com:example/repository-one.git"
@@ -198,7 +197,7 @@ func TestMigrateCommandRunScenarios(testInstance *testing.T) {
 			require.NoError(subtest, buildError)
 
 			command.SetContext(context.Background())
-			commandArguments := append([]string{migrateCommandNameConstant}, testCase.arguments...)
+			commandArguments := append([]string{}, testCase.arguments...)
 			command.SetArgs(commandArguments)
 
 			executionError := command.Execute()

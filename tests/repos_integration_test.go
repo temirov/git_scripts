@@ -17,10 +17,9 @@ const (
 	reposIntegrationErrorLevel                  = "error"
 	reposIntegrationRunSubcommand               = "run"
 	reposIntegrationModulePathConstant          = "."
-	reposIntegrationGroup                       = "repos"
-	reposIntegrationRenameCommand               = "rename-folders"
-	reposIntegrationRemotesCommand              = "update-canonical-remote"
-	reposIntegrationProtocolCommand             = "convert-remote-protocol"
+	reposIntegrationRenameCommand               = "repo-folders-rename"
+	reposIntegrationRemotesCommand              = "repo-remote-update"
+	reposIntegrationProtocolCommand             = "protocol-convert"
 	reposIntegrationDryRunFlag                  = "--dry-run"
 	reposIntegrationYesFlag                     = "--yes"
 	reposIntegrationFromFlag                    = "--from"
@@ -42,7 +41,7 @@ const (
 	reposIntegrationRemoteCaseName              = "update_canonical_remote"
 	reposIntegrationProtocolCaseName            = "convert_protocol"
 	reposIntegrationProtocolHelpCaseName        = "protocol_help_missing_flags"
-	reposIntegrationProtocolUsageSnippet        = "convert-remote-protocol [root ...]"
+	reposIntegrationProtocolUsageSnippet        = "protocol-convert [root ...]"
 	reposIntegrationProtocolMissingFlagsMessage = "specify both --from and --to"
 )
 
@@ -68,7 +67,6 @@ func TestReposCommandIntegration(testInstance *testing.T) {
 				reposIntegrationModulePathConstant,
 				reposIntegrationLogLevelFlag,
 				reposIntegrationErrorLevel,
-				reposIntegrationGroup,
 				reposIntegrationRenameCommand,
 				reposIntegrationDryRunFlag,
 			},
@@ -91,7 +89,6 @@ func TestReposCommandIntegration(testInstance *testing.T) {
 				reposIntegrationModulePathConstant,
 				reposIntegrationLogLevelFlag,
 				reposIntegrationErrorLevel,
-				reposIntegrationGroup,
 				reposIntegrationRemotesCommand,
 				reposIntegrationYesFlag,
 			},
@@ -116,7 +113,6 @@ func TestReposCommandIntegration(testInstance *testing.T) {
 				reposIntegrationModulePathConstant,
 				reposIntegrationLogLevelFlag,
 				reposIntegrationErrorLevel,
-				reposIntegrationGroup,
 				reposIntegrationProtocolCommand,
 				reposIntegrationYesFlag,
 				reposIntegrationFromFlag,
@@ -169,7 +165,6 @@ func TestReposProtocolCommandDisplaysHelpWhenProtocolsMissing(testInstance *test
 				reposIntegrationModulePathConstant,
 				reposIntegrationLogLevelFlag,
 				reposIntegrationErrorLevel,
-				reposIntegrationGroup,
 				reposIntegrationProtocolCommand,
 			},
 			expectedSnippets: []string{

@@ -12,9 +12,9 @@ import (
 )
 
 const (
-	remotesUseConstant          = "update-canonical-remote [root ...]"
+	remotesUseConstant          = "repo-remote-update [root ...]"
 	remotesShortDescription     = "Update origin URLs to match canonical GitHub repositories"
-	remotesLongDescription      = "update-canonical-remote adjusts origin remotes to point to canonical GitHub repositories."
+	remotesLongDescription      = "repo-remote-update adjusts origin remotes to point to canonical GitHub repositories."
 	remotesDryRunFlagName       = "dry-run"
 	remotesDryRunDescription    = "Preview remote updates without making changes"
 	remotesAssumeYesFlagName    = "yes"
@@ -22,7 +22,7 @@ const (
 	remotesAssumeYesShorthand   = "y"
 )
 
-// RemotesCommandBuilder assembles the update-canonical-remote command.
+// RemotesCommandBuilder assembles the repo-remote-update command.
 type RemotesCommandBuilder struct {
 	LoggerProvider               LoggerProvider
 	Discoverer                   shared.RepositoryDiscoverer
@@ -33,7 +33,7 @@ type RemotesCommandBuilder struct {
 	HumanReadableLoggingProvider func() bool
 }
 
-// Build constructs the update-canonical-remote command.
+// Build constructs the repo-remote-update command.
 func (builder *RemotesCommandBuilder) Build() (*cobra.Command, error) {
 	command := &cobra.Command{
 		Use:   remotesUseConstant,

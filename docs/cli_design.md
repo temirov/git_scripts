@@ -60,11 +60,11 @@ The following tables document each script. "Inputs" include both positional argu
 The new CLI (working name **`git-maintenance`**) will use Cobra for command/flag parsing. The root binary lives at `cmd/cli/main.go` and exposes the following hierarchy:
 
 - `git-maintenance audit`
-- `git-maintenance repos rename-folders`
-- `git-maintenance repos update-canonical-remote`
-- `git-maintenance repos convert-remote-protocol`
-- `git-maintenance branches cleanup`
-- `git-maintenance branch flip-main`
+- `git-maintenance repo-folders-rename`
+- `git-maintenance repo-remote-update`
+- `git-maintenance protocol-convert`
+- `git-maintenance repo-prs-purge`
+- `git-maintenance branch-migrate`
 - `git-maintenance packages purge-untagged`
 
 ### 3.1 Flag and Behavior Mapping
@@ -73,11 +73,11 @@ The table below maps current script switches to Cobra equivalents and documents 
 | Script behavior | Cobra command | Flags & arguments | `gh` usage strategy |
 | --- | --- | --- | --- |
 | CSV audit (`--audit`) | `git-maintenance audit` | `--root` (repeatable; defaults to `.`), `--debug`, `--format csv` (defaults to CSV; future extensibility), `--output` (optional file). Command is read-only. | Use `exec.CommandContext` to run `gh repo view` and `gh api repos/{owner}/{repo}` exactly once per repo. Results cached per repo to minimize API calls. |
-| Directory rename (`--rename`) | `git-maintenance repos rename-folders` | `--root`, `--dry-run`, `--require-clean`, `--yes`. | Same metadata resolution as audit. No extra `gh` commands beyond canonical lookup. |
-| Update remote to canonical (`--update-remote`) | `git-maintenance repos update-canonical-remote` | `--root`, `--dry-run`, `--yes`. | Requires canonical owner/repo from `gh api repos/{owner}/{repo}`. |
-| Protocol conversion (`--protocol-from`, `--protocol-to`) | `git-maintenance repos convert-remote-protocol` | `--root`, `--from {https\|git\|ssh}`, `--to {https\|git\|ssh}`, `--dry-run`, `--yes`. | Canonical resolution via `gh api`; no other `gh` usage. |
-| Delete merged branches | `git-maintenance branches cleanup` | `--remote origin` (default), `--pr-state closed` (default). No positional args. | Invoke `gh pr list --state <state>` via `exec`. The command will stream JSON once, then process locally. |
-| Migrate `main` → `master` | `git-maintenance branch flip-main` | `--debug`, `--skip-rebase`, `--skip-pages`, `--skip-workflows` (new guardrails), `--non-interactive` to suppress prompts if any. | Heavy use of `gh`. Continue to shell out to `gh` for PR retargeting, default branch update, Pages reconfiguration, branch protection queries. Each sub-operation encapsulated in domain service structs that wrap `gh` invocations. |
+| Directory rename (`--rename`) | `git-maintenance repo-folders-rename` | `--root`, `--dry-run`, `--require-clean`, `--yes`. | Same metadata resolution as audit. No extra `gh` commands beyond canonical lookup. |
+| Update remote to canonical (`--update-remote`) | `git-maintenance repo-remote-update` | `--root`, `--dry-run`, `--yes`. | Requires canonical owner/repo from `gh api repos/{owner}/{repo}`. |
+| Protocol conversion (`--protocol-from`, `--protocol-to`) | `git-maintenance protocol-convert` | `--root`, `--from {https\|git\|ssh}`, `--to {https\|git\|ssh}`, `--dry-run`, `--yes`. | Canonical resolution via `gh api`; no other `gh` usage. |
+| Delete merged branches | `git-maintenance repo-prs-purge` | `--remote origin` (default), `--pr-state closed` (default). No positional args. | Invoke `gh pr list --state <state>` via `exec`. The command will stream JSON once, then process locally. |
+| Migrate `main` → `master` | `git-maintenance branch-migrate` | `--debug`, `--skip-rebase`, `--skip-pages`, `--skip-workflows` (new guardrails), `--non-interactive` to suppress prompts if any. | Heavy use of `gh`. Continue to shell out to `gh` for PR retargeting, default branch update, Pages reconfiguration, branch protection queries. Each sub-operation encapsulated in domain service structs that wrap `gh` invocations. |
 | Remove untagged GHCR packages | `git-maintenance packages purge-untagged` | `--owner`, `--owner-type {user\|org}`, `--package`, `--token`, `--dry-run`, `--page-size` (default 100). Configurable via Viper with env prefix `GITMAINT`. | Prefer direct HTTP using `go-github` REST client authenticated with token. If we reuse `gh`, we would invoke `gh api` with `--method`. The design chooses native HTTP to avoid shelling out where OAuth token is already provided. |
 
 ### 3.2 Shared command behavior

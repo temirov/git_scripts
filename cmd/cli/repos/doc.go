@@ -1,2 +1,2 @@
-// Package repos exposes subcommands for bulk repository maintenance tasks.
+// Package repos exposes standalone commands for bulk repository maintenance tasks.
 package repos
