@@ -1,18 +1,19 @@
 package packages
 
 const (
-	configurationKeyPackagesConstant   = "packages"
-	purgeConfigurationKeyConstant      = configurationKeyPackagesConstant + ".purge"
-	purgeOwnerKeyConstant              = purgeConfigurationKeyConstant + ".owner"
-	purgePackageNameKeyConstant        = purgeConfigurationKeyConstant + ".package"
-	purgeOwnerTypeKeyConstant          = purgeConfigurationKeyConstant + ".owner_type"
-	purgeTokenSourceKeyConstant        = purgeConfigurationKeyConstant + ".token_source"
-	purgeDryRunKeyConstant             = purgeConfigurationKeyConstant + ".dry_run"
-	purgeServiceBaseURLKeyConstant     = purgeConfigurationKeyConstant + ".service_base_url"
-	purgePageSizeKeyConstant           = purgeConfigurationKeyConstant + ".page_size"
-	defaultTokenSourceValueConstant    = "env:GITHUB_PACKAGES_TOKEN"
-	defaultServiceBaseURLValueConstant = ""
-	defaultPageSizeValueConstant       = 0
+	toolsConfigurationRootKeyConstant    = "tools"
+	packagesConfigurationRootKeyConstant = toolsConfigurationRootKeyConstant + ".packages"
+	purgeConfigurationKeyConstant        = packagesConfigurationRootKeyConstant + ".purge"
+	purgeOwnerKeyConstant                = purgeConfigurationKeyConstant + ".owner"
+	purgePackageNameKeyConstant          = purgeConfigurationKeyConstant + ".package"
+	purgeOwnerTypeKeyConstant            = purgeConfigurationKeyConstant + ".owner_type"
+	purgeTokenSourceKeyConstant          = purgeConfigurationKeyConstant + ".token_source"
+	purgeDryRunKeyConstant               = purgeConfigurationKeyConstant + ".dry_run"
+	purgeServiceBaseURLKeyConstant       = purgeConfigurationKeyConstant + ".service_base_url"
+	purgePageSizeKeyConstant             = purgeConfigurationKeyConstant + ".page_size"
+	defaultTokenSourceValueConstant      = "env:GITHUB_PACKAGES_TOKEN"
+	defaultServiceBaseURLValueConstant   = ""
+	defaultPageSizeValueConstant         = 0
 )
 
 // Configuration aggregates settings for packages commands.

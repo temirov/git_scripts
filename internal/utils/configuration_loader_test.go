@@ -14,13 +14,14 @@ import (
 
 const (
 	testEnvironmentPrefixConstant                  = "TESTGITSCRIPTS"
-	testLogLevelKeyConstant                        = "log_level"
+	testCommonSectionKeyConstant                   = "common"
+	testLogLevelKeyConstant                        = testCommonSectionKeyConstant + ".log_level"
 	testDefaultLogLevelConstant                    = "info"
 	testConfiguredLogLevelConstant                 = "debug"
 	testOverriddenLogLevelConstant                 = "error"
 	testFileLogLevelConstant                       = "warn"
 	testConfigFileNameConstant                     = "config.yaml"
-	testConfigContentTemplateConstant              = "log_level: %s\n"
+	testConfigContentTemplateConstant              = "common:\n  log_level: %s\n"
 	testCaseDefaultsMessageConstant                = "defaults are applied"
 	testCaseFileMessageConstant                    = "config file overrides defaults"
 	testCaseEnvironmentMessageConstant             = "environment overrides file"
@@ -30,6 +31,10 @@ const (
 )
 
 type configurationFixture struct {
+	Common configurationCommonFixture `mapstructure:"common"`
+}
+
+type configurationCommonFixture struct {
 	LogLevel string `mapstructure:"log_level"`
 }
 
@@ -72,7 +77,7 @@ func TestConfigurationLoaderLoadConfiguration(testInstance *testing.T) {
 			}
 
 			if len(testCase.environmentLogLevel) > 0 {
-				environmentVariableName := fmt.Sprintf("%s_%s", testEnvironmentPrefixConstant, strings.ToUpper(testLogLevelKeyConstant))
+				environmentVariableName := fmt.Sprintf("%s_%s", testEnvironmentPrefixConstant, strings.ToUpper(strings.ReplaceAll(testLogLevelKeyConstant, ".", "_")))
 				setError := os.Setenv(environmentVariableName, testCase.environmentLogLevel)
 				require.NoError(testInstance, setError)
 				testInstance.Cleanup(func() {
@@ -90,7 +95,7 @@ func TestConfigurationLoaderLoadConfiguration(testInstance *testing.T) {
 			loadedConfiguration := configurationFixture{}
 			metadata, loadError := configurationLoader.LoadConfiguration(configurationFilePath, defaultValues, &loadedConfiguration)
 			require.NoError(testInstance, loadError)
-			require.Equal(testInstance, testCase.expectedLogLevel, loadedConfiguration.LogLevel)
+			require.Equal(testInstance, testCase.expectedLogLevel, loadedConfiguration.Common.LogLevel)
 
 			if len(configurationFilePath) > 0 {
 				require.Equal(testInstance, configurationFilePath, metadata.ConfigFileUsed)
