@@ -29,7 +29,6 @@ const (
 	integrationSafetyWarningMessageConstant      = "Branch deletion blocked by safety gates"
 	integrationFailureWarningMessageConstant     = "Repository migration failed"
 	integrationRepositoryFieldNameConstant       = "repository"
-	integrationMigrateCommandNameConstant        = "migrate"
 )
 
 func TestBranchMigrateCommandIntegration(testInstance *testing.T) {
@@ -141,7 +140,7 @@ func TestBranchMigrateCommandIntegration(testInstance *testing.T) {
 			require.NoError(subtest, buildError)
 
 			command.SetContext(context.Background())
-			command.SetArgs([]string{integrationMigrateCommandNameConstant})
+			command.SetArgs(nil)
 
 			executionError := command.Execute()
 			if testCase.expectError {

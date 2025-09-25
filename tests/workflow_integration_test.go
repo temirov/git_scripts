@@ -21,8 +21,7 @@ const (
 	workflowIntegrationLogLevelFlag            = "--log-level"
 	workflowIntegrationConfigFlag              = "--config"
 	workflowIntegrationErrorLevel              = "error"
-	workflowIntegrationGroup                   = "workflow"
-	workflowIntegrationCommand                 = "run"
+	workflowIntegrationCommand                 = "workflow-run"
 	workflowIntegrationRootsFlag               = "--roots"
 	workflowIntegrationYesFlag                 = "--yes"
 	workflowIntegrationGitExecutable           = "git"
@@ -59,8 +58,8 @@ const (
 	workflowIntegrationConfigFlagCaseName      = "config_flag_without_positional"
 	workflowIntegrationRepositoryConfigCase    = "repository_root_configuration"
 	workflowIntegrationHelpCaseName            = "workflow_help_missing_configuration"
-	workflowIntegrationUsageSnippet            = "workflow run [workflow]"
-	workflowIntegrationMissingConfigMessage    = "workflow configuration path required; provide a positional argument or --config flag"
+	workflowIntegrationUsageSnippet            = "workflow-run [workflow]"
+	workflowIntegrationMissingConfigMessage    = "workflow-run configuration path required; provide a positional argument or --config flag"
 )
 
 func TestWorkflowRunIntegration(testInstance *testing.T) {
@@ -173,10 +172,7 @@ func TestWorkflowRunIntegration(testInstance *testing.T) {
 				commandArguments = append(commandArguments, workflowIntegrationConfigFlag, configPath)
 			}
 
-			commandArguments = append(commandArguments,
-				workflowIntegrationGroup,
-				workflowIntegrationCommand,
-			)
+			commandArguments = append(commandArguments, workflowIntegrationCommand)
 
 			if testCase.includePositionalWorkflowArg {
 				commandArguments = append(commandArguments, configPath)
@@ -221,7 +217,6 @@ func TestWorkflowRunDisplaysHelpWhenConfigurationMissing(testInstance *testing.T
 				workflowIntegrationModulePathConstant,
 				workflowIntegrationLogLevelFlag,
 				workflowIntegrationErrorLevel,
-				workflowIntegrationGroup,
 				workflowIntegrationCommand,
 			},
 			expectedSnippets: []string{

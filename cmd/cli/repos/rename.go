@@ -12,9 +12,9 @@ import (
 )
 
 const (
-	renameUseConstant             = "rename-folders [root ...]"
+	renameUseConstant             = "repo-folders-rename [root ...]"
 	renameShortDescription        = "Rename repository directories to match canonical GitHub names"
-	renameLongDescription         = "rename-folders normalizes repository directory names to match canonical GitHub repositories."
+	renameLongDescription         = "repo-folders-rename normalizes repository directory names to match canonical GitHub repositories."
 	renameDryRunFlagName          = "dry-run"
 	renameDryRunFlagDescription   = "Preview rename actions without making changes"
 	renameAssumeYesFlagName       = "yes"
@@ -24,7 +24,7 @@ const (
 	renameRequireCleanDescription = "Require clean worktrees before applying renames"
 )
 
-// RenameCommandBuilder assembles the rename-folders command.
+// RenameCommandBuilder assembles the repo-folders-rename command.
 type RenameCommandBuilder struct {
 	LoggerProvider               LoggerProvider
 	Discoverer                   shared.RepositoryDiscoverer
@@ -36,7 +36,7 @@ type RenameCommandBuilder struct {
 	HumanReadableLoggingProvider func() bool
 }
 
-// Build constructs the rename-folders command.
+// Build constructs the repo-folders-rename command.
 func (builder *RenameCommandBuilder) Build() (*cobra.Command, error) {
 	command := &cobra.Command{
 		Use:   renameUseConstant,
