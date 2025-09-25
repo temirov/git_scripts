@@ -24,7 +24,6 @@ const (
 	flagDryRunNameConstant                      = "dry-run"
 	flagDryRunDescriptionConstant               = "Preview deletions without making changes"
 	repositoryDiscoveryErrorTemplateConstant    = "repository discovery failed: %w"
-	defaultRepositoryRootConstant               = "."
 	logMessageRepositoryDiscoveryFailedConstant = "Repository discovery failed"
 	logMessageRepositoryCleanupFailedConstant   = "Repository cleanup failed"
 	logFieldRepositoryRootsConstant             = "roots"
@@ -46,6 +45,7 @@ type CommandBuilder struct {
 	WorkingDirectory             string
 	RepositoryDiscoverer         RepositoryDiscoverer
 	HumanReadableLoggingProvider func() bool
+	ConfigurationProvider        func() CommandConfiguration
 }
 
 // Build constructs the repo-prs-purge command.
@@ -118,18 +118,30 @@ type commandOptions struct {
 }
 
 func (builder *CommandBuilder) parseOptions(command *cobra.Command, arguments []string) (commandOptions, error) {
-	remoteNameValue, _ := command.Flags().GetString(flagRemoteNameConstant)
+	configuration := builder.resolveConfiguration()
+
+	remoteNameValue := configuration.RemoteName
+	if command != nil && command.Flags().Changed(flagRemoteNameConstant) {
+		configuredRemote, _ := command.Flags().GetString(flagRemoteNameConstant)
+		remoteNameValue = configuredRemote
+	}
 	trimmedRemoteName := strings.TrimSpace(remoteNameValue)
 	if len(trimmedRemoteName) == 0 {
 		trimmedRemoteName = defaultRemoteNameConstant
 	}
 
-	limitValue, _ := command.Flags().GetInt(flagLimitNameConstant)
-	if limitValue == 0 {
+	limitValue := configuration.PullRequestLimit
+	if command != nil && command.Flags().Changed(flagLimitNameConstant) {
+		limitValue, _ = command.Flags().GetInt(flagLimitNameConstant)
+	}
+	if limitValue <= 0 {
 		limitValue = defaultPullRequestLimitConstant
 	}
 
-	dryRunValue, _ := command.Flags().GetBool(flagDryRunNameConstant)
+	dryRunValue := configuration.DryRun
+	if command != nil && command.Flags().Changed(flagDryRunNameConstant) {
+		dryRunValue, _ = command.Flags().GetBool(flagDryRunNameConstant)
+	}
 
 	cleanupOptions := CleanupOptions{
 		RemoteName:       trimmedRemoteName,
@@ -137,7 +149,7 @@ func (builder *CommandBuilder) parseOptions(command *cobra.Command, arguments []
 		DryRun:           dryRunValue,
 	}
 
-	repositoryRoots := builder.determineRepositoryRoots(arguments)
+	repositoryRoots := builder.determineRepositoryRoots(arguments, configuration.RepositoryRoots)
 
 	return commandOptions{CleanupOptions: cleanupOptions, RepositoryRoots: repositoryRoots}, nil
 }
@@ -181,7 +193,7 @@ func (builder *CommandBuilder) resolveRepositoryDiscoverer() RepositoryDiscovere
 	return discovery.NewFilesystemRepositoryDiscoverer()
 }
 
-func (builder *CommandBuilder) determineRepositoryRoots(arguments []string) []string {
+func (builder *CommandBuilder) determineRepositoryRoots(arguments []string, configuredRoots []string) []string {
 	repositoryRoots := make([]string, 0, len(arguments))
 	for argumentIndex := range arguments {
 		trimmedRoot := strings.TrimSpace(arguments[argumentIndex])
@@ -195,10 +207,24 @@ func (builder *CommandBuilder) determineRepositoryRoots(arguments []string) []st
 		return repositoryRoots
 	}
 
+	sanitizedConfiguredRoots := sanitizeRoots(configuredRoots)
+	if len(sanitizedConfiguredRoots) > 0 {
+		return sanitizedConfiguredRoots
+	}
+
 	trimmedWorkingDirectory := strings.TrimSpace(builder.WorkingDirectory)
 	if len(trimmedWorkingDirectory) > 0 {
 		return []string{trimmedWorkingDirectory}
 	}
 
 	return []string{defaultRepositoryRootConstant}
+}
+
+func (builder *CommandBuilder) resolveConfiguration() CommandConfiguration {
+	if builder.ConfigurationProvider == nil {
+		return DefaultCommandConfiguration()
+	}
+
+	provided := builder.ConfigurationProvider()
+	return provided.sanitize()
 }

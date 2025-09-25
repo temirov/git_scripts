@@ -31,6 +31,7 @@ type RemotesCommandBuilder struct {
 	GitHubResolver               shared.GitHubMetadataResolver
 	PrompterFactory              PrompterFactory
 	HumanReadableLoggingProvider func() bool
+	ConfigurationProvider        func() RemotesConfiguration
 }
 
 // Build constructs the repo-remote-update command.
@@ -49,9 +50,19 @@ func (builder *RemotesCommandBuilder) Build() (*cobra.Command, error) {
 }
 
 func (builder *RemotesCommandBuilder) run(command *cobra.Command, arguments []string) error {
-	dryRun, _ := command.Flags().GetBool(remotesDryRunFlagName)
-	assumeYes, _ := command.Flags().GetBool(remotesAssumeYesFlagName)
-	roots := determineRepositoryRoots(arguments)
+	configuration := builder.resolveConfiguration()
+
+	dryRun := configuration.DryRun
+	if command != nil && command.Flags().Changed(remotesDryRunFlagName) {
+		dryRun, _ = command.Flags().GetBool(remotesDryRunFlagName)
+	}
+
+	assumeYes := configuration.AssumeYes
+	if command != nil && command.Flags().Changed(remotesAssumeYesFlagName) {
+		assumeYes, _ = command.Flags().GetBool(remotesAssumeYesFlagName)
+	}
+
+	roots := determineRepositoryRoots(arguments, configuration.RepositoryRoots)
 
 	logger := resolveLogger(builder.LoggerProvider)
 	humanReadableLogging := false
@@ -108,4 +119,14 @@ func (builder *RemotesCommandBuilder) run(command *cobra.Command, arguments []st
 	}
 
 	return nil
+}
+
+func (builder *RemotesCommandBuilder) resolveConfiguration() RemotesConfiguration {
+	if builder.ConfigurationProvider == nil {
+		defaults := DefaultToolsConfiguration()
+		return defaults.Remotes
+	}
+
+	provided := builder.ConfigurationProvider()
+	return provided.sanitize()
 }

@@ -39,10 +39,15 @@ const (
 	reposIntegrationSubtestNameTemplate         = "%d_%s"
 	reposIntegrationRenameCaseName              = "rename_plan"
 	reposIntegrationRemoteCaseName              = "update_canonical_remote"
+	reposIntegrationRemoteConfigCaseName        = "update_canonical_remote_config"
 	reposIntegrationProtocolCaseName            = "convert_protocol"
+	reposIntegrationProtocolConfigCaseName      = "convert_protocol_config"
 	reposIntegrationProtocolHelpCaseName        = "protocol_help_missing_flags"
 	reposIntegrationProtocolUsageSnippet        = "protocol-convert [root ...]"
 	reposIntegrationProtocolMissingFlagsMessage = "specify both --from and --to"
+	reposIntegrationConfigFlagName              = "--config"
+	reposIntegrationConfigFileName              = "config.yaml"
+	reposIntegrationConfigTemplate              = "tools:\n  repos:\n    remotes:\n      roots:\n        - %s\n      assume_yes: true\n    protocol:\n      roots:\n        - %s\n      assume_yes: true\n      from: https\n      to: ssh\n"
 )
 
 func TestReposCommandIntegration(testInstance *testing.T) {
@@ -51,11 +56,13 @@ func TestReposCommandIntegration(testInstance *testing.T) {
 	repositoryRoot := filepath.Dir(workingDirectory)
 
 	testCases := []struct {
-		name           string
-		arguments      []string
-		setup          func(testInstance *testing.T) (string, string)
-		expectedOutput func(repositoryPath string) string
-		verify         func(testInstance *testing.T, repositoryPath string)
+		name                   string
+		arguments              []string
+		setup                  func(testInstance *testing.T) (string, string)
+		expectedOutput         func(repositoryPath string) string
+		verify                 func(testInstance *testing.T, repositoryPath string)
+		prepare                func(testInstance *testing.T, repositoryPath string, arguments *[]string)
+		omitRepositoryArgument bool
 	}{
 		{
 			name: reposIntegrationRenameCaseName,
@@ -104,6 +111,38 @@ func TestReposCommandIntegration(testInstance *testing.T) {
 			},
 		},
 		{
+			name: reposIntegrationRemoteConfigCaseName,
+			setup: func(testInstance *testing.T) (string, string) {
+				return initializeRepositoryWithStub(testInstance)
+			},
+			arguments: []string{
+				reposIntegrationRunSubcommand,
+				reposIntegrationModulePathConstant,
+				reposIntegrationLogLevelFlag,
+				reposIntegrationErrorLevel,
+				reposIntegrationRemotesCommand,
+			},
+			expectedOutput: func(repositoryPath string) string {
+				return fmt.Sprintf("UPDATE-REMOTE-DONE: %s origin now https://github.com/canonical/example.git\n", repositoryPath)
+			},
+			verify: func(testInstance *testing.T, repositoryPath string) {
+				remoteCommand := exec.Command(reposIntegrationGitExecutable, "-C", repositoryPath, reposIntegrationRemoteSubcommand, reposIntegrationGetURLSubcommand, reposIntegrationOriginRemoteName)
+				remoteCommand.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+				outputBytes, remoteError := remoteCommand.CombinedOutput()
+				require.NoError(testInstance, remoteError, string(outputBytes))
+				require.Equal(testInstance, "https://github.com/canonical/example.git\n", string(outputBytes))
+			},
+			prepare: func(testInstance *testing.T, repositoryPath string, arguments *[]string) {
+				configDirectory := testInstance.TempDir()
+				configPath := filepath.Join(configDirectory, reposIntegrationConfigFileName)
+				configContent := fmt.Sprintf(reposIntegrationConfigTemplate, repositoryPath, repositoryPath)
+				writeError := os.WriteFile(configPath, []byte(configContent), 0o644)
+				require.NoError(testInstance, writeError)
+				*arguments = append(*arguments, reposIntegrationConfigFlagName, configPath)
+			},
+			omitRepositoryArgument: true,
+		},
+		{
 			name: reposIntegrationProtocolCaseName,
 			setup: func(testInstance *testing.T) (string, string) {
 				return initializeRepositoryWithStub(testInstance)
@@ -131,6 +170,38 @@ func TestReposCommandIntegration(testInstance *testing.T) {
 				require.Equal(testInstance, "ssh://git@github.com/canonical/example.git\n", string(outputBytes))
 			},
 		},
+		{
+			name: reposIntegrationProtocolConfigCaseName,
+			setup: func(testInstance *testing.T) (string, string) {
+				return initializeRepositoryWithStub(testInstance)
+			},
+			arguments: []string{
+				reposIntegrationRunSubcommand,
+				reposIntegrationModulePathConstant,
+				reposIntegrationLogLevelFlag,
+				reposIntegrationErrorLevel,
+				reposIntegrationProtocolCommand,
+			},
+			expectedOutput: func(repositoryPath string) string {
+				return fmt.Sprintf("CONVERT-DONE: %s origin now ssh://git@github.com/canonical/example.git\n", repositoryPath)
+			},
+			verify: func(testInstance *testing.T, repositoryPath string) {
+				remoteCommand := exec.Command(reposIntegrationGitExecutable, "-C", repositoryPath, reposIntegrationRemoteSubcommand, reposIntegrationGetURLSubcommand, reposIntegrationOriginRemoteName)
+				remoteCommand.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+				outputBytes, remoteError := remoteCommand.CombinedOutput()
+				require.NoError(testInstance, remoteError, string(outputBytes))
+				require.Equal(testInstance, "ssh://git@github.com/canonical/example.git\n", string(outputBytes))
+			},
+			prepare: func(testInstance *testing.T, repositoryPath string, arguments *[]string) {
+				configDirectory := testInstance.TempDir()
+				configPath := filepath.Join(configDirectory, reposIntegrationConfigFileName)
+				configContent := fmt.Sprintf(reposIntegrationConfigTemplate, repositoryPath, repositoryPath)
+				writeError := os.WriteFile(configPath, []byte(configContent), 0o644)
+				require.NoError(testInstance, writeError)
+				*arguments = append(*arguments, reposIntegrationConfigFlagName, configPath)
+			},
+			omitRepositoryArgument: true,
+		},
 	}
 
 	for testCaseIndex, testCase := range testCases {
@@ -138,7 +209,12 @@ func TestReposCommandIntegration(testInstance *testing.T) {
 			repositoryPath, extendedPath := testCase.setup(subtest)
 
 			commandArguments := append([]string{}, testCase.arguments...)
-			commandArguments = append(commandArguments, repositoryPath)
+			if testCase.prepare != nil {
+				testCase.prepare(subtest, repositoryPath, &commandArguments)
+			}
+			if !testCase.omitRepositoryArgument {
+				commandArguments = append(commandArguments, repositoryPath)
+			}
 
 			rawOutput := runIntegrationCommand(subtest, repositoryRoot, extendedPath, reposIntegrationTimeout, commandArguments)
 			expectedOutput := testCase.expectedOutput(repositoryPath)
