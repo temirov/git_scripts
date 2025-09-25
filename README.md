@@ -3,6 +3,23 @@
 A Go-based command-line interface that automates routine Git and GitHub maintenance. The CLI replaces the legacy Bash scripts
 that previously lived in this repository and exposes explicit, composable commands for each workflow.
 
+### Execution modes at a glance
+
+You can run the CLI in two complementary ways depending on how much orchestration you need:
+
+- **Direct commands with persisted defaults** – invoke subcommands such as `repos`, `packages`, and `audit` from the shell,
+  optionally loading shared flags (for example, log level or default owners) via [`--config` files](#configuration-and-logging).
+  This mode mirrors the examples throughout the [command catalog](#command-catalog) and is ideal when you want immediate,
+  one-off execution.
+- **Workflow runner with YAML/JSON steps** – describe ordered operations in declarative workflow files and let `workflow run`
+  drive them. The [`Workflow bundling`](#workflow-bundling) section shows the domain-specific language (DSL) and how the
+  runner reuses discovery, prompting, and logging across steps.
+
+| Choose this mode | When it shines | Example |
+| --- | --- | --- |
+| Direct commands | You need a focused, ad-hoc action with minimal setup, such as renaming directories or auditing repositories | [`repos rename-folders`](#repository-maintenance-git-scripts-repos-) and [`audit`](#audit-reports) examples |
+| Workflow runner | You want to bundle several operations together, share discovery across them, or hand off a repeatable plan to teammates | [`workflow run` with a YAML plan](#workflow-bundling) |
+
 ## Feature highlights
 
 - **Repository auditing** – generate CSV summaries describing canonical GitHub metadata for every repository under one or many
