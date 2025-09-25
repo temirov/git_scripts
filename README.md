@@ -1,7 +1,6 @@
 # Git/GitHub helper CLI
 
-A Go-based command-line interface that automates routine Git and GitHub maintenance. The CLI replaces the legacy Bash scripts
-that previously lived in this repository and exposes explicit, composable commands for each workflow.
+A Go-based command-line interface that automates routine Git and GitHub maintenance.
 
 ### Execution modes at a glance
 
@@ -39,13 +38,13 @@ confirmation via `--yes`.
 
 The CLI targets Go **1.24** or newer.
 
-```bash
+```shell
 go run . --help
 ```
 
 Build a reusable binary with either `go build` or the provided make target:
 
-```bash
+```shell
 go build
 ./git_scripts --help
 
@@ -70,7 +69,7 @@ Configuration keys mirror the flags (`common.log_level`, `common.log_format`) an
 
 ### Audit reports
 
-```bash
+```shell
 go run . audit --audit ~/Development
 ```
 
@@ -81,7 +80,7 @@ stdout. Add `--debug` to log discovery progress and inspection diagnostics.
 
 *Rename directories to the canonical GitHub name*
 
-```bash
+```shell
 go run . repos rename-folders --dry-run ~/Development
 # Apply the plan with confirmations
 go run . repos rename-folders --yes ~/Development
@@ -91,7 +90,7 @@ go run . repos rename-folders --yes --require-clean ~/Development
 
 *Update `origin` to the canonical GitHub remote*
 
-```bash
+```shell
 go run . repos update-canonical-remote --dry-run ~/Development
 # Automatically confirm updates
 go run . repos update-canonical-remote --yes ~/Development
@@ -99,7 +98,7 @@ go run . repos update-canonical-remote --yes ~/Development
 
 *Convert `origin` between Git protocols*
 
-```bash
+```shell
 go run . repos convert-remote-protocol --from https --to git --dry-run ~/Development
 # Apply conversions without interactive prompts
 go run . repos convert-remote-protocol --from https --to ssh --yes ~/Development
@@ -109,7 +108,7 @@ go run . repos convert-remote-protocol --from ssh --to https --yes ~/Development
 
 ### Pull-request branch cleanup
 
-```bash
+```shell
 go run . pr-cleanup --remote origin --limit 100 ~/Development
 # Preview deletions without mutating remotes or local branches
 go run . pr-cleanup --dry-run ~/Development
@@ -120,7 +119,7 @@ working directory.
 
 ### Default-branch migration
 
-```bash
+```shell
 go run . branch migrate --debug ~/Development/project-repo
 ```
 
@@ -129,7 +128,7 @@ go run . branch migrate --debug ~/Development/project-repo
 
 ### GitHub Packages maintenance
 
-```bash
+```shell
 go run . packages purge \
   --owner my-org \
   --package my-image \
@@ -155,7 +154,7 @@ tools:
       page_size: 50
 ```
 
-```bash
+```shell
 go run . --config packages.yaml packages purge --dry-run=false
 ```
 
@@ -189,7 +188,7 @@ steps:
 
 Run the workflow:
 
-```bash
+```shell
 go run . workflow run workflow.yaml --roots ~/Development --dry-run
 # Execute with confirmations suppressed
 go run . workflow run workflow.yaml --roots ~/Development --yes
@@ -222,7 +221,7 @@ make release        # Cross-compile binaries into ./dist
 The packages command additionally requires network access and a GitHub Personal Access Token with `read:packages`,
 `write:packages`, and `delete:packages` scopes. Export the token before invoking the command:
 
-```bash
+```shell
 export GITHUB_PACKAGES_TOKEN=ghp_XXXXXXXXXXXXXXXXXXXXXXXXXXXX
 ```
 
