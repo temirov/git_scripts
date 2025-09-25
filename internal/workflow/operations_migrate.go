@@ -10,16 +10,17 @@ import (
 )
 
 const (
-	defaultMigrationRemoteNameConstant          = "origin"
-	defaultMigrationSourceBranchConstant        = "main"
-	defaultMigrationTargetBranchConstant        = "master"
-	defaultMigrationWorkflowsDirectoryConstant  = ".github/workflows"
-	migrationDryRunMessageTemplateConstant      = "WORKFLOW-PLAN: migrate %s (%s → %s)\n"
-	migrationSuccessMessageTemplateConstant     = "WORKFLOW-MIGRATE: %s (%s → %s) safe_to_delete=%t\n"
-	migrationIdentifierMissingMessageConstant   = "repository identifier unavailable for migration target"
-	migrationExecutionErrorTemplateConstant     = "branch migration failed: %w"
-	migrationRefreshErrorTemplateConstant       = "failed to refresh repository after branch migration: %w"
-	migrationDependenciesMissingMessageConstant = "branch migration requires repository manager, git executor, and GitHub client"
+	defaultMigrationRemoteNameConstant                 = "origin"
+	defaultMigrationSourceBranchConstant               = "main"
+	defaultMigrationTargetBranchConstant               = "master"
+	defaultMigrationWorkflowsDirectoryConstant         = ".github/workflows"
+	migrationDryRunMessageTemplateConstant             = "WORKFLOW-PLAN: migrate %s (%s → %s)\n"
+	migrationSuccessMessageTemplateConstant            = "WORKFLOW-MIGRATE: %s (%s → %s) safe_to_delete=%t\n"
+	migrationIdentifierMissingMessageConstant          = "repository identifier unavailable for migration target"
+	migrationExecutionErrorTemplateConstant            = "branch migration failed: %w"
+	migrationRefreshErrorTemplateConstant              = "failed to refresh repository after branch migration: %w"
+	migrationDependenciesMissingMessageConstant        = "branch migration requires repository manager, git executor, and GitHub client"
+	migrationMultipleTargetsUnsupportedMessageConstant = "branch migration requires exactly one target configuration"
 )
 
 // BranchMigrationTarget describes branch migration behavior for discovered repositories.
@@ -63,51 +64,56 @@ func (operation *BranchMigrationOperation) Execute(executionContext context.Cont
 		return fmt.Errorf(migrationExecutionErrorTemplateConstant, serviceError)
 	}
 
+	if len(operation.Targets) == 0 {
+		return nil
+	}
+	if len(operation.Targets) > 1 {
+		return errors.New(migrationMultipleTargetsUnsupportedMessageConstant)
+	}
+
+	target := operation.Targets[0]
 	repositories := state.CloneRepositories()
 
-	for targetIndex := range operation.Targets {
-		target := operation.Targets[targetIndex]
-		for repositoryIndex := range repositories {
-			repositoryState := repositories[repositoryIndex]
-			if repositoryState == nil {
-				continue
-			}
+	for repositoryIndex := range repositories {
+		repositoryState := repositories[repositoryIndex]
+		if repositoryState == nil {
+			continue
+		}
 
-			repositoryIdentifier, identifierError := resolveRepositoryIdentifier(repositoryState)
-			if identifierError != nil {
-				return identifierError
-			}
+		repositoryIdentifier, identifierError := resolveRepositoryIdentifier(repositoryState)
+		if identifierError != nil {
+			return identifierError
+		}
 
-			options := migrate.MigrationOptions{
-				RepositoryPath:       repositoryState.Path,
-				RepositoryRemoteName: target.RemoteName,
-				RepositoryIdentifier: repositoryIdentifier,
-				WorkflowsDirectory:   defaultMigrationWorkflowsDirectoryConstant,
-				SourceBranch:         migrate.BranchName(target.SourceBranch),
-				TargetBranch:         migrate.BranchName(target.TargetBranch),
-				PushUpdates:          target.PushToRemote,
-				DeleteSourceBranch:   target.DeleteSourceBranch,
-			}
+		options := migrate.MigrationOptions{
+			RepositoryPath:       repositoryState.Path,
+			RepositoryRemoteName: target.RemoteName,
+			RepositoryIdentifier: repositoryIdentifier,
+			WorkflowsDirectory:   defaultMigrationWorkflowsDirectoryConstant,
+			SourceBranch:         migrate.BranchName(target.SourceBranch),
+			TargetBranch:         migrate.BranchName(target.TargetBranch),
+			PushUpdates:          target.PushToRemote,
+			DeleteSourceBranch:   target.DeleteSourceBranch,
+		}
 
-			if environment.DryRun {
-				if environment.Output != nil {
-					fmt.Fprintf(environment.Output, migrationDryRunMessageTemplateConstant, repositoryState.Path, target.SourceBranch, target.TargetBranch)
-				}
-				continue
-			}
-
-			result, executionError := migrationService.Execute(executionContext, options)
-			if executionError != nil {
-				return fmt.Errorf(migrationExecutionErrorTemplateConstant, executionError)
-			}
-
+		if environment.DryRun {
 			if environment.Output != nil {
-				fmt.Fprintf(environment.Output, migrationSuccessMessageTemplateConstant, repositoryState.Path, target.SourceBranch, target.TargetBranch, result.SafetyStatus.SafeToDelete)
+				fmt.Fprintf(environment.Output, migrationDryRunMessageTemplateConstant, repositoryState.Path, target.SourceBranch, target.TargetBranch)
 			}
+			continue
+		}
 
-			if refreshError := repositoryState.Refresh(executionContext, environment.AuditService); refreshError != nil {
-				return fmt.Errorf(migrationRefreshErrorTemplateConstant, refreshError)
-			}
+		result, executionError := migrationService.Execute(executionContext, options)
+		if executionError != nil {
+			return fmt.Errorf(migrationExecutionErrorTemplateConstant, executionError)
+		}
+
+		if environment.Output != nil {
+			fmt.Fprintf(environment.Output, migrationSuccessMessageTemplateConstant, repositoryState.Path, target.SourceBranch, target.TargetBranch, result.SafetyStatus.SafeToDelete)
+		}
+
+		if refreshError := repositoryState.Refresh(executionContext, environment.AuditService); refreshError != nil {
+			return fmt.Errorf(migrationRefreshErrorTemplateConstant, refreshError)
 		}
 	}
 
