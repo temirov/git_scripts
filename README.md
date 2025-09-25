@@ -63,8 +63,8 @@ Global flags configure logging and optional configuration files:
 - `--log-level <debug|info|warn|error>` – override the configured log level.
 - `--log-format <structured|console>` – switch between JSON and human-readable logs.
 
-Configuration keys mirror the flags (`log_level`, `log_format`) and can also be provided via environment variables prefixed with
-`GITSCRIPTS_` (for example, `GITSCRIPTS_LOG_LEVEL=error`).
+Configuration keys mirror the flags (`common.log_level`, `common.log_format`) and can also be provided via environment variables prefixed with
+`GITSCRIPTS_` (for example, `GITSCRIPTS_COMMON_LOG_LEVEL=error`).
 
 ## Command catalog
 
@@ -142,15 +142,17 @@ Persist defaults in a configuration file to avoid long flag lists:
 
 ```yaml
 # packages.yaml
-log_level: info
-log_format: structured
-packages:
-  purge:
-    owner: my-org
-    package: my-image
-    owner_type: org
-    token_source: env:GITHUB_PACKAGES_TOKEN
-    page_size: 50
+common:
+  log_level: info
+  log_format: structured
+tools:
+  packages:
+    purge:
+      owner: my-org
+      package: my-image
+      owner_type: org
+      token_source: env:GITHUB_PACKAGES_TOKEN
+      page_size: 50
 ```
 
 ```bash
