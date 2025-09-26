@@ -224,7 +224,8 @@ func TestPackagesCommandIntegration(testInstance *testing.T) {
 			}
 
 			pathVariable := os.Getenv("PATH")
-			_ = runIntegrationCommand(subtest, repositoryRoot, pathVariable, packagesIntegrationCommandTimeout, arguments)
+			commandOptions := integrationCommandOptions{PathVariable: pathVariable}
+			_ = runIntegrationCommand(subtest, repositoryRoot, commandOptions, packagesIntegrationCommandTimeout, arguments)
 
 			listRequests := serverState.snapshotListRequests()
 			require.Len(subtest, listRequests, 2)

@@ -216,7 +216,8 @@ func TestReposCommandIntegration(testInstance *testing.T) {
 				commandArguments = append(commandArguments, repositoryPath)
 			}
 
-			rawOutput := runIntegrationCommand(subtest, repositoryRoot, extendedPath, reposIntegrationTimeout, commandArguments)
+			commandOptions := integrationCommandOptions{PathVariable: extendedPath}
+			rawOutput := runIntegrationCommand(subtest, repositoryRoot, commandOptions, reposIntegrationTimeout, commandArguments)
 			expectedOutput := testCase.expectedOutput(repositoryPath)
 			require.Equal(subtest, expectedOutput, filterStructuredOutput(rawOutput))
 			testCase.verify(subtest, repositoryPath)
@@ -254,7 +255,8 @@ func TestReposProtocolCommandDisplaysHelpWhenProtocolsMissing(testInstance *test
 	for testCaseIndex, testCase := range testCases {
 		subtestName := fmt.Sprintf(reposIntegrationSubtestNameTemplate, testCaseIndex, testCase.name)
 		testInstance.Run(subtestName, func(subtest *testing.T) {
-			outputText, _ := runFailingIntegrationCommand(subtest, repositoryRoot, "", reposIntegrationTimeout, testCase.arguments)
+			commandOptions := integrationCommandOptions{}
+			outputText, _ := runFailingIntegrationCommand(subtest, repositoryRoot, commandOptions, reposIntegrationTimeout, testCase.arguments)
 			filteredOutput := filterStructuredOutput(outputText)
 			for _, expectedSnippet := range testCase.expectedSnippets {
 				require.Contains(subtest, filteredOutput, expectedSnippet)
