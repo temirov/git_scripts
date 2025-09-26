@@ -37,6 +37,8 @@ const (
 	defaultRootRepositoryPathConstant      = "/workspace/root/project"
 	defaultRootRemoteConstant              = "git@github.com:example/default.git"
 	defaultRootIdentifierConstant          = "example/default"
+	configurationRootValueConstant         = "/tmp/configured-root"
+	cliRootOverrideConstant                = "/tmp/cli-root"
 )
 
 func TestMigrateCommandRunScenarios(testInstance *testing.T) {
@@ -242,6 +244,109 @@ func TestMigrateCommandRunScenarios(testInstance *testing.T) {
 					repositoryValue, hasRepository := entry.ContextMap()[repositoryLogFieldNameConstant]
 					require.True(subtest, hasRepository)
 					require.Contains(subtest, testCase.expectedExecutedRepositories, repositoryValue)
+				}
+			}
+		})
+	}
+}
+
+func TestMigrateCommandConfigurationPrecedence(testInstance *testing.T) {
+	testCases := []struct {
+		name                   string
+		configuration          migrate.CommandConfiguration
+		arguments              []string
+		workingDirectory       string
+		discoveredRepositories []string
+		repositoryRemotes      map[string]string
+		expectedRoots          []string
+		expectedDebugEnabled   bool
+	}{
+		{
+			name: "configuration_values_apply",
+			configuration: migrate.CommandConfiguration{
+				EnableDebugLogging: true,
+				RepositoryRoots:    []string{"  " + configurationRootValueConstant + "  "},
+			},
+			arguments:              []string{},
+			workingDirectory:       workingDirectoryFallbackConstant,
+			discoveredRepositories: []string{repositoryOnePathConstant},
+			repositoryRemotes: map[string]string{
+				repositoryOnePathConstant: repositoryOneRemoteConstant,
+			},
+			expectedRoots:        []string{configurationRootValueConstant},
+			expectedDebugEnabled: true,
+		},
+		{
+			name: "flags_override_configuration",
+			configuration: migrate.CommandConfiguration{
+				EnableDebugLogging: false,
+				RepositoryRoots:    []string{configurationRootValueConstant},
+			},
+			arguments:              []string{debugFlagArgumentConstant, cliRootOverrideConstant},
+			workingDirectory:       workingDirectoryFallbackConstant,
+			discoveredRepositories: []string{repositoryTwoPathConstant},
+			repositoryRemotes: map[string]string{
+				repositoryTwoPathConstant: repositoryTwoRemoteConstant,
+			},
+			expectedRoots:        []string{cliRootOverrideConstant},
+			expectedDebugEnabled: true,
+		},
+		{
+			name:                   "defaults_fill_missing_configuration",
+			configuration:          migrate.CommandConfiguration{},
+			arguments:              []string{},
+			workingDirectory:       workingDirectoryFallbackConstant,
+			discoveredRepositories: []string{defaultRootRepositoryPathConstant},
+			repositoryRemotes: map[string]string{
+				defaultRootRepositoryPathConstant: defaultRootRemoteConstant,
+			},
+			expectedRoots:        []string{workingDirectoryFallbackConstant},
+			expectedDebugEnabled: false,
+		},
+	}
+
+	for testCaseIndex := range testCases {
+		testCase := testCases[testCaseIndex]
+		subtestName := fmt.Sprintf("%d_%s", testCaseIndex, testCase.name)
+
+		testInstance.Run(subtestName, func(subtest *testing.T) {
+			repositoryDiscoverer := &testsupport.RepositoryDiscovererStub{
+				Repositories: append([]string{}, testCase.discoveredRepositories...),
+			}
+
+			commandExecutor := &testsupport.CommandExecutorStub{
+				RepositoryRemotes: appendMap(testCase.repositoryRemotes),
+			}
+
+			migrationService := &testsupport.ServiceStub{}
+
+			builder := migrate.CommandBuilder{
+				LoggerProvider: func() *zap.Logger { return zap.NewNop() },
+				Executor:       commandExecutor,
+				ServiceProvider: func(migrate.ServiceDependencies) (migrate.MigrationExecutor, error) {
+					return migrationService, nil
+				},
+				RepositoryDiscoverer: repositoryDiscoverer,
+				WorkingDirectory:     testCase.workingDirectory,
+				ConfigurationProvider: func() migrate.CommandConfiguration {
+					return testCase.configuration
+				},
+			}
+
+			command, buildError := builder.Build()
+			require.NoError(subtest, buildError)
+
+			command.SetContext(context.Background())
+			command.SetArgs(append([]string{}, testCase.arguments...))
+
+			executionError := command.Execute()
+			require.NoError(subtest, executionError)
+
+			require.Equal(subtest, testCase.expectedRoots, repositoryDiscoverer.ReceivedRoots)
+
+			if require.Len(subtest, migrationService.ExecutedOptions, len(testCase.discoveredRepositories)); len(migrationService.ExecutedOptions) > 0 {
+				for _, options := range migrationService.ExecutedOptions {
+					require.Equal(subtest, testCase.expectedDebugEnabled, options.EnableDebugLogging)
 				}
 			}
 		})
