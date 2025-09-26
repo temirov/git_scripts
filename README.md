@@ -129,7 +129,7 @@ go run . branch-migrate --debug ~/Development/project-repo
 ### GitHub Packages maintenance
 
 ```shell
-go run . packages purge \
+go run . packages-purge \
   --owner my-org \
   --package my-image \
   --owner-type org \
@@ -175,7 +175,7 @@ steps:
 ```
 
 ```shell
-go run . packages purge --dry-run=false
+go run . packages-purge --dry-run=false
 ```
 
 Specify `--config path/to/override.yaml` when you need to load an alternate configuration.

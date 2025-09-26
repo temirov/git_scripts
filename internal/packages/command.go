@@ -12,26 +12,23 @@ import (
 )
 
 const (
-	packagesCommandUseConstant              = "packages"
-	packagesCommandShortDescriptionConstant = "Manage GitHub Packages resources"
-	packagesCommandLongDescriptionConstant  = "packages provides commands for GitHub Packages maintenance tasks."
-	purgeCommandUseConstant                 = "purge"
-	purgeCommandShortDescriptionConstant    = "Delete untagged GHCR versions"
-	purgeCommandLongDescriptionConstant     = "purge removes untagged container versions from GitHub Container Registry."
-	unexpectedArgumentsErrorMessageConstant = "packages purge does not accept positional arguments"
-	commandExecutionErrorTemplateConstant   = "packages purge failed: %w"
-	ownerFlagNameConstant                   = "owner"
-	ownerFlagDescriptionConstant            = "GitHub user or organization that owns the package"
-	packageFlagNameConstant                 = "package"
-	packageFlagDescriptionConstant          = "Container package name in GHCR"
-	ownerTypeFlagNameConstant               = "owner-type"
-	ownerTypeFlagDescriptionConstant        = "Owner type: user or org"
-	tokenSourceFlagNameConstant             = "token-source"
-	tokenSourceFlagDescriptionConstant      = "Token source (env:NAME or file:/path)"
-	dryRunFlagNameConstant                  = "dry-run"
-	dryRunFlagDescriptionConstant           = "Preview deletions without modifying GHCR"
-	ownerTypeParseErrorTemplateConstant     = "invalid owner type: %w"
-	tokenSourceParseErrorTemplateConstant   = "invalid token source: %w"
+	packagesPurgeCommandUseConstant              = "packages-purge"
+	packagesPurgeCommandShortDescriptionConstant = "Delete untagged GHCR versions"
+	packagesPurgeCommandLongDescriptionConstant  = "packages-purge removes untagged container versions from GitHub Container Registry."
+	unexpectedArgumentsErrorMessageConstant      = "packages-purge does not accept positional arguments"
+	commandExecutionErrorTemplateConstant        = "packages-purge failed: %w"
+	ownerFlagNameConstant                        = "owner"
+	ownerFlagDescriptionConstant                 = "GitHub user or organization that owns the package"
+	packageFlagNameConstant                      = "package"
+	packageFlagDescriptionConstant               = "Container package name in GHCR"
+	ownerTypeFlagNameConstant                    = "owner-type"
+	ownerTypeFlagDescriptionConstant             = "Owner type: user or org"
+	tokenSourceFlagNameConstant                  = "token-source"
+	tokenSourceFlagDescriptionConstant           = "Token source (env:NAME or file:/path)"
+	dryRunFlagNameConstant                       = "dry-run"
+	dryRunFlagDescriptionConstant                = "Preview deletions without modifying GHCR"
+	ownerTypeParseErrorTemplateConstant          = "invalid owner type: %w"
+	tokenSourceParseErrorTemplateConstant        = "invalid token source: %w"
 )
 
 // LoggerProvider supplies a zap logger instance.
@@ -45,7 +42,7 @@ type PurgeServiceResolver interface {
 	Resolve(logger *zap.Logger) (PurgeExecutor, error)
 }
 
-// CommandBuilder assembles the packages command hierarchy.
+// CommandBuilder assembles the packages-purge command.
 type CommandBuilder struct {
 	LoggerProvider        LoggerProvider
 	ConfigurationProvider ConfigurationProvider
@@ -58,18 +55,12 @@ type CommandBuilder struct {
 	TokenResolver         TokenResolver
 }
 
-// Build constructs the packages command with the purge subcommand.
+// Build constructs the packages-purge command with purge functionality.
 func (builder *CommandBuilder) Build() (*cobra.Command, error) {
-	packagesCommand := &cobra.Command{
-		Use:   packagesCommandUseConstant,
-		Short: packagesCommandShortDescriptionConstant,
-		Long:  packagesCommandLongDescriptionConstant,
-	}
-
 	purgeCommand := &cobra.Command{
-		Use:   purgeCommandUseConstant,
-		Short: purgeCommandShortDescriptionConstant,
-		Long:  purgeCommandLongDescriptionConstant,
+		Use:   packagesPurgeCommandUseConstant,
+		Short: packagesPurgeCommandShortDescriptionConstant,
+		Long:  packagesPurgeCommandLongDescriptionConstant,
 		RunE:  builder.runPurge,
 	}
 
@@ -79,9 +70,7 @@ func (builder *CommandBuilder) Build() (*cobra.Command, error) {
 	purgeCommand.Flags().String(tokenSourceFlagNameConstant, "", tokenSourceFlagDescriptionConstant)
 	purgeCommand.Flags().Bool(dryRunFlagNameConstant, false, dryRunFlagDescriptionConstant)
 
-	packagesCommand.AddCommand(purgeCommand)
-
-	return packagesCommand, nil
+	return purgeCommand, nil
 }
 
 func (builder *CommandBuilder) runPurge(command *cobra.Command, arguments []string) error {
