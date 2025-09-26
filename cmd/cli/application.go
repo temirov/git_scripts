@@ -381,6 +381,8 @@ func (application *Application) syncLoggerInstance(logger *zap.Logger) error {
 		return nil
 	case errors.Is(syncError, syscall.EINVAL):
 		return nil
+	case errors.Is(syncError, syscall.EBADF):
+		return nil
 	default:
 		return syncError
 	}

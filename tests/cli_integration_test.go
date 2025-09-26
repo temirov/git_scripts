@@ -1,9 +1,11 @@
 package tests
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -36,6 +38,10 @@ const (
 	integrationConsoleLogCaseNameConstant              = "console_format"
 	integrationConsoleLogFlagConstant                  = "--log-format=console"
 	integrationConfigurationInitializedSnippetConstant = "configuration initialized"
+	integrationGoBinaryNameConstant                    = "go"
+	integrationGoRunSubcommandConstant                 = "run"
+	integrationCurrentDirectoryArgumentConstant        = "."
+	integrationStderrPipeCaseNameConstant              = "stderr_pipe"
 )
 
 func TestCLIIntegrationLogLevels(testInstance *testing.T) {
@@ -218,6 +224,56 @@ func TestCLIIntegrationRespectsLogFormatFlag(testInstance *testing.T) {
 			}
 
 			require.True(testInstance, logLineFound, outputText)
+		})
+	}
+}
+
+func TestCLIIntegrationHandlesPipeForStandardError(testInstance *testing.T) {
+	testCases := []struct {
+		name string
+	}{
+		{
+			name: integrationStderrPipeCaseNameConstant,
+		},
+	}
+
+	currentWorkingDirectory, workingDirectoryError := os.Getwd()
+	require.NoError(testInstance, workingDirectoryError)
+	repositoryRootDirectory := filepath.Dir(currentWorkingDirectory)
+
+	for testCaseIndex, testCase := range testCases {
+		testInstance.Run(fmt.Sprintf(integrationSubtestNameTemplateConstant, testCaseIndex, testCase.name), func(testInstance *testing.T) {
+			commandArguments := []string{integrationGoRunSubcommandConstant, integrationCurrentDirectoryArgumentConstant}
+
+			executionContext, cancelFunction := context.WithTimeout(context.Background(), integrationCommandTimeout)
+			defer cancelFunction()
+
+			command := exec.CommandContext(executionContext, integrationGoBinaryNameConstant, commandArguments...)
+			command.Dir = repositoryRootDirectory
+			command.Env = os.Environ()
+
+			var stdoutBuffer bytes.Buffer
+			command.Stdout = &stdoutBuffer
+
+			pipeReader, pipeWriter, pipeError := os.Pipe()
+			require.NoError(testInstance, pipeError)
+
+			defer func() {
+				closeError := pipeReader.Close()
+				require.NoError(testInstance, closeError)
+			}()
+
+			command.Stderr = pipeWriter
+
+			runError := command.Run()
+
+			closeError := pipeWriter.Close()
+			require.NoError(testInstance, closeError)
+
+			stderrBytes, readError := io.ReadAll(pipeReader)
+
+			require.NoError(testInstance, runError, string(stderrBytes))
+			require.NoError(testInstance, readError)
 		})
 	}
 }
