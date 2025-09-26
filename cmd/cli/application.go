@@ -193,6 +193,9 @@ func NewApplication() *Application {
 			return application.logger
 		},
 		HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
+		ConfigurationProvider: func() repos.RenameConfiguration {
+			return application.configuration.Tools.Repos.Rename
+		},
 	}
 	renameCommand, renameBuildError := renameBuilder.Build()
 	if renameBuildError == nil {

@@ -5,8 +5,10 @@ import "strings"
 const (
 	remotesConfigurationKeyConstant      = "remotes"
 	protocolConfigurationKeyConstant     = "protocol"
+	renameConfigurationKeyConstant       = "rename"
 	configurationDryRunKeyConstant       = "dry_run"
 	configurationAssumeYesKeyConstant    = "assume_yes"
+	configurationRequireCleanKeyConstant = "require_clean"
 	configurationRootsKeyConstant        = "roots"
 	protocolConfigurationFromKeyConstant = "from"
 	protocolConfigurationToKeyConstant   = "to"
@@ -16,6 +18,7 @@ const (
 type ToolsConfiguration struct {
 	Remotes  RemotesConfiguration  `mapstructure:"remotes"`
 	Protocol ProtocolConfiguration `mapstructure:"protocol"`
+	Rename   RenameConfiguration   `mapstructure:"rename"`
 }
 
 // RemotesConfiguration describes configuration values for repo-remote-update.
@@ -34,6 +37,14 @@ type ProtocolConfiguration struct {
 	ToProtocol      string   `mapstructure:"to"`
 }
 
+// RenameConfiguration describes configuration values for repo-folders-rename.
+type RenameConfiguration struct {
+	DryRun               bool     `mapstructure:"dry_run"`
+	AssumeYes            bool     `mapstructure:"assume_yes"`
+	RequireCleanWorktree bool     `mapstructure:"require_clean"`
+	RepositoryRoots      []string `mapstructure:"roots"`
+}
+
 // DefaultToolsConfiguration returns baseline configuration values for repository commands.
 func DefaultToolsConfiguration() ToolsConfiguration {
 	return ToolsConfiguration{
@@ -48,6 +59,12 @@ func DefaultToolsConfiguration() ToolsConfiguration {
 			RepositoryRoots: []string{defaultRepositoryRootConstant},
 			FromProtocol:    "",
 			ToProtocol:      "",
+		},
+		Rename: RenameConfiguration{
+			DryRun:               false,
+			AssumeYes:            false,
+			RequireCleanWorktree: false,
+			RepositoryRoots:      []string{defaultRepositoryRootConstant},
 		},
 	}
 }
@@ -64,6 +81,10 @@ func DefaultConfigurationValues(rootKey string) map[string]any {
 		rootKey + "." + protocolConfigurationKeyConstant + "." + configurationRootsKeyConstant:        defaults.Protocol.RepositoryRoots,
 		rootKey + "." + protocolConfigurationKeyConstant + "." + protocolConfigurationFromKeyConstant: defaults.Protocol.FromProtocol,
 		rootKey + "." + protocolConfigurationKeyConstant + "." + protocolConfigurationToKeyConstant:   defaults.Protocol.ToProtocol,
+		rootKey + "." + renameConfigurationKeyConstant + "." + configurationDryRunKeyConstant:         defaults.Rename.DryRun,
+		rootKey + "." + renameConfigurationKeyConstant + "." + configurationAssumeYesKeyConstant:      defaults.Rename.AssumeYes,
+		rootKey + "." + renameConfigurationKeyConstant + "." + configurationRequireCleanKeyConstant:   defaults.Rename.RequireCleanWorktree,
+		rootKey + "." + renameConfigurationKeyConstant + "." + configurationRootsKeyConstant:          defaults.Rename.RepositoryRoots,
 	}
 }
 
@@ -86,5 +107,15 @@ func (configuration ProtocolConfiguration) sanitize() ProtocolConfiguration {
 	}
 	sanitized.FromProtocol = strings.TrimSpace(configuration.FromProtocol)
 	sanitized.ToProtocol = strings.TrimSpace(configuration.ToProtocol)
+	return sanitized
+}
+
+// sanitize normalizes rename configuration values.
+func (configuration RenameConfiguration) sanitize() RenameConfiguration {
+	sanitized := configuration
+	sanitized.RepositoryRoots = trimRoots(configuration.RepositoryRoots)
+	if len(sanitized.RepositoryRoots) == 0 {
+		sanitized.RepositoryRoots = append([]string{}, defaultRepositoryRootConstant)
+	}
 	return sanitized
 }
