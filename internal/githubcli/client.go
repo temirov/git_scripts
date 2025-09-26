@@ -59,6 +59,8 @@ const (
 	updateDefaultBranchOperationNameConstant   = OperationName("UpdateDefaultBranch")
 	updatePullRequestOperationNameConstant     = OperationName("UpdatePullRequestBase")
 	checkBranchProtectionOperationNameConstant = OperationName("CheckBranchProtection")
+	httpNotFoundIndicatorConstant              = "http 404"
+	statusNotFoundIndicatorConstant            = "status 404"
 )
 
 // OperationName describes a named GitHub CLI workflow supported by the client.
@@ -508,8 +510,20 @@ func (client *Client) CheckBranchProtection(executionContext context.Context, re
 
 	var commandFailure execshell.CommandFailedError
 	if errors.As(executionError, &commandFailure) {
-		return false, nil
+		if branchProtectionNotFound(commandFailure.Result) {
+			return false, nil
+		}
 	}
 
 	return false, OperationError{Operation: checkBranchProtectionOperationNameConstant, Cause: executionError}
+}
+
+func branchProtectionNotFound(result execshell.ExecutionResult) bool {
+	if len(result.StandardError) == 0 && len(result.StandardOutput) == 0 {
+		return false
+	}
+
+	combinedOutput := strings.ToLower(result.StandardError + " " + result.StandardOutput)
+
+	return strings.Contains(combinedOutput, httpNotFoundIndicatorConstant) || strings.Contains(combinedOutput, statusNotFoundIndicatorConstant)
 }
