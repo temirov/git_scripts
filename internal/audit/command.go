@@ -1,8 +1,6 @@
 package audit
 
 import (
-	"errors"
-
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 
@@ -20,25 +18,27 @@ type CommandBuilder struct {
 	GitManager                   GitRepositoryManager
 	GitHubResolver               GitHubMetadataResolver
 	HumanReadableLoggingProvider func() bool
+	ConfigurationProvider        func() CommandConfiguration
 }
 
 // Build constructs the cobra command for repository audit workflows.
 func (builder *CommandBuilder) Build() (*cobra.Command, error) {
 	command := &cobra.Command{
-		Use:   commandNameConstant,
+		Use:   commandUseConstant,
 		Short: commandShortDescription,
 		Long:  commandLongDescription,
+		Args:  cobra.NoArgs,
 		RunE:  builder.run,
 	}
 
-	command.Flags().Bool(flagAuditName, false, flagAuditDescription)
-	command.Flags().Bool(flagDebugName, false, flagDebugDescription)
+	command.Flags().StringSlice(flagRootNameConstant, nil, flagRootDescriptionConstant)
+	command.Flags().Bool(flagDebugNameConstant, false, flagDebugDescriptionConstant)
 
 	return command, nil
 }
 
 func (builder *CommandBuilder) run(command *cobra.Command, arguments []string) error {
-	options, optionsError := builder.parseOptions(command, arguments)
+	options, optionsError := builder.parseOptions(command)
 	if optionsError != nil {
 		return optionsError
 	}
@@ -65,23 +65,29 @@ func (builder *CommandBuilder) run(command *cobra.Command, arguments []string) e
 	return service.Run(command.Context(), options)
 }
 
-func (builder *CommandBuilder) parseOptions(command *cobra.Command, arguments []string) (CommandOptions, error) {
-	auditFlag, _ := command.Flags().GetBool(flagAuditName)
-	debugFlag, _ := command.Flags().GetBool(flagDebugName)
+func (builder *CommandBuilder) parseOptions(command *cobra.Command) (CommandOptions, error) {
+	configuration := builder.resolveConfiguration()
 
-	if !auditFlag {
-		if helpError := builder.displayCommandHelp(command); helpError != nil {
-			return CommandOptions{}, helpError
-		}
-		return CommandOptions{}, errors.New(errorMissingOperation)
+	debugMode := configuration.Debug
+	if command != nil && command.Flags().Changed(flagDebugNameConstant) {
+		debugFlagValue, _ := command.Flags().GetBool(flagDebugNameConstant)
+		debugMode = debugFlagValue
 	}
 
-	roots := append([]string{}, arguments...)
+	roots := configuration.Roots
+	if command != nil && command.Flags().Changed(flagRootNameConstant) {
+		flagRoots, _ := command.Flags().GetStringSlice(flagRootNameConstant)
+		sanitizedRoots := sanitizeRoots(flagRoots)
+		if len(sanitizedRoots) == 0 {
+			roots = append([]string{}, defaultRootPathConstant)
+		} else {
+			roots = sanitizedRoots
+		}
+	}
 
 	options := CommandOptions{
 		Roots:       roots,
-		AuditReport: auditFlag,
-		DebugOutput: debugFlag,
+		DebugOutput: debugMode,
 	}
 
 	return options, nil
@@ -114,9 +120,10 @@ func (builder *CommandBuilder) resolveGitHubClient(executor GitExecutor) (GitHub
 	return dependencies.ResolveGitHubResolver(builder.GitHubResolver, executor)
 }
 
-func (builder *CommandBuilder) displayCommandHelp(command *cobra.Command) error {
-	if command == nil {
-		return nil
+func (builder *CommandBuilder) resolveConfiguration() CommandConfiguration {
+	if builder.ConfigurationProvider == nil {
+		return DefaultCommandConfiguration()
 	}
-	return command.Help()
+	provided := builder.ConfigurationProvider()
+	return provided.sanitize()
 }

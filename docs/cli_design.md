@@ -16,12 +16,12 @@ The following tables document each script. "Inputs" include both positional argu
 | Aspect | Details |
 | --- | --- |
 | Primary purpose | Audit GitHub repositories across one or more directories, optionally renaming local folders, updating remotes to canonical URLs, or converting remote protocols. |
-| Inputs & flags | Positional scan roots (defaults to `.`). Flags: `--audit`, `--rename`, `--update-remote`, `--protocol-from {https\|git\|ssh}`, `--protocol-to {https\|git\|ssh}`, `--dry-run`, `--yes` (`-y`), `--require-clean`, `--debug`. |
+| Inputs & flags | Positional scan roots (defaults to `.`). Flags: `--rename`, `--update-remote`, `--protocol-from {https\|git\|ssh}`, `--protocol-to {https\|git\|ssh}`, `--dry-run`, `--yes` (`-y`), `--require-clean`, `--debug`. |
 | Environment variables | `GIT_TERMINAL_PROMPT=0` (set within script to disable interactive credential prompts). |
 | External dependencies | `git`, `gh`, `jq`, `find`, `readlink`/`realpath`, `mv`, `sed`, `awk`, standard GNU coreutils. Requires authenticated `gh` session. |
 | Network/API usage | `gh api` to resolve repository canonical metadata; `gh repo view` to determine default branch; optional `git fetch` for sync detection; `git remote set-url` for updates. |
 | Side effects | File-system renames of repository directories; remote URL changes; Git fetches; optional prompts; stdout/stderr logging. With `--dry-run`, operations are read-only. |
-| Outputs | When `--audit` is the only active operation, emits CSV (header + one line per repo) to stdout. Operational modes emit plan/action messages (`PLAN-OK`, `UPDATE-REMOTE-DONE`, etc.) to stdout and error messages to stderr. Debug logging when `--debug` is set. |
+| Outputs | When the dedicated audit command runs, it emits CSV (header + one line per repo) to stdout. Operational modes emit plan/action messages (`PLAN-OK`, `UPDATE-REMOTE-DONE`, etc.) to stdout and error messages to stderr. Debug logging when `--debug` is set. |
 
 ### 2.2 `delete_merged_branches.sh`
 | Aspect | Details |
@@ -59,7 +59,7 @@ The following tables document each script. "Inputs" include both positional argu
 ## 3. Command Equivalence Plan
 The new CLI (working name **`git-maintenance`**) will use Cobra for command/flag parsing. The root binary lives at `cmd/cli/main.go` and exposes the following hierarchy:
 
-- `git-maintenance audit`
+- `git-maintenance audit-run`
 - `git-maintenance repo-folders-rename`
 - `git-maintenance repo-remote-update`
 - `git-maintenance protocol-convert`
@@ -72,7 +72,7 @@ The table below maps current script switches to Cobra equivalents and documents 
 
 | Script behavior | Cobra command | Flags & arguments | `gh` usage strategy |
 | --- | --- | --- | --- |
-| CSV audit (`--audit`) | `git-maintenance audit` | `--root` (repeatable; defaults to `.`), `--debug`, `--format csv` (defaults to CSV; future extensibility), `--output` (optional file). Command is read-only. | Use `exec.CommandContext` to run `gh repo view` and `gh api repos/{owner}/{repo}` exactly once per repo. Results cached per repo to minimize API calls. |
+| CSV audit (read-only) | `git-maintenance audit-run` | `--root` (repeatable; defaults to `.`), `--debug`, `--format csv` (defaults to CSV; future extensibility), `--output` (optional file). Command is read-only. | Use `exec.CommandContext` to run `gh repo view` and `gh api repos/{owner}/{repo}` exactly once per repo. Results cached per repo to minimize API calls. |
 | Directory rename (`--rename`) | `git-maintenance repo-folders-rename` | `--root`, `--dry-run`, `--require-clean`, `--yes`. | Same metadata resolution as audit. No extra `gh` commands beyond canonical lookup. |
 | Update remote to canonical (`--update-remote`) | `git-maintenance repo-remote-update` | `--root`, `--dry-run`, `--yes`. | Requires canonical owner/repo from `gh api repos/{owner}/{repo}`. |
 | Protocol conversion (`--protocol-from`, `--protocol-to`) | `git-maintenance protocol-convert` | `--root`, `--from {https\|git\|ssh}`, `--to {https\|git\|ssh}`, `--dry-run`, `--yes`. | Canonical resolution via `gh api`; no other `gh` usage. |
