@@ -28,7 +28,7 @@ const (
 	packagesIntegrationRunSubcommandConstant            = "run"
 	packagesIntegrationModulePathConstant               = "."
 	packagesIntegrationConfigFlagTemplateConstant       = "--config=%s"
-	packagesIntegrationPackagesPurgeCommandNameConstant = "packages-purge"
+	packagesIntegrationPackagesPurgeCommandNameConstant = "repo-packages-purge"
 	packagesIntegrationCommandTimeout                   = 10 * time.Second
 	packagesIntegrationPageSizeConstant                 = 3
 	packagesIntegrationTaggedVersionIDConstant          = 101

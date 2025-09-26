@@ -28,7 +28,7 @@ type RemotesConfiguration struct {
 	RepositoryRoots []string `mapstructure:"roots"`
 }
 
-// ProtocolConfiguration describes configuration values for protocol-convert.
+// ProtocolConfiguration describes configuration values for repo-protocol-convert.
 type ProtocolConfiguration struct {
 	DryRun          bool     `mapstructure:"dry_run"`
 	AssumeYes       bool     `mapstructure:"assume_yes"`

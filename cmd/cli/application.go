@@ -183,9 +183,9 @@ func NewApplication() *Application {
 			return application.configuration.Tools.Packages
 		},
 	}
-	packagesPurgeCommand, packagesBuildError := packagesBuilder.Build()
+	repoPackagesPurgeCommand, packagesBuildError := packagesBuilder.Build()
 	if packagesBuildError == nil {
-		cobraCommand.AddCommand(packagesPurgeCommand)
+		cobraCommand.AddCommand(repoPackagesPurgeCommand)
 	}
 
 	renameBuilder := repos.RenameCommandBuilder{
