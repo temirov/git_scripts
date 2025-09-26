@@ -20,15 +20,24 @@ import (
 )
 
 const (
-	integrationRepositoryIdentifierConstant  = "integration/test"
-	integrationWorkflowDirectoryConstant     = ".github/workflows"
-	integrationWorkflowFileNameConstant      = "ci.yml"
-	integrationWorkflowInitialContent        = "on:\n  push:\n    branches:\n      - main\n"
-	integrationWorkflowCommitMessageConstant = "CI: switch workflow branch filters to master"
-	migrationRetainBranchCaseNameConstant    = "retain_source_branch_with_open_pr"
-	migrationDeleteBranchCaseNameConstant    = "delete_source_branch_when_safe"
-	migrationSkipDeletionCaseNameConstant    = "skip_deletion_when_not_safe"
-	migrationSubtestNameTemplateConstant     = "%d_%s"
+	integrationRepositoryIdentifierConstant   = "integration/test"
+	integrationWorkflowDirectoryConstant      = ".github/workflows"
+	integrationWorkflowFileNameConstant       = "ci.yml"
+	integrationWorkflowInitialContent         = "on:\n  push:\n    branches:\n      - main\n"
+	integrationWorkflowCommitMessageConstant  = "CI: switch workflow branch filters to master"
+	migrationRetainBranchCaseNameConstant     = "retain_source_branch_with_open_pr"
+	migrationDeleteBranchCaseNameConstant     = "delete_source_branch_when_safe"
+	migrationSkipDeletionCaseNameConstant     = "skip_deletion_when_not_safe"
+	migrationSubtestNameTemplateConstant      = "%d_%s"
+	gitExecutableNameConstant                 = "git"
+	gitDirOptionConstant                      = "--git-dir"
+	gitSymbolicRefCommandConstant             = "symbolic-ref"
+	gitHeadReferenceNameConstant              = "HEAD"
+	gitReferenceHeadsPrefixConstant           = "refs/heads"
+	gitTerminalPromptEnvironmentConstant      = "GIT_TERMINAL_PROMPT=0"
+	symbolicRefMissingRemotePathErrorConstant = "remote git directory path must be configured for symbolic-ref operation"
+	symbolicRefFailureErrorTemplateConstant   = "failed to update remote HEAD symbolic reference: %w"
+	wrappedErrorWithOutputTemplateConstant    = "%w: %s"
 )
 
 type recordingGitHubOperations struct {
@@ -38,6 +47,7 @@ type recordingGitHubOperations struct {
 	pullRequests            []githubcli.PullRequest
 	retargetedPullRequests  []int
 	branchProtectionEnabled bool
+	remoteGitDirectoryPath  string
 }
 
 func (operations *recordingGitHubOperations) GetPagesConfig(_ context.Context, repository string) (githubcli.PagesStatus, error) {
@@ -67,6 +77,28 @@ func (operations *recordingGitHubOperations) UpdatePullRequestBase(_ context.Con
 func (operations *recordingGitHubOperations) SetDefaultBranch(_ context.Context, repository string, branchName string) error {
 	_ = repository
 	operations.defaultBranchTarget = branchName
+	if len(operations.remoteGitDirectoryPath) == 0 {
+		return fmt.Errorf(symbolicRefMissingRemotePathErrorConstant)
+	}
+
+	branchReference := fmt.Sprintf("%s/%s", gitReferenceHeadsPrefixConstant, branchName)
+	symbolicRefCommand := exec.Command(
+		gitExecutableNameConstant,
+		gitDirOptionConstant,
+		operations.remoteGitDirectoryPath,
+		gitSymbolicRefCommandConstant,
+		gitHeadReferenceNameConstant,
+		branchReference,
+	)
+	symbolicRefCommand.Env = append(os.Environ(), gitTerminalPromptEnvironmentConstant)
+	symbolicRefOutput, symbolicRefError := symbolicRefCommand.CombinedOutput()
+	if symbolicRefError != nil {
+		trimmedOutput := strings.TrimSpace(string(symbolicRefOutput))
+		if len(trimmedOutput) > 0 {
+			symbolicRefError = fmt.Errorf(wrappedErrorWithOutputTemplateConstant, symbolicRefError, trimmedOutput)
+		}
+		return fmt.Errorf(symbolicRefFailureErrorTemplateConstant, symbolicRefError)
+	}
 	return nil
 }
 
@@ -175,6 +207,7 @@ func TestMigrationIntegration(testInstance *testing.T) {
 				},
 				pullRequests:            append([]githubcli.PullRequest{}, testCase.pullRequests...),
 				branchProtectionEnabled: testCase.branchProtectionEnabled,
+				remoteGitDirectoryPath:  remoteDirectory,
 			}
 
 			service, serviceError := migrate.NewService(migrate.ServiceDependencies{
@@ -236,9 +269,9 @@ func TestMigrationIntegration(testInstance *testing.T) {
 
 func runMigrationGitCommand(testInstance *testing.T, repositoryPath string, arguments ...string) string {
 	testInstance.Helper()
-	command := exec.Command("git", arguments...)
+	command := exec.Command(gitExecutableNameConstant, arguments...)
 	command.Dir = repositoryPath
-	command.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	command.Env = append(os.Environ(), gitTerminalPromptEnvironmentConstant)
 	outputBytes, commandError := command.CombinedOutput()
 	require.NoError(testInstance, commandError, string(outputBytes))
 	return string(bytes.TrimSpace(outputBytes))
@@ -252,8 +285,8 @@ func branchExists(testInstance *testing.T, repositoryPath string, branchName str
 
 func remoteBranchExists(testInstance *testing.T, remoteGitDirectory string, branchName string) bool {
 	testInstance.Helper()
-	command := exec.Command("git", "--git-dir", remoteGitDirectory, "branch", "--list", branchName)
-	command.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	command := exec.Command(gitExecutableNameConstant, gitDirOptionConstant, remoteGitDirectory, "branch", "--list", branchName)
+	command.Env = append(os.Environ(), gitTerminalPromptEnvironmentConstant)
 	outputBytes, commandError := command.CombinedOutput()
 	require.NoError(testInstance, commandError, string(outputBytes))
 	return len(strings.TrimSpace(string(bytes.TrimSpace(outputBytes)))) > 0
@@ -261,8 +294,8 @@ func remoteBranchExists(testInstance *testing.T, remoteGitDirectory string, bran
 
 func initializeBareGitRepository(testInstance *testing.T, repositoryPath string) {
 	testInstance.Helper()
-	command := exec.Command("git", "init", "--bare", repositoryPath)
-	command.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	command := exec.Command(gitExecutableNameConstant, "init", "--bare", repositoryPath)
+	command.Env = append(os.Environ(), gitTerminalPromptEnvironmentConstant)
 	outputBytes, commandError := command.CombinedOutput()
 	require.NoError(testInstance, commandError, string(outputBytes))
 }
