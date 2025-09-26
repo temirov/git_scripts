@@ -26,7 +26,6 @@ const (
 // CommandOptions captures the configurable parameters for the audit command.
 type CommandOptions struct {
 	Roots       []string
-	AuditReport bool
 	DebugOutput bool
 }
 
