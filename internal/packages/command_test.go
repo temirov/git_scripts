@@ -107,7 +107,7 @@ func TestCommandBuilderHandlesExecutionError(testingInstance *testing.T) {
 	command.SetArgs([]string{"--owner", "o", "--package", "p", "--token-source", "env:VAR"})
 	executionError := command.Execute()
 	require.Error(testingInstance, executionError)
-	require.ErrorContains(testingInstance, executionError, "packages-purge failed")
+	require.ErrorContains(testingInstance, executionError, "repo-packages-purge failed")
 }
 
 func TestCommandBuilderValidatesArguments(testingInstance *testing.T) {

@@ -8,14 +8,14 @@ const (
 	workflowConfigurationAssumeYesKeyConstant = "assume_yes"
 )
 
-// CommandConfiguration captures configuration values for workflow-run.
+// CommandConfiguration captures configuration values for workflow.
 type CommandConfiguration struct {
 	Roots     []string `mapstructure:"roots"`
 	DryRun    bool     `mapstructure:"dry_run"`
 	AssumeYes bool     `mapstructure:"assume_yes"`
 }
 
-// DefaultCommandConfiguration provides default workflow command settings.
+// DefaultCommandConfiguration provides default workflow command settings for workflow.
 func DefaultCommandConfiguration() CommandConfiguration {
 	return CommandConfiguration{
 		Roots:     []string{defaultWorkflowRootConstant},

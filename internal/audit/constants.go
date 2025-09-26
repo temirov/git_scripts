@@ -1,7 +1,7 @@
 package audit
 
 const (
-	commandUseConstant              = "audit-run"
+	commandUseConstant              = "audit"
 	commandShortDescription         = "Audit and reconcile local GitHub repositories"
 	commandLongDescription          = "Scans git repositories for GitHub remotes and produces audit reports or applies reconciliation actions."
 	flagRootNameConstant            = "root"

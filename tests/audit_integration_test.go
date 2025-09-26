@@ -17,7 +17,7 @@ const (
 	auditIntegrationErrorLevel            = "error"
 	auditIntegrationRunSubcommand         = "run"
 	auditIntegrationModulePathConstant    = "."
-	auditIntegrationAuditCommandName      = "audit-run"
+	auditIntegrationAuditCommandName      = "audit"
 	auditIntegrationRootFlag              = "--root"
 	auditIntegrationDebugFlag             = "--debug"
 	auditIntegrationGitExecutable         = "git"
