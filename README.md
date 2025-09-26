@@ -6,29 +6,37 @@ A Go-based command-line interface that automates routine Git and GitHub maintena
 
 You can run the CLI in two complementary ways depending on how much orchestration you need:
 
-- **Direct commands with persisted defaults** – invoke commands such as `repo-folders-rename`, `repo-protocol-convert`, `repo-packages-purge`, and `audit` from the shell,
-  optionally loading shared flags (for example, log level or default owners) via [`--config` files](#configuration-and-logging).
-  This mode mirrors the quick-start rows in the [command catalog](#command-catalog) and is ideal when you want immediate,
+- **Direct commands with persisted defaults** – invoke commands such as `repo-folders-rename`, `repo-protocol-convert`,
+  `repo-packages-purge`, and `audit` from the shell,
+  optionally loading shared flags (for example, log level or default owners) via [
+  `--config` files](#configuration-and-logging).
+  This mode mirrors the quick-start rows in the [command catalog](#command-catalog) and is ideal when you want
+  immediate,
   one-off execution.
-- **Workflow runner with YAML/JSON steps** – describe ordered operations in declarative workflow files and let `workflow`
+- **Workflow runner with YAML/JSON steps** – describe ordered operations in declarative workflow files and let
+  `workflow`
   drive them. The [`Workflow bundling`](#workflow-bundling) section shows the domain-specific language (DSL) and how the
   runner reuses discovery, prompting, and logging across steps.
 
-| Choose this mode | When it shines | Example |
-| --- | --- | --- |
-| Direct commands | You need a focused, ad-hoc action with minimal setup, such as renaming directories or auditing repositories | [`repo-folders-rename`](#command-catalog) and [`audit`](#command-catalog) quick-starts |
-| Workflow runner | You want to bundle several operations together, share discovery across them, or hand off a repeatable plan to teammates | [`workflow` with a YAML plan](#workflow-bundling) |
+| Choose this mode | When it shines                                                                                                          | Example                                                                                |
+|------------------|-------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------|
+| Direct commands  | You need a focused, ad-hoc action with minimal setup, such as renaming directories or auditing repositories             | [`repo-folders-rename`](#command-catalog) and [`audit`](#command-catalog) quick-starts |
+| Workflow runner  | You want to bundle several operations together, share discovery across them, or hand off a repeatable plan to teammates | [`workflow` with a YAML plan](#workflow-bundling)                                      |
 
 ## Feature highlights
 
-- **Repository auditing** – generate CSV summaries describing canonical GitHub metadata for every repository under one or many
+- **Repository auditing** – generate CSV summaries describing canonical GitHub metadata for every repository under one
+  or many
   roots.
 - **Directory reconciliation** – rename working directories to match the canonical repository name returned by GitHub.
-- **Remote normalization** – update `origin` to the canonical GitHub remote or convert between HTTPS, SSH, and `git` protocols.
-- **Branch maintenance** – delete remote/local branches once their pull requests are closed and migrate defaults from `main` to
+- **Remote normalization** – update `origin` to the canonical GitHub remote or convert between HTTPS, SSH, and `git`
+  protocols.
+- **Branch maintenance** – delete remote/local branches once their pull requests are closed and migrate defaults from
+  `main` to
   `master` with safety gates.
 - **GitHub Packages upkeep** – remove untagged GHCR container versions via the official API.
-- **Workflow bundling** – describe ordered operations in YAML or JSON and execute them in one pass with shared discovery,
+- **Workflow bundling** – describe ordered operations in YAML or JSON and execute them in one pass with shared
+  discovery,
   prompting, and logging.
 
 All repository-facing commands accept multiple root directories, honor `--dry-run` previews, and support non-interactive
@@ -62,23 +70,25 @@ Global flags configure logging and optional configuration files:
 - `--log-level <debug|info|warn|error>` – override the configured log level.
 - `--log-format <structured|console>` – switch between JSON and human-readable logs.
 
-Configuration keys mirror the flags (`common.log_level`, `common.log_format`) and can also be provided via environment variables prefixed with
+Configuration keys mirror the flags (`common.log_level`, `common.log_format`) and can also be provided via environment
+variables prefixed with
 `GITSCRIPTS_` (for example, `GITSCRIPTS_COMMON_LOG_LEVEL=error`).
 
 ## Command catalog
 
-The commands below share repository discovery, prompting, and logging helpers. Use the quick-start examples to align with the registered command names and flags.
+The commands below share repository discovery, prompting, and logging helpers. Use the quick-start examples to align
+with the registered command names and flags.
 
-| Command | Summary | Key flags / example |
-| --- | --- | --- |
-| `audit` | Audit and reconcile local GitHub repositories | Flags: `--root`, `--debug`. Example: `go run . audit --root ~/Development` |
-| `repo-folders-rename` | Rename repository directories to match canonical GitHub names | Flags: `--dry-run`, `--yes`, `--require-clean`. Example: `go run . repo-folders-rename --yes --require-clean ~/Development` |
-| `repo-remote-update` | Update origin URLs to match canonical GitHub repositories | Flags: `--dry-run`, `--yes`. Example: `go run . repo-remote-update --dry-run ~/Development` |
-| `repo-protocol-convert` | Convert repository origin remotes between protocols | Flags: `--from`, `--to`, `--dry-run`, `--yes`. Example: `go run . repo-protocol-convert --from https --to ssh --yes ~/Development` |
-| `repo-prs-purge` | Remove remote and local branches for closed pull requests | Flags: `--remote`, `--limit`, `--dry-run`. Example: `go run . repo-prs-purge --remote origin --limit 100 ~/Development` |
-| `branch-migrate` | Migrate repository defaults from main to master | Flag: `--debug` for verbose diagnostics. Example: `go run . branch-migrate --debug ~/Development/project-repo` |
-| `repo-packages-purge` | Delete untagged GHCR versions | Flags: `--owner`, `--package`, `--owner-type`, `--token-source`, `--dry-run`. Example: `go run . repo-packages-purge --owner my-org --package my-image --owner-type org --token-source env:GITHUB_PACKAGES_TOKEN --dry-run` |
-| `workflow` | Run a workflow configuration file | Flags: `--roots`, `--dry-run`, `--yes`. Example: `go run . workflow config.yaml --roots ~/Development --dry-run` |
+| Command                 | Summary                                                       | Key flags / example                                                                                                                                                                                                         |
+|-------------------------|---------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `audit`                 | Audit and reconcile local GitHub repositories                 | Flags: `--root`, `--debug`. Example: `go run . audit --root ~/Development`                                                                                                                                                  |
+| `repo-folders-rename`   | Rename repository directories to match canonical GitHub names | Flags: `--dry-run`, `--yes`, `--require-clean`. Example: `go run . repo-folders-rename --yes --require-clean ~/Development`                                                                                                 |
+| `repo-remote-update`    | Update origin URLs to match canonical GitHub repositories     | Flags: `--dry-run`, `--yes`. Example: `go run . repo-remote-update --dry-run ~/Development`                                                                                                                                 |
+| `repo-protocol-convert` | Convert repository origin remotes between protocols           | Flags: `--from`, `--to`, `--dry-run`, `--yes`. Example: `go run . repo-protocol-convert --from https --to ssh --yes ~/Development`                                                                                          |
+| `repo-prs-purge`        | Remove remote and local branches for closed pull requests     | Flags: `--remote`, `--limit`, `--dry-run`. Example: `go run . repo-prs-purge --remote origin --limit 100 ~/Development`                                                                                                     |
+| `branch-migrate`        | Migrate repository defaults from main to master               | Flag: `--debug` for verbose diagnostics. Example: `go run . branch-migrate --debug ~/Development/project-repo`                                                                                                              |
+| `repo-packages-purge`   | Delete untagged GHCR versions                                 | Flags: `--owner`, `--package`, `--owner-type`, `--token-source`, `--dry-run`. Example: `go run . repo-packages-purge --owner my-org --package my-image --owner-type org --token-source env:GITHUB_PACKAGES_TOKEN --dry-run` |
+| `workflow`              | Run a workflow configuration file                             | Flags: `--roots`, `--dry-run`, `--yes`. Example: `go run . workflow config.yaml --roots ~/Development --dry-run`                                                                                                            |
 
 Persist defaults and workflow plans in a single configuration file to avoid long flag lists and keep the runner in sync:
 
@@ -134,7 +144,8 @@ go run . workflow --roots ~/Development --yes
 ```
 
 `workflow` reads the `steps` array from `config.yaml`, reusing the same repository discovery, prompting, and logging
-infrastructure as the standalone commands. Pass additional roots on the command line to override the configuration file and
+infrastructure as the standalone commands. Pass additional roots on the command line to override the configuration file
+and
 combine `--dry-run`/`--yes` for non-interactive execution.
 
 ## Development and testing
@@ -154,8 +165,12 @@ make release        # Cross-compile binaries into ./dist
 - Go 1.24+
 - git
 - GitHub CLI (`gh`) with an authenticated session (`gh auth login`)
+    - Install the CLI via your platform's package manager or the [official releases](https://cli.github.com/).
+    - Run `gh auth login` (or verify with `gh auth status`) so API calls succeed during branch cleanup and migration
+      commands.
 
-The `repo-packages-purge` command additionally requires network access and a GitHub Personal Access Token with `read:packages`,
+The `repo-packages-purge` command additionally requires network access and a GitHub Personal Access Token with
+`read:packages`,
 `write:packages`, and `delete:packages` scopes. Export the token before invoking the command:
 
 ```shell
@@ -164,10 +179,12 @@ export GITHUB_PACKAGES_TOKEN=ghp_XXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
 ## Repository roots and bulk execution tips
 
-- Provide explicit repository roots to operate on multiple directories in one invocation. When omitted, commands default to the
+- Provide explicit repository roots to operate on multiple directories in one invocation. When omitted, commands default
+  to the
   current working directory.
 - Use `--dry-run` to preview changes. Combine with `--yes` once you are comfortable executing the plan without prompts.
-- Workflow configurations let you mix and match operations (for example, convert protocols, migrate branches, and audit) while
+- Workflow configurations let you mix and match operations (for example, convert protocols, migrate branches, and audit)
+  while
   sharing discovery costs.
 
 ## License
