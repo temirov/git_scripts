@@ -341,6 +341,7 @@ if [ "$1" = "api" ] && [ "$2" = "repos/canonical/example" ]; then
   exit 0
 fi
 if [ "$1" = "api" ] && [ "$2" = "repos/canonical/example/branches/main/protection" ]; then
+  echo 'gh: Not Found (HTTP 404)' >&2
   exit 1
 fi
 exit 0

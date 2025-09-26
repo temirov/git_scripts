@@ -14,42 +14,45 @@ import (
 )
 
 const (
-	testRepositoryIdentifierConstant                    = "owner/example"
-	testBaseBranchConstant                              = "main"
-	testPullRequestTitleConstant                        = "Example"
-	testPullRequestHeadConstant                         = "feature/example"
-	testPagesSourceBranchConstant                       = "gh-pages"
-	testPagesSourcePathConstant                         = "/docs"
-	testTargetBranchConstant                            = "master"
-	testResolveSuccessCaseNameConstant                  = "resolve_success"
-	testResolveDecodeFailureCaseNameConstant            = "resolve_decode_failure"
-	testResolveCommandFailureCaseNameConstant           = "resolve_command_failure"
-	testResolveInputFailureCaseNameConstant             = "resolve_input_failure"
-	testListSuccessCaseNameConstant                     = "list_success"
-	testListDecodeFailureCaseNameConstant               = "list_decode_failure"
-	testListCommandFailureCaseNameConstant              = "list_command_failure"
-	testListRepositoryValidationCaseNameConstant        = "list_repository_validation"
-	testListBaseValidationCaseNameConstant              = "list_base_validation"
-	testListStateValidationCaseNameConstant             = "list_state_validation"
-	testPagesSuccessCaseNameConstant                    = "pages_success"
-	testPagesCommandFailureCaseNameConstant             = "pages_command_failure"
-	testPagesRepositoryValidationCaseNameConstant       = "pages_repository_validation"
-	testPagesSourceBranchValidationCaseNameConstant     = "pages_source_branch_validation"
-	testGetPagesSuccessCaseNameConstant                 = "get_pages_success"
-	testGetPagesNullCaseNameConstant                    = "get_pages_null"
-	testGetPagesDecodeFailureCaseNameConstant           = "get_pages_decode_failure"
-	testGetPagesCommandFailureCaseNameConstant          = "get_pages_command_failure"
-	testGetPagesValidationCaseNameConstant              = "get_pages_validation"
-	testDefaultBranchSuccessCaseNameConstant            = "default_branch_success"
-	testDefaultBranchCommandFailureCaseNameConstant     = "default_branch_command_failure"
-	testDefaultBranchValidationCaseNameConstant         = "default_branch_validation"
-	testUpdatePullRequestSuccessCaseNameConstant        = "update_pull_request_success"
-	testUpdatePullRequestCommandFailureCaseNameConstant = "update_pull_request_command_failure"
-	testUpdatePullRequestValidationCaseNameConstant     = "update_pull_request_validation"
-	testBranchProtectionProtectedCaseNameConstant       = "branch_protection_protected"
-	testBranchProtectionUnprotectedCaseNameConstant     = "branch_protection_unprotected"
-	testBranchProtectionCommandFailureCaseNameConstant  = "branch_protection_command_failure"
-	testBranchProtectionValidationCaseNameConstant      = "branch_protection_validation"
+	testRepositoryIdentifierConstant                     = "owner/example"
+	testBaseBranchConstant                               = "main"
+	testPullRequestTitleConstant                         = "Example"
+	testPullRequestHeadConstant                          = "feature/example"
+	testPagesSourceBranchConstant                        = "gh-pages"
+	testPagesSourcePathConstant                          = "/docs"
+	testTargetBranchConstant                             = "master"
+	testResolveSuccessCaseNameConstant                   = "resolve_success"
+	testResolveDecodeFailureCaseNameConstant             = "resolve_decode_failure"
+	testResolveCommandFailureCaseNameConstant            = "resolve_command_failure"
+	testResolveInputFailureCaseNameConstant              = "resolve_input_failure"
+	testListSuccessCaseNameConstant                      = "list_success"
+	testListDecodeFailureCaseNameConstant                = "list_decode_failure"
+	testListCommandFailureCaseNameConstant               = "list_command_failure"
+	testListRepositoryValidationCaseNameConstant         = "list_repository_validation"
+	testListBaseValidationCaseNameConstant               = "list_base_validation"
+	testListStateValidationCaseNameConstant              = "list_state_validation"
+	testPagesSuccessCaseNameConstant                     = "pages_success"
+	testPagesCommandFailureCaseNameConstant              = "pages_command_failure"
+	testPagesRepositoryValidationCaseNameConstant        = "pages_repository_validation"
+	testPagesSourceBranchValidationCaseNameConstant      = "pages_source_branch_validation"
+	testGetPagesSuccessCaseNameConstant                  = "get_pages_success"
+	testGetPagesNullCaseNameConstant                     = "get_pages_null"
+	testGetPagesDecodeFailureCaseNameConstant            = "get_pages_decode_failure"
+	testGetPagesCommandFailureCaseNameConstant           = "get_pages_command_failure"
+	testGetPagesValidationCaseNameConstant               = "get_pages_validation"
+	testDefaultBranchSuccessCaseNameConstant             = "default_branch_success"
+	testDefaultBranchCommandFailureCaseNameConstant      = "default_branch_command_failure"
+	testDefaultBranchValidationCaseNameConstant          = "default_branch_validation"
+	testUpdatePullRequestSuccessCaseNameConstant         = "update_pull_request_success"
+	testUpdatePullRequestCommandFailureCaseNameConstant  = "update_pull_request_command_failure"
+	testUpdatePullRequestValidationCaseNameConstant      = "update_pull_request_validation"
+	testBranchProtectionProtectedCaseNameConstant        = "branch_protection_protected"
+	testBranchProtectionUnprotectedCaseNameConstant      = "branch_protection_unprotected"
+	testBranchProtectionUnexpectedStatusCaseNameConstant = "branch_protection_unexpected_status"
+	testBranchProtectionCommandFailureCaseNameConstant   = "branch_protection_command_failure"
+	testBranchProtectionValidationCaseNameConstant       = "branch_protection_validation"
+	testHTTPNotFoundStandardErrorMessageConstant         = "gh: Not Found (HTTP 404)"
+	testHTTPForbiddenStandardErrorMessageConstant        = "gh: Forbidden (HTTP 403)"
 )
 
 type stubGitHubExecutor struct {
@@ -539,9 +542,19 @@ func TestCheckBranchProtection(testInstance *testing.T) {
 			repository: testRepositoryIdentifierConstant,
 			branchName: testBaseBranchConstant,
 			executor: &stubGitHubExecutor{executeFunc: func(context.Context, execshell.CommandDetails) (execshell.ExecutionResult, error) {
-				return execshell.ExecutionResult{}, execshell.CommandFailedError{Command: execshell.ShellCommand{Name: execshell.CommandGitHub}, Result: execshell.ExecutionResult{ExitCode: 1}}
+				return execshell.ExecutionResult{}, execshell.CommandFailedError{Command: execshell.ShellCommand{Name: execshell.CommandGitHub}, Result: execshell.ExecutionResult{ExitCode: 1, StandardError: testHTTPNotFoundStandardErrorMessageConstant}}
 			}},
 			expectedProtected: false,
+		},
+		{
+			name:       testBranchProtectionUnexpectedStatusCaseNameConstant,
+			repository: testRepositoryIdentifierConstant,
+			branchName: testBaseBranchConstant,
+			executor: &stubGitHubExecutor{executeFunc: func(context.Context, execshell.CommandDetails) (execshell.ExecutionResult, error) {
+				return execshell.ExecutionResult{}, execshell.CommandFailedError{Command: execshell.ShellCommand{Name: execshell.CommandGitHub}, Result: execshell.ExecutionResult{ExitCode: 1, StandardError: testHTTPForbiddenStandardErrorMessageConstant}}
+			}},
+			expectError: true,
+			errorType:   githubcli.OperationError{},
 		},
 		{
 			name:       testBranchProtectionCommandFailureCaseNameConstant,
