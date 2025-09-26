@@ -34,6 +34,7 @@ type RenameCommandBuilder struct {
 	FileSystem                   shared.FileSystem
 	PrompterFactory              PrompterFactory
 	HumanReadableLoggingProvider func() bool
+	ConfigurationProvider        func() RenameConfiguration
 }
 
 // Build constructs the repo-folders-rename command.
@@ -53,11 +54,24 @@ func (builder *RenameCommandBuilder) Build() (*cobra.Command, error) {
 }
 
 func (builder *RenameCommandBuilder) run(command *cobra.Command, arguments []string) error {
-	dryRun, _ := command.Flags().GetBool(renameDryRunFlagName)
-	assumeYes, _ := command.Flags().GetBool(renameAssumeYesFlagName)
-	requireClean, _ := command.Flags().GetBool(renameRequireCleanFlagName)
+	configuration := builder.resolveConfiguration()
 
-	roots := determineRepositoryRoots(arguments, nil)
+	dryRun := configuration.DryRun
+	if command != nil && command.Flags().Changed(renameDryRunFlagName) {
+		dryRun, _ = command.Flags().GetBool(renameDryRunFlagName)
+	}
+
+	assumeYes := configuration.AssumeYes
+	if command != nil && command.Flags().Changed(renameAssumeYesFlagName) {
+		assumeYes, _ = command.Flags().GetBool(renameAssumeYesFlagName)
+	}
+
+	requireClean := configuration.RequireCleanWorktree
+	if command != nil && command.Flags().Changed(renameRequireCleanFlagName) {
+		requireClean, _ = command.Flags().GetBool(renameRequireCleanFlagName)
+	}
+
+	roots := determineRepositoryRoots(arguments, configuration.RepositoryRoots)
 
 	logger := resolveLogger(builder.LoggerProvider)
 	humanReadableLogging := false
@@ -120,4 +134,14 @@ func (builder *RenameCommandBuilder) run(command *cobra.Command, arguments []str
 	}
 
 	return nil
+}
+
+func (builder *RenameCommandBuilder) resolveConfiguration() RenameConfiguration {
+	if builder.ConfigurationProvider == nil {
+		defaults := DefaultToolsConfiguration()
+		return defaults.Rename
+	}
+
+	provided := builder.ConfigurationProvider()
+	return provided.sanitize()
 }
