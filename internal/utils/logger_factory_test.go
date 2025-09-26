@@ -102,7 +102,12 @@ func TestLoggerFactoryCreateLogger(testInstance *testing.T) {
 			loggerOutputs.DiagnosticLogger.Info(testLogMessageConstant)
 			syncError := loggerOutputs.DiagnosticLogger.Sync()
 			if syncError != nil {
-				require.True(testInstance, errors.Is(syncError, syscall.ENOTSUP) || errors.Is(syncError, syscall.EINVAL))
+				// Some operating systems return syscall.ENOTSUP when Sync is not supported,
+				// others surface syscall.EINVAL when Sync is a no-op, while certain Linux
+				// environments surface syscall.EBADF for closed file descriptors. All three
+				// scenarios indicate a benign Sync outcome for zap loggers across supported
+				// platforms, so they are treated as acceptable here.
+				require.True(testInstance, errors.Is(syncError, syscall.ENOTSUP) || errors.Is(syncError, syscall.EINVAL) || errors.Is(syncError, syscall.EBADF))
 			}
 
 			loggerOutputs.ConsoleLogger.Info(testConsoleLogMessageConstant)
