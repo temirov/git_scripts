@@ -38,7 +38,7 @@ func TestCommandBuilderParsesConfigurationDefaults(testingInstance *testing.T) {
 	require.NoError(testingInstance, buildError)
 
 	command.SetContext(context.Background())
-	command.SetArgs([]string{"purge"})
+	command.SetArgs([]string{})
 	executionError := command.Execute()
 	require.NoError(testingInstance, executionError)
 
@@ -68,7 +68,6 @@ func TestCommandBuilderFlagOverrides(testingInstance *testing.T) {
 
 	command.SetContext(context.Background())
 	args := []string{
-		"purge",
 		"--owner", "flag-owner",
 		"--package", "flag-package",
 		"--owner-type", "org",
@@ -105,10 +104,10 @@ func TestCommandBuilderHandlesExecutionError(testingInstance *testing.T) {
 	require.NoError(testingInstance, buildError)
 
 	command.SetContext(context.Background())
-	command.SetArgs([]string{"purge", "--owner", "o", "--package", "p", "--token-source", "env:VAR"})
+	command.SetArgs([]string{"--owner", "o", "--package", "p", "--token-source", "env:VAR"})
 	executionError := command.Execute()
 	require.Error(testingInstance, executionError)
-	require.ErrorContains(testingInstance, executionError, "packages purge failed")
+	require.ErrorContains(testingInstance, executionError, "packages-purge failed")
 }
 
 func TestCommandBuilderValidatesArguments(testingInstance *testing.T) {
@@ -126,7 +125,7 @@ func TestCommandBuilderValidatesArguments(testingInstance *testing.T) {
 	require.NoError(testingInstance, buildError)
 
 	command.SetContext(context.Background())
-	command.SetArgs([]string{"purge", "unexpected"})
+	command.SetArgs([]string{"unexpected"})
 	executionError := command.Execute()
 	require.Error(testingInstance, executionError)
 	require.ErrorContains(testingInstance, executionError, "does not accept positional arguments")
