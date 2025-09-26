@@ -6,9 +6,9 @@ A Go-based command-line interface that automates routine Git and GitHub maintena
 
 You can run the CLI in two complementary ways depending on how much orchestration you need:
 
-- **Direct commands with persisted defaults** – invoke commands such as `repo-folders-rename`, `protocol-convert`, `packages`, and `audit` from the shell,
+- **Direct commands with persisted defaults** – invoke commands such as `repo-folders-rename`, `protocol-convert`, `packages-purge`, and `audit-run` from the shell,
   optionally loading shared flags (for example, log level or default owners) via [`--config` files](#configuration-and-logging).
-  This mode mirrors the examples throughout the [command catalog](#command-catalog) and is ideal when you want immediate,
+  This mode mirrors the quick-start rows in the [command catalog](#command-catalog) and is ideal when you want immediate,
   one-off execution.
 - **Workflow runner with YAML/JSON steps** – describe ordered operations in declarative workflow files and let `workflow-run`
   drive them. The [`Workflow bundling`](#workflow-bundling) section shows the domain-specific language (DSL) and how the
@@ -16,7 +16,7 @@ You can run the CLI in two complementary ways depending on how much orchestratio
 
 | Choose this mode | When it shines | Example |
 | --- | --- | --- |
-| Direct commands | You need a focused, ad-hoc action with minimal setup, such as renaming directories or auditing repositories | [`repo-folders-rename`](#repository-maintenance-commands) and [`audit`](#audit-reports) examples |
+| Direct commands | You need a focused, ad-hoc action with minimal setup, such as renaming directories or auditing repositories | [`repo-folders-rename`](#command-catalog) and [`audit-run`](#command-catalog) quick-starts |
 | Workflow runner | You want to bundle several operations together, share discovery across them, or hand off a repeatable plan to teammates | [`workflow-run` with a YAML plan](#workflow-bundling) |
 
 ## Feature highlights
@@ -67,75 +67,18 @@ Configuration keys mirror the flags (`common.log_level`, `common.log_format`) an
 
 ## Command catalog
 
-### Audit reports
+The commands below share repository discovery, prompting, and logging helpers. Use the quick-start examples to align with the registered command names and flags.
 
-```shell
-go run . audit-run --root ~/Development
-```
-
-`audit-run` scans each repository beneath the provided roots (defaults to the current directory or configured roots) and writes a CSV summary to
-stdout. Add `--debug` to log discovery progress and inspection diagnostics.
-
-### Repository maintenance commands
-
-*Rename directories to the canonical GitHub name*
-
-```shell
-go run . repo-folders-rename --dry-run ~/Development
-# Apply the plan with confirmations
-go run . repo-folders-rename --yes ~/Development
-# Require clean worktrees before renaming
-go run . repo-folders-rename --yes --require-clean ~/Development
-```
-
-*Update `origin` to the canonical GitHub remote*
-
-```shell
-go run . repo-remote-update --dry-run ~/Development
-# Automatically confirm updates
-go run . repo-remote-update --yes ~/Development
-```
-
-*Convert `origin` between Git protocols*
-
-```shell
-go run . protocol-convert --from https --to git --dry-run ~/Development
-# Apply conversions without interactive prompts
-go run . protocol-convert --from https --to ssh --yes ~/Development
-# Operate on a single repository path
-go run . protocol-convert --from ssh --to https --yes ~/Development/project-repo
-```
-
-### Pull-request branch cleanup
-
-```shell
-go run . repo-prs-purge --remote origin --limit 100 ~/Development
-# Preview deletions without mutating remotes or local branches
-go run . repo-prs-purge --dry-run ~/Development
-```
-
-The command deletes branches whose pull requests are already closed. Provide one or more repository roots or rely on the current
-working directory.
-
-### Default-branch migration
-
-```shell
-go run . branch-migrate --debug ~/Development/project-repo
-```
-
-`branch-migrate` rewrites workflows, retargets GitHub Pages, pushes branch updates, and flips the default branch from `main` to
-`master`. Debug logging surfaces detailed progress for each safety gate and API call.
-
-### GitHub Packages maintenance
-
-```shell
-go run . packages-purge \
-  --owner my-org \
-  --package my-image \
-  --owner-type org \
-  --token-source env:GITHUB_PACKAGES_TOKEN \
-  --dry-run
-```
+| Command | Summary | Key flags / example |
+| --- | --- | --- |
+| `audit-run` | Audit and reconcile local GitHub repositories | Flags: `--root`, `--debug`. Example: `go run . audit-run --root ~/Development` |
+| `repo-folders-rename` | Rename repository directories to match canonical GitHub names | Flags: `--dry-run`, `--yes`, `--require-clean`. Example: `go run . repo-folders-rename --yes --require-clean ~/Development` |
+| `repo-remote-update` | Update origin URLs to match canonical GitHub repositories | Flags: `--dry-run`, `--yes`. Example: `go run . repo-remote-update --dry-run ~/Development` |
+| `protocol-convert` | Convert repository origin remotes between protocols | Flags: `--from`, `--to`, `--dry-run`, `--yes`. Example: `go run . protocol-convert --from https --to ssh --yes ~/Development` |
+| `repo-prs-purge` | Remove remote and local branches for closed pull requests | Flags: `--remote`, `--limit`, `--dry-run`. Example: `go run . repo-prs-purge --remote origin --limit 100 ~/Development` |
+| `branch-migrate` | Migrate repository defaults from main to master | Flag: `--debug` for verbose diagnostics. Example: `go run . branch-migrate --debug ~/Development/project-repo` |
+| `packages-purge` | Delete untagged GHCR versions | Flags: `--owner`, `--package`, `--owner-type`, `--token-source`, `--dry-run`. Example: `go run . packages-purge --owner my-org --package my-image --owner-type org --token-source env:GITHUB_PACKAGES_TOKEN --dry-run` |
+| `workflow-run` | Run a workflow configuration file | Flags: `--roots`, `--dry-run`, `--yes`. Example: `go run . workflow-run config.yaml --roots ~/Development --dry-run` |
 
 Persist defaults and workflow plans in a single configuration file to avoid long flag lists and keep the runner in sync:
 
@@ -214,7 +157,7 @@ make release        # Cross-compile binaries into ./dist
   - Install the CLI via your platform's package manager or the [official releases](https://cli.github.com/).
   - Run `gh auth login` (or verify with `gh auth status`) so API calls succeed during branch cleanup and migration commands.
 
-The packages command additionally requires network access and a GitHub Personal Access Token with `read:packages`,
+The `packages-purge` command additionally requires network access and a GitHub Personal Access Token with `read:packages`,
 `write:packages`, and `delete:packages` scopes. Export the token before invoking the command:
 
 ```shell
