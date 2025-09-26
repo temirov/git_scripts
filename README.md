@@ -100,11 +100,18 @@ common:
 tools:
   packages:
     purge:
-      owner: my-org
-      package: my-image
-      owner_type: org
-      token_source: env:GITHUB_PACKAGES_TOKEN
-      page_size: 50
+      operation: repo-packages-purge
+      with:
+        owner: my-org
+        package: my-image
+        owner_type: org
+        token_source: env:GITHUB_PACKAGES_TOKEN
+        page_size: 50
+  reports:
+    audit:
+      operation: audit-report
+      with:
+        output: ./audit.csv
 steps:
   - operation: convert-protocol
     with:
@@ -122,9 +129,10 @@ steps:
           target_branch: master
           push_to_remote: true
           delete_source_branch: false
-  - operation: audit-report
+  - tool_ref: packages.purge
+  - tool_ref: reports.audit
     with:
-      output: ./audit.csv
+      output: ./reports/audit-latest.csv
 ```
 
 ```shell
@@ -147,6 +155,11 @@ go run . workflow --roots ~/Development --yes
 infrastructure as the standalone commands. Pass additional roots on the command line to override the configuration file
 and
 combine `--dry-run`/`--yes` for non-interactive execution.
+
+Each entry in `steps` can either specify an explicit `operation` with its `with` map or reference a reusable tool
+definition via `tool_ref`. When you supply `tool_ref`, the runner copies the shared defaults defined under `tools` and
+applies any inline overrides you add alongside the reference. Reach for inline `with` maps when a step is unique; prefer
+`tool_ref` when several steps share the same configuration and you want a single place to update future adjustments.
 
 ## Development and testing
 
