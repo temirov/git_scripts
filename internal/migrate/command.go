@@ -43,7 +43,6 @@ const (
 	logMessageRepositoryMigrationFailedConstant  = "Repository migration failed"
 	logFieldRepositoryRootsConstant              = "roots"
 	logFieldRepositoryPathConstant               = "repository"
-	defaultRepositoryRootConstant                = "."
 )
 
 // RepositoryDiscoverer locates Git repositories beneath provided roots.
@@ -55,8 +54,8 @@ type RepositoryDiscoverer interface {
 type ServiceProvider func(dependencies ServiceDependencies) (MigrationExecutor, error)
 
 type commandOptions struct {
-	enableDebug     bool
-	repositoryRoots []string
+	debugLoggingEnabled bool
+	repositoryRoots     []string
 }
 
 // LoggerProvider supplies a zap logger instance.
@@ -70,6 +69,7 @@ type CommandBuilder struct {
 	RepositoryDiscoverer         RepositoryDiscoverer
 	ServiceProvider              ServiceProvider
 	HumanReadableLoggingProvider func() bool
+	ConfigurationProvider        func() CommandConfiguration
 }
 
 // Build constructs the branch-migrate command.
@@ -83,7 +83,7 @@ func (builder *CommandBuilder) Build() (*cobra.Command, error) {
 		RunE:          builder.runMigrate,
 	}
 
-	command.Flags().Bool(debugFlagNameConstant, false, debugFlagDescriptionConstant)
+	command.Flags().Bool(debugFlagNameConstant, DefaultCommandConfiguration().EnableDebugLogging, debugFlagDescriptionConstant)
 
 	return command, nil
 }
@@ -94,7 +94,7 @@ func (builder *CommandBuilder) runMigrate(command *cobra.Command, arguments []st
 		return optionsError
 	}
 
-	logger := builder.resolveLogger(options.enableDebug)
+	logger := builder.resolveLogger(options.debugLoggingEnabled)
 
 	executor, executorError := builder.resolveExecutor(logger)
 	if executorError != nil {
@@ -166,7 +166,7 @@ func (builder *CommandBuilder) runMigrate(command *cobra.Command, arguments []st
 			SourceBranch:         BranchMain,
 			TargetBranch:         BranchMaster,
 			PushUpdates:          true,
-			EnableDebugLogging:   options.enableDebug,
+			EnableDebugLogging:   options.debugLoggingEnabled,
 		}
 
 		result, migrationError := service.Execute(command.Context(), migrationOptions)
@@ -191,23 +191,27 @@ func (builder *CommandBuilder) runMigrate(command *cobra.Command, arguments []st
 }
 
 func (builder *CommandBuilder) parseOptions(command *cobra.Command, arguments []string) (commandOptions, error) {
-	debugEnabled, _ := command.Flags().GetBool(debugFlagNameConstant)
-	repositoryRoots := builder.determineRepositoryRoots(arguments)
-	return commandOptions{enableDebug: debugEnabled, repositoryRoots: repositoryRoots}, nil
-}
+	configuration := builder.resolveConfiguration()
 
-func (builder *CommandBuilder) determineRepositoryRoots(arguments []string) []string {
-	repositoryRoots := make([]string, 0, len(arguments))
-	for _, argument := range arguments {
-		trimmedRoot := strings.TrimSpace(argument)
-		if len(trimmedRoot) == 0 {
-			continue
-		}
-		repositoryRoots = append(repositoryRoots, trimmedRoot)
+	debugEnabled := configuration.EnableDebugLogging
+	if command != nil && command.Flags().Changed(debugFlagNameConstant) {
+		debugEnabled, _ = command.Flags().GetBool(debugFlagNameConstant)
 	}
 
-	if len(repositoryRoots) > 0 {
-		return repositoryRoots
+	repositoryRoots := builder.determineRepositoryRoots(arguments, configuration.RepositoryRoots)
+
+	return commandOptions{debugLoggingEnabled: debugEnabled, repositoryRoots: repositoryRoots}, nil
+}
+
+func (builder *CommandBuilder) determineRepositoryRoots(arguments []string, configuredRoots []string) []string {
+	argumentRoots := sanitizeRoots(arguments)
+	if len(argumentRoots) > 0 {
+		return argumentRoots
+	}
+
+	sanitizedConfiguredRoots := sanitizeRoots(configuredRoots)
+	if len(sanitizedConfiguredRoots) > 0 {
+		return sanitizedConfiguredRoots
 	}
 
 	trimmedWorkingDirectory := strings.TrimSpace(builder.WorkingDirectory)
@@ -261,6 +265,15 @@ func (builder *CommandBuilder) resolveService(dependencies ServiceDependencies) 
 		return builder.ServiceProvider(dependencies)
 	}
 	return NewService(dependencies)
+}
+
+func (builder *CommandBuilder) resolveConfiguration() CommandConfiguration {
+	if builder.ConfigurationProvider == nil {
+		return DefaultCommandConfiguration()
+	}
+
+	provided := builder.ConfigurationProvider()
+	return provided.sanitize()
 }
 
 func (builder *CommandBuilder) logMigrationFailure(logger *zap.Logger, repositoryPath string, failure error) {
