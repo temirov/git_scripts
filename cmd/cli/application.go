@@ -55,6 +55,7 @@ const (
 	branchCleanupConfigurationKeyConstant   = toolsConfigurationKeyConstant + ".branch_cleanup"
 	reposConfigurationKeyConstant           = toolsConfigurationKeyConstant + ".repos"
 	workflowConfigurationKeyConstant        = toolsConfigurationKeyConstant + ".workflow"
+	auditConfigurationKeyConstant           = toolsConfigurationKeyConstant + ".audit"
 )
 
 // ApplicationConfiguration describes the persisted configuration for the CLI entrypoint.
@@ -71,6 +72,7 @@ type ApplicationCommonConfiguration struct {
 
 // ApplicationToolsConfiguration holds configuration for CLI subcommands grouped by tool family.
 type ApplicationToolsConfiguration struct {
+	Audit         audit.CommandConfiguration       `mapstructure:"audit"`
 	Packages      packages.Configuration           `mapstructure:"packages"`
 	BranchCleanup branches.CommandConfiguration    `mapstructure:"branch_cleanup"`
 	Repos         repos.ToolsConfiguration         `mapstructure:"repos"`
@@ -131,6 +133,9 @@ func NewApplication() *Application {
 			return application.logger
 		},
 		HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
+		ConfigurationProvider: func() audit.CommandConfiguration {
+			return application.configuration.Tools.Audit
+		},
 	}
 	auditCommand, auditBuildError := auditBuilder.Build()
 	if auditBuildError == nil {
@@ -254,6 +259,9 @@ func (application *Application) initializeConfiguration(command *cobra.Command) 
 	defaultValues := map[string]any{
 		commonLogLevelConfigKeyConstant:  string(utils.LogLevelInfo),
 		commonLogFormatConfigKeyConstant: string(utils.LogFormatStructured),
+	}
+	for configurationKey, configurationValue := range audit.DefaultConfigurationValues(auditConfigurationKeyConstant) {
+		defaultValues[configurationKey] = configurationValue
 	}
 	for configurationKey, configurationValue := range packages.DefaultConfigurationValues() {
 		defaultValues[configurationKey] = configurationValue

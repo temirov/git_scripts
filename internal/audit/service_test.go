@@ -87,8 +87,7 @@ func TestServiceRunBehaviors(testInstance *testing.T) {
 		{
 			name: "audit_report",
 			options: audit.CommandOptions{
-				AuditReport: true,
-				Roots:       []string{"/tmp/example"},
+				Roots: []string{"/tmp/example"},
 			},
 			discoverer: stubDiscoverer{repositories: []string{"/tmp/example"}},
 			executorOutputs: map[string]execshell.ExecutionResult{
@@ -111,7 +110,6 @@ func TestServiceRunBehaviors(testInstance *testing.T) {
 		{
 			name: "audit_debug",
 			options: audit.CommandOptions{
-				AuditReport: true,
 				DebugOutput: true,
 				Roots:       []string{"/tmp/example"},
 			},

@@ -1,14 +1,13 @@
 package audit
 
 const (
-	commandNameConstant             = "audit"
+	commandUseConstant              = "audit-run"
 	commandShortDescription         = "Audit and reconcile local GitHub repositories"
 	commandLongDescription          = "Scans git repositories for GitHub remotes and produces audit reports or applies reconciliation actions."
-	flagAuditName                   = "audit"
-	flagAuditDescription            = "Generate a CSV audit report"
-	flagDebugName                   = "debug"
-	flagDebugDescription            = "Print debug information while scanning"
-	errorMissingOperation           = "specify --audit"
+	flagRootNameConstant            = "root"
+	flagRootDescriptionConstant     = "Repository roots to scan (repeatable)"
+	flagDebugNameConstant           = "debug"
+	flagDebugDescriptionConstant    = "Print debug information while scanning"
 	defaultRootPathConstant         = "."
 	debugDiscoveredTemplate         = "DEBUG: discovered %d candidate repos under: %s\n"
 	debugCheckingTemplate           = "DEBUG: checking %s\n"

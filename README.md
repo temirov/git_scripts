@@ -70,10 +70,10 @@ Configuration keys mirror the flags (`common.log_level`, `common.log_format`) an
 ### Audit reports
 
 ```shell
-go run . audit --audit ~/Development
+go run . audit-run --root ~/Development
 ```
 
-`audit --audit` scans each repository beneath the provided roots (defaults to the current directory) and writes a CSV summary to
+`audit-run` scans each repository beneath the provided roots (defaults to the current directory or configured roots) and writes a CSV summary to
 stdout. Add `--debug` to log discovery progress and inspection diagnostics.
 
 ### Repository maintenance commands

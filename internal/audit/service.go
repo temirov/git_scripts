@@ -48,10 +48,6 @@ func (service *Service) Run(executionContext context.Context, options CommandOpt
 		return inspectionError
 	}
 
-	if !options.AuditReport {
-		return nil
-	}
-
 	return service.writeAuditReport(inspections)
 }
 
