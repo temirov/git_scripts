@@ -22,41 +22,42 @@ import (
 )
 
 const (
-	applicationNameConstant                 = "git-scripts"
-	applicationShortDescriptionConstant     = "Command-line interface for git_scripts utilities"
-	applicationLongDescriptionConstant      = "git_scripts ships reusable helpers that integrate Git, GitHub CLI, and related tooling."
-	configFileFlagNameConstant              = "config"
-	configFileFlagUsageConstant             = "Optional path to a configuration file (YAML or JSON)."
-	logLevelFlagNameConstant                = "log-level"
-	logLevelFlagUsageConstant               = "Override the configured log level."
-	logFormatFlagNameConstant               = "log-format"
-	logFormatFlagUsageConstant              = "Override the configured log format (structured or console)."
-	commonConfigurationKeyConstant          = "common"
-	commonLogLevelConfigKeyConstant         = commonConfigurationKeyConstant + ".log_level"
-	commonLogFormatConfigKeyConstant        = commonConfigurationKeyConstant + ".log_format"
-	environmentPrefixConstant               = "GITSCRIPTS"
-	configurationNameConstant               = "config"
-	configurationTypeConstant               = "yaml"
-	configurationInitializedMessageConstant = "configuration initialized"
-	configurationLogLevelFieldConstant      = "log_level"
-	configurationLogFormatFieldConstant     = "log_format"
-	configurationFileFieldConstant          = "config_file"
-	configurationLoadErrorTemplateConstant  = "unable to load configuration: %w"
-	loggerCreationErrorTemplateConstant     = "unable to create logger: %w"
-	loggerSyncErrorTemplateConstant         = "unable to flush logger: %w"
-	rootCommandInfoMessageConstant          = "git_scripts CLI executed"
-	rootCommandDebugMessageConstant         = "git_scripts CLI diagnostics"
-	logFieldCommandNameConstant             = "command_name"
-	logFieldArgumentCountConstant           = "argument_count"
-	logFieldArgumentsConstant               = "arguments"
-	loggerNotInitializedMessageConstant     = "logger not initialized"
-	defaultConfigurationSearchPathConstant  = "."
-	toolsConfigurationKeyConstant           = "tools"
-	branchCleanupConfigurationKeyConstant   = toolsConfigurationKeyConstant + ".branch_cleanup"
-	reposConfigurationKeyConstant           = toolsConfigurationKeyConstant + ".repos"
-	workflowConfigurationKeyConstant        = toolsConfigurationKeyConstant + ".workflow"
-	migrateConfigurationKeyConstant         = toolsConfigurationKeyConstant + ".migrate"
-	auditConfigurationKeyConstant           = toolsConfigurationKeyConstant + ".audit"
+	applicationNameConstant                            = "git-scripts"
+	applicationShortDescriptionConstant                = "Command-line interface for git_scripts utilities"
+	applicationLongDescriptionConstant                 = "git_scripts ships reusable helpers that integrate Git, GitHub CLI, and related tooling."
+	configFileFlagNameConstant                         = "config"
+	configFileFlagUsageConstant                        = "Optional path to a configuration file (YAML or JSON)."
+	logLevelFlagNameConstant                           = "log-level"
+	logLevelFlagUsageConstant                          = "Override the configured log level."
+	logFormatFlagNameConstant                          = "log-format"
+	logFormatFlagUsageConstant                         = "Override the configured log format (structured or console)."
+	commonConfigurationKeyConstant                     = "common"
+	commonLogLevelConfigKeyConstant                    = commonConfigurationKeyConstant + ".log_level"
+	commonLogFormatConfigKeyConstant                   = commonConfigurationKeyConstant + ".log_format"
+	environmentPrefixConstant                          = "GITSCRIPTS"
+	configurationNameConstant                          = "config"
+	configurationTypeConstant                          = "yaml"
+	configurationInitializedMessageConstant            = "configuration initialized"
+	configurationLogLevelFieldConstant                 = "log_level"
+	configurationLogFormatFieldConstant                = "log_format"
+	configurationFileFieldConstant                     = "config_file"
+	configurationLoadErrorTemplateConstant             = "unable to load configuration: %w"
+	loggerCreationErrorTemplateConstant                = "unable to create logger: %w"
+	loggerSyncErrorTemplateConstant                    = "unable to flush logger: %w"
+	rootCommandInfoMessageConstant                     = "git_scripts CLI executed"
+	rootCommandDebugMessageConstant                    = "git_scripts CLI diagnostics"
+	logFieldCommandNameConstant                        = "command_name"
+	logFieldArgumentCountConstant                      = "argument_count"
+	logFieldArgumentsConstant                          = "arguments"
+	loggerNotInitializedMessageConstant                = "logger not initialized"
+	defaultConfigurationSearchPathConstant             = "."
+	configurationSearchPathEnvironmentVariableConstant = "GITSCRIPTS_CONFIG_SEARCH_PATH"
+	toolsConfigurationKeyConstant                      = "tools"
+	branchCleanupConfigurationKeyConstant              = toolsConfigurationKeyConstant + ".branch_cleanup"
+	reposConfigurationKeyConstant                      = toolsConfigurationKeyConstant + ".repos"
+	workflowConfigurationKeyConstant                   = toolsConfigurationKeyConstant + ".workflow"
+	migrateConfigurationKeyConstant                    = toolsConfigurationKeyConstant + ".migrate"
+	auditConfigurationKeyConstant                      = toolsConfigurationKeyConstant + ".audit"
 )
 
 // ApplicationConfiguration describes the persisted configuration for the CLI entrypoint.
@@ -97,19 +98,18 @@ type Application struct {
 
 // NewApplication assembles a fully wired CLI application instance.
 func NewApplication() *Application {
-	configurationLoader := utils.NewConfigurationLoader(
-		configurationNameConstant,
-		configurationTypeConstant,
-		environmentPrefixConstant,
-		[]string{defaultConfigurationSearchPathConstant},
-	)
-
 	application := &Application{
-		configurationLoader:    configurationLoader,
 		loggerFactory:          utils.NewLoggerFactory(),
 		logger:                 zap.NewNop(),
 		commandContextAccessor: utils.NewCommandContextAccessor(),
 	}
+
+	application.configurationLoader = utils.NewConfigurationLoader(
+		configurationNameConstant,
+		configurationTypeConstant,
+		environmentPrefixConstant,
+		application.resolveConfigurationSearchPaths(),
+	)
 
 	cobraCommand := &cobra.Command{
 		Use:           applicationNameConstant,
@@ -261,6 +261,32 @@ func (application *Application) Execute() error {
 // Execute builds a fresh application instance and executes the root command hierarchy.
 func Execute() error {
 	return NewApplication().Execute()
+}
+
+func (application *Application) resolveConfigurationSearchPaths() []string {
+	overrideValue := strings.TrimSpace(os.Getenv(configurationSearchPathEnvironmentVariableConstant))
+	if len(overrideValue) == 0 {
+		return []string{defaultConfigurationSearchPathConstant}
+	}
+
+	overridePaths := strings.FieldsFunc(overrideValue, func(candidate rune) bool {
+		return candidate == os.PathListSeparator
+	})
+
+	cleanedPaths := make([]string, 0, len(overridePaths))
+	for _, pathCandidate := range overridePaths {
+		trimmedCandidate := strings.TrimSpace(pathCandidate)
+		if len(trimmedCandidate) == 0 {
+			continue
+		}
+		cleanedPaths = append(cleanedPaths, trimmedCandidate)
+	}
+
+	if len(cleanedPaths) == 0 {
+		return []string{defaultConfigurationSearchPathConstant}
+	}
+
+	return cleanedPaths
 }
 
 func (application *Application) initializeConfiguration(command *cobra.Command) error {

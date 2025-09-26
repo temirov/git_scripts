@@ -97,7 +97,8 @@ func TestAuditRunCommandIntegration(testInstance *testing.T) {
 
 	for testCaseIndex, testCase := range testCases {
 		testInstance.Run(fmt.Sprintf(auditIntegrationSubtestNameTemplate, testCaseIndex, testCase.name), func(subtest *testing.T) {
-			subtestOutput := runIntegrationCommand(subtest, repositoryRoot, extendedPath, auditIntegrationTimeout, testCase.arguments)
+			commandOptions := integrationCommandOptions{PathVariable: extendedPath}
+			subtestOutput := runIntegrationCommand(subtest, repositoryRoot, commandOptions, auditIntegrationTimeout, testCase.arguments)
 			require.Equal(subtest, testCase.expectedOutput, filterStructuredOutput(subtestOutput))
 		})
 	}

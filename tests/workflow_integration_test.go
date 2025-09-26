@@ -46,6 +46,7 @@ const (
 	workflowIntegrationStubExecutable          = "gh"
 	workflowIntegrationStateFileName           = "default_branch.txt"
 	workflowIntegrationConfigFileName          = "config.yaml"
+	workflowIntegrationConfigSearchPathEnvVar  = "GITSCRIPTS_CONFIG_SEARCH_PATH"
 	workflowIntegrationAuditFileName           = "audit.csv"
 	workflowIntegrationBranchCommitMessage     = "CI: switch workflow branch filters to master"
 	workflowIntegrationRepoViewJSONTemplate    = "{\"nameWithOwner\":\"canonical/example\",\"defaultBranchRef\":{\"name\":\"%s\"},\"description\":\"\"}\n"
@@ -184,7 +185,8 @@ func TestWorkflowRunIntegration(testInstance *testing.T) {
 				workflowIntegrationYesFlag,
 			)
 
-			rawOutput := runIntegrationCommand(subtest, repositoryRoot, extendedPath, workflowIntegrationTimeout, commandArguments)
+			commandOptions := integrationCommandOptions{PathVariable: extendedPath}
+			rawOutput := runIntegrationCommand(subtest, repositoryRoot, commandOptions, workflowIntegrationTimeout, commandArguments)
 			filteredOutput := filterStructuredOutput(rawOutput)
 
 			expectedConversion := fmt.Sprintf(workflowIntegrationConvertExpectedTemplate, repositoryPath)
@@ -231,22 +233,13 @@ func TestWorkflowRunDisplaysHelpWhenConfigurationMissing(testInstance *testing.T
 		testCase := testCases[testCaseIndex]
 		subtestName := fmt.Sprintf(workflowIntegrationSubtestNameTemplate, testCaseIndex, testCase.name)
 		testInstance.Run(subtestName, func(subtest *testing.T) {
-			repositoryConfigPath := filepath.Join(repositoryRoot, workflowIntegrationConfigFileName)
-			repositoryConfigInfo, repositoryConfigStatErr := os.Stat(repositoryConfigPath)
-			if repositoryConfigStatErr == nil {
-				temporaryConfigDirectory := subtest.TempDir()
-				relocatedConfigPath := filepath.Join(temporaryConfigDirectory, workflowIntegrationConfigFileName)
-				require.NoError(subtest, os.Rename(repositoryConfigPath, relocatedConfigPath))
-
-				subtest.Cleanup(func() {
-					require.NoError(subtest, os.Rename(relocatedConfigPath, repositoryConfigPath))
-					require.NoError(subtest, os.Chmod(repositoryConfigPath, repositoryConfigInfo.Mode()))
-				})
-			} else {
-				require.ErrorIs(subtest, repositoryConfigStatErr, os.ErrNotExist)
+			emptyDirectory := subtest.TempDir()
+			commandOptions := integrationCommandOptions{
+				EnvironmentOverrides: map[string]string{
+					workflowIntegrationConfigSearchPathEnvVar: emptyDirectory,
+				},
 			}
-
-			outputText, _ := runFailingIntegrationCommand(subtest, repositoryRoot, "", workflowIntegrationTimeout, testCase.arguments)
+			outputText, _ := runFailingIntegrationCommand(subtest, repositoryRoot, commandOptions, workflowIntegrationTimeout, testCase.arguments)
 			filteredOutput := filterStructuredOutput(outputText)
 			for _, expectedSnippet := range testCase.expectedSnippets {
 				require.Contains(subtest, filteredOutput, expectedSnippet)
