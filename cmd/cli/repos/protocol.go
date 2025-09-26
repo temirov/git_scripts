@@ -40,6 +40,7 @@ type ProtocolCommandBuilder struct {
 	GitHubResolver               shared.GitHubMetadataResolver
 	PrompterFactory              PrompterFactory
 	HumanReadableLoggingProvider func() bool
+	ConfigurationProvider        func() ProtocolConfiguration
 }
 
 // Build constructs the protocol-convert command.
@@ -60,10 +61,27 @@ func (builder *ProtocolCommandBuilder) Build() (*cobra.Command, error) {
 }
 
 func (builder *ProtocolCommandBuilder) run(command *cobra.Command, arguments []string) error {
-	dryRun, _ := command.Flags().GetBool(protocolDryRunFlagName)
-	assumeYes, _ := command.Flags().GetBool(protocolAssumeYesFlagName)
-	fromValue, _ := command.Flags().GetString(protocolFromFlagName)
-	toValue, _ := command.Flags().GetString(protocolToFlagName)
+	configuration := builder.resolveConfiguration()
+
+	dryRun := configuration.DryRun
+	if command != nil && command.Flags().Changed(protocolDryRunFlagName) {
+		dryRun, _ = command.Flags().GetBool(protocolDryRunFlagName)
+	}
+
+	assumeYes := configuration.AssumeYes
+	if command != nil && command.Flags().Changed(protocolAssumeYesFlagName) {
+		assumeYes, _ = command.Flags().GetBool(protocolAssumeYesFlagName)
+	}
+
+	fromValue := configuration.FromProtocol
+	if command != nil && command.Flags().Changed(protocolFromFlagName) {
+		fromValue, _ = command.Flags().GetString(protocolFromFlagName)
+	}
+
+	toValue := configuration.ToProtocol
+	if command != nil && command.Flags().Changed(protocolToFlagName) {
+		toValue, _ = command.Flags().GetString(protocolToFlagName)
+	}
 
 	if len(strings.TrimSpace(fromValue)) == 0 || len(strings.TrimSpace(toValue)) == 0 {
 		if helpError := displayCommandHelp(command); helpError != nil {
@@ -86,7 +104,7 @@ func (builder *ProtocolCommandBuilder) run(command *cobra.Command, arguments []s
 		return errors.New(protocolErrorSamePair)
 	}
 
-	roots := determineRepositoryRoots(arguments)
+	roots := determineRepositoryRoots(arguments, configuration.RepositoryRoots)
 
 	logger := resolveLogger(builder.LoggerProvider)
 	humanReadableLogging := false
@@ -144,6 +162,16 @@ func (builder *ProtocolCommandBuilder) run(command *cobra.Command, arguments []s
 	}
 
 	return nil
+}
+
+func (builder *ProtocolCommandBuilder) resolveConfiguration() ProtocolConfiguration {
+	if builder.ConfigurationProvider == nil {
+		defaults := DefaultToolsConfiguration()
+		return defaults.Protocol
+	}
+
+	provided := builder.ConfigurationProvider()
+	return provided.sanitize()
 }
 
 func parseProtocolValue(value string) (shared.RemoteProtocol, error) {
