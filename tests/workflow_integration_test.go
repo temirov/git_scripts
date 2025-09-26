@@ -45,7 +45,7 @@ const (
 	workflowIntegrationHTTPSRemote             = "https://github.com/origin/example.git"
 	workflowIntegrationStubExecutable          = "gh"
 	workflowIntegrationStateFileName           = "default_branch.txt"
-	workflowIntegrationConfigFileName          = "workflow.yaml"
+	workflowIntegrationConfigFileName          = "config.yaml"
 	workflowIntegrationAuditFileName           = "audit.csv"
 	workflowIntegrationBranchCommitMessage     = "CI: switch workflow branch filters to master"
 	workflowIntegrationRepoViewJSONTemplate    = "{\"nameWithOwner\":\"canonical/example\",\"defaultBranchRef\":{\"name\":\"%s\"},\"description\":\"\"}\n"
