@@ -28,8 +28,7 @@ const (
 	packagesIntegrationRunSubcommandConstant            = "run"
 	packagesIntegrationModulePathConstant               = "."
 	packagesIntegrationConfigFlagTemplateConstant       = "--config=%s"
-	packagesIntegrationPackagesCommandNameConstant      = "packages"
-	packagesIntegrationPurgeCommandNameConstant         = "purge"
+	packagesIntegrationPackagesPurgeCommandNameConstant = "packages-purge"
 	packagesIntegrationCommandTimeout                   = 10 * time.Second
 	packagesIntegrationPageSizeConstant                 = 3
 	packagesIntegrationTaggedVersionIDConstant          = 101
@@ -221,8 +220,7 @@ func TestPackagesCommandIntegration(testInstance *testing.T) {
 				packagesIntegrationRunSubcommandConstant,
 				packagesIntegrationModulePathConstant,
 				fmt.Sprintf(packagesIntegrationConfigFlagTemplateConstant, configPath),
-				packagesIntegrationPackagesCommandNameConstant,
-				packagesIntegrationPurgeCommandNameConstant,
+				packagesIntegrationPackagesPurgeCommandNameConstant,
 			}
 
 			pathVariable := os.Getenv("PATH")
