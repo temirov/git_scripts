@@ -10,14 +10,17 @@ import (
 )
 
 const (
-	configurationStepsFieldNameConstant          = "steps"
-	configurationOperationFieldNameConstant      = "operation"
-	configurationOptionsFieldNameConstant        = "with"
-	configurationLoadErrorTemplateConstant       = "failed to load workflow configuration: %w"
-	configurationParseErrorTemplateConstant      = "failed to parse workflow configuration: %w"
-	configurationPathRequiredMessageConstant     = "workflow configuration path must be provided"
-	configurationEmptyStepsMessageConstant       = "workflow configuration must define at least one step"
-	configurationOperationMissingMessageConstant = "workflow step missing operation name"
+	configurationStepsFieldNameConstant               = "steps"
+	configurationOperationFieldNameConstant           = "operation"
+	configurationOptionsFieldNameConstant             = "with"
+	configurationLoadErrorTemplateConstant            = "failed to load workflow configuration: %w"
+	configurationParseErrorTemplateConstant           = "failed to parse workflow configuration: %w"
+	configurationPathRequiredMessageConstant          = "workflow configuration path must be provided"
+	configurationEmptyStepsMessageConstant            = "workflow configuration must define at least one step"
+	configurationOperationMissingMessageConstant      = "workflow step missing operation name"
+	configurationToolNameRequiredMessageConstant      = "workflow tool names must be non-empty"
+	configurationDuplicateToolNameMessageConstant     = "workflow configuration defines duplicate tool names"
+	configurationToolOperationMissingTemplateConstant = "workflow tool %s missing operation name"
 )
 
 // OperationType identifies supported workflow operations.
@@ -32,13 +35,20 @@ const (
 	OperationTypeAuditReport        OperationType = OperationType("audit-report")
 )
 
-// Configuration describes the ordered workflow steps loaded from YAML or JSON.
+// Configuration describes the ordered workflow steps and reusable tool definitions loaded from YAML or JSON.
 type Configuration struct {
-	Steps []StepConfiguration `yaml:"steps" json:"steps"`
+	Tools map[string]ToolConfiguration `yaml:"tools" json:"tools"`
+	Steps []StepConfiguration          `yaml:"steps" json:"steps"`
 }
 
 // StepConfiguration associates an operation type with declarative options.
 type StepConfiguration struct {
+	Operation OperationType  `yaml:"operation" json:"operation"`
+	Options   map[string]any `yaml:"with" json:"with"`
+}
+
+// ToolConfiguration describes reusable workflow options for a specific operation type.
+type ToolConfiguration struct {
 	Operation OperationType  `yaml:"operation" json:"operation"`
 	Options   map[string]any `yaml:"with" json:"with"`
 }
@@ -60,6 +70,12 @@ func LoadConfiguration(filePath string) (Configuration, error) {
 		return Configuration{}, fmt.Errorf(configurationParseErrorTemplateConstant, unmarshalError)
 	}
 
+	normalizedTools, toolsError := normalizeTools(configuration.Tools)
+	if toolsError != nil {
+		return Configuration{}, toolsError
+	}
+	configuration.Tools = normalizedTools
+
 	if len(configuration.Steps) == 0 {
 		return Configuration{}, errors.New(configurationEmptyStepsMessageConstant)
 	}
@@ -71,4 +87,27 @@ func LoadConfiguration(filePath string) (Configuration, error) {
 	}
 
 	return configuration, nil
+}
+
+func normalizeTools(raw map[string]ToolConfiguration) (map[string]ToolConfiguration, error) {
+	if raw == nil {
+		return nil, nil
+	}
+
+	normalized := make(map[string]ToolConfiguration, len(raw))
+	for originalName, tool := range raw {
+		trimmedName := strings.TrimSpace(originalName)
+		if len(trimmedName) == 0 {
+			return nil, errors.New(configurationToolNameRequiredMessageConstant)
+		}
+		if _, exists := normalized[trimmedName]; exists {
+			return nil, errors.New(configurationDuplicateToolNameMessageConstant)
+		}
+		if len(strings.TrimSpace(string(tool.Operation))) == 0 {
+			return nil, fmt.Errorf(configurationToolOperationMissingTemplateConstant, trimmedName)
+		}
+		normalized[trimmedName] = tool
+	}
+
+	return normalized, nil
 }
