@@ -231,6 +231,21 @@ func TestWorkflowRunDisplaysHelpWhenConfigurationMissing(testInstance *testing.T
 		testCase := testCases[testCaseIndex]
 		subtestName := fmt.Sprintf(workflowIntegrationSubtestNameTemplate, testCaseIndex, testCase.name)
 		testInstance.Run(subtestName, func(subtest *testing.T) {
+			repositoryConfigPath := filepath.Join(repositoryRoot, workflowIntegrationConfigFileName)
+			repositoryConfigInfo, repositoryConfigStatErr := os.Stat(repositoryConfigPath)
+			if repositoryConfigStatErr == nil {
+				temporaryConfigDirectory := subtest.TempDir()
+				relocatedConfigPath := filepath.Join(temporaryConfigDirectory, workflowIntegrationConfigFileName)
+				require.NoError(subtest, os.Rename(repositoryConfigPath, relocatedConfigPath))
+
+				subtest.Cleanup(func() {
+					require.NoError(subtest, os.Rename(relocatedConfigPath, repositoryConfigPath))
+					require.NoError(subtest, os.Chmod(repositoryConfigPath, repositoryConfigInfo.Mode()))
+				})
+			} else {
+				require.ErrorIs(subtest, repositoryConfigStatErr, os.ErrNotExist)
+			}
+
 			outputText, _ := runFailingIntegrationCommand(subtest, repositoryRoot, "", workflowIntegrationTimeout, testCase.arguments)
 			filteredOutput := filterStructuredOutput(outputText)
 			for _, expectedSnippet := range testCase.expectedSnippets {
