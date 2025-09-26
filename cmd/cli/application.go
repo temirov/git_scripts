@@ -55,6 +55,7 @@ const (
 	branchCleanupConfigurationKeyConstant   = toolsConfigurationKeyConstant + ".branch_cleanup"
 	reposConfigurationKeyConstant           = toolsConfigurationKeyConstant + ".repos"
 	workflowConfigurationKeyConstant        = toolsConfigurationKeyConstant + ".workflow"
+	migrateConfigurationKeyConstant         = toolsConfigurationKeyConstant + ".migrate"
 	auditConfigurationKeyConstant           = toolsConfigurationKeyConstant + ".audit"
 )
 
@@ -77,6 +78,7 @@ type ApplicationToolsConfiguration struct {
 	BranchCleanup branches.CommandConfiguration    `mapstructure:"branch_cleanup"`
 	Repos         repos.ToolsConfiguration         `mapstructure:"repos"`
 	Workflow      workflowcmd.CommandConfiguration `mapstructure:"workflow"`
+	Migrate       migrate.CommandConfiguration     `mapstructure:"migrate"`
 }
 
 // Application wires the Cobra root command, configuration loader, and structured logger.
@@ -161,6 +163,9 @@ func NewApplication() *Application {
 			return application.logger
 		},
 		HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
+		ConfigurationProvider: func() migrate.CommandConfiguration {
+			return application.configuration.Tools.Migrate
+		},
 	}
 	if workingDirectory, workingDirectoryError := os.Getwd(); workingDirectoryError == nil {
 		branchMigrationBuilder.WorkingDirectory = workingDirectory
@@ -273,6 +278,9 @@ func (application *Application) initializeConfiguration(command *cobra.Command) 
 		defaultValues[configurationKey] = configurationValue
 	}
 	for configurationKey, configurationValue := range workflowcmd.DefaultConfigurationValues(workflowConfigurationKeyConstant) {
+		defaultValues[configurationKey] = configurationValue
+	}
+	for configurationKey, configurationValue := range migrate.DefaultConfigurationValues(migrateConfigurationKeyConstant) {
 		defaultValues[configurationKey] = configurationValue
 	}
 
