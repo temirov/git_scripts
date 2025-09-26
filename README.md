@@ -6,18 +6,18 @@ A Go-based command-line interface that automates routine Git and GitHub maintena
 
 You can run the CLI in two complementary ways depending on how much orchestration you need:
 
-- **Direct commands with persisted defaults** – invoke commands such as `repo-folders-rename`, `protocol-convert`, `packages-purge`, and `audit-run` from the shell,
+- **Direct commands with persisted defaults** – invoke commands such as `repo-folders-rename`, `repo-protocol-convert`, `repo-packages-purge`, and `audit` from the shell,
   optionally loading shared flags (for example, log level or default owners) via [`--config` files](#configuration-and-logging).
   This mode mirrors the quick-start rows in the [command catalog](#command-catalog) and is ideal when you want immediate,
   one-off execution.
-- **Workflow runner with YAML/JSON steps** – describe ordered operations in declarative workflow files and let `workflow-run`
+- **Workflow runner with YAML/JSON steps** – describe ordered operations in declarative workflow files and let `workflow`
   drive them. The [`Workflow bundling`](#workflow-bundling) section shows the domain-specific language (DSL) and how the
   runner reuses discovery, prompting, and logging across steps.
 
 | Choose this mode | When it shines | Example |
 | --- | --- | --- |
-| Direct commands | You need a focused, ad-hoc action with minimal setup, such as renaming directories or auditing repositories | [`repo-folders-rename`](#command-catalog) and [`audit-run`](#command-catalog) quick-starts |
-| Workflow runner | You want to bundle several operations together, share discovery across them, or hand off a repeatable plan to teammates | [`workflow-run` with a YAML plan](#workflow-bundling) |
+| Direct commands | You need a focused, ad-hoc action with minimal setup, such as renaming directories or auditing repositories | [`repo-folders-rename`](#command-catalog) and [`audit`](#command-catalog) quick-starts |
+| Workflow runner | You want to bundle several operations together, share discovery across them, or hand off a repeatable plan to teammates | [`workflow` with a YAML plan](#workflow-bundling) |
 
 ## Feature highlights
 
@@ -71,14 +71,14 @@ The commands below share repository discovery, prompting, and logging helpers. U
 
 | Command | Summary | Key flags / example |
 | --- | --- | --- |
-| `audit-run` | Audit and reconcile local GitHub repositories | Flags: `--root`, `--debug`. Example: `go run . audit-run --root ~/Development` |
+| `audit` | Audit and reconcile local GitHub repositories | Flags: `--root`, `--debug`. Example: `go run . audit --root ~/Development` |
 | `repo-folders-rename` | Rename repository directories to match canonical GitHub names | Flags: `--dry-run`, `--yes`, `--require-clean`. Example: `go run . repo-folders-rename --yes --require-clean ~/Development` |
 | `repo-remote-update` | Update origin URLs to match canonical GitHub repositories | Flags: `--dry-run`, `--yes`. Example: `go run . repo-remote-update --dry-run ~/Development` |
-| `protocol-convert` | Convert repository origin remotes between protocols | Flags: `--from`, `--to`, `--dry-run`, `--yes`. Example: `go run . protocol-convert --from https --to ssh --yes ~/Development` |
+| `repo-protocol-convert` | Convert repository origin remotes between protocols | Flags: `--from`, `--to`, `--dry-run`, `--yes`. Example: `go run . repo-protocol-convert --from https --to ssh --yes ~/Development` |
 | `repo-prs-purge` | Remove remote and local branches for closed pull requests | Flags: `--remote`, `--limit`, `--dry-run`. Example: `go run . repo-prs-purge --remote origin --limit 100 ~/Development` |
 | `branch-migrate` | Migrate repository defaults from main to master | Flag: `--debug` for verbose diagnostics. Example: `go run . branch-migrate --debug ~/Development/project-repo` |
-| `packages-purge` | Delete untagged GHCR versions | Flags: `--owner`, `--package`, `--owner-type`, `--token-source`, `--dry-run`. Example: `go run . packages-purge --owner my-org --package my-image --owner-type org --token-source env:GITHUB_PACKAGES_TOKEN --dry-run` |
-| `workflow-run` | Run a workflow configuration file | Flags: `--roots`, `--dry-run`, `--yes`. Example: `go run . workflow-run config.yaml --roots ~/Development --dry-run` |
+| `repo-packages-purge` | Delete untagged GHCR versions | Flags: `--owner`, `--package`, `--owner-type`, `--token-source`, `--dry-run`. Example: `go run . repo-packages-purge --owner my-org --package my-image --owner-type org --token-source env:GITHUB_PACKAGES_TOKEN --dry-run` |
+| `workflow` | Run a workflow configuration file | Flags: `--roots`, `--dry-run`, `--yes`. Example: `go run . workflow config.yaml --roots ~/Development --dry-run` |
 
 Persist defaults and workflow plans in a single configuration file to avoid long flag lists and keep the runner in sync:
 
@@ -118,22 +118,22 @@ steps:
 ```
 
 ```shell
-go run . packages-purge --dry-run=false
+go run . repo-packages-purge --dry-run=false
 ```
 
 Specify `--config path/to/override.yaml` when you need to load an alternate configuration.
 
 ### Workflow bundling
 
-Define ordered steps in YAML or JSON and execute them with `workflow-run`:
+Define ordered steps in YAML or JSON and execute them with `workflow`:
 
 ```shell
-go run . workflow-run --roots ~/Development --dry-run
+go run . workflow --roots ~/Development --dry-run
 # Execute with confirmations suppressed
-go run . workflow-run --roots ~/Development --yes
+go run . workflow --roots ~/Development --yes
 ```
 
-`workflow-run` reads the `steps` array from `config.yaml`, reusing the same repository discovery, prompting, and logging
+`workflow` reads the `steps` array from `config.yaml`, reusing the same repository discovery, prompting, and logging
 infrastructure as the standalone commands. Pass additional roots on the command line to override the configuration file and
 combine `--dry-run`/`--yes` for non-interactive execution.
 
@@ -157,7 +157,7 @@ make release        # Cross-compile binaries into ./dist
   - Install the CLI via your platform's package manager or the [official releases](https://cli.github.com/).
   - Run `gh auth login` (or verify with `gh auth status`) so API calls succeed during branch cleanup and migration commands.
 
-The `packages-purge` command additionally requires network access and a GitHub Personal Access Token with `read:packages`,
+The `repo-packages-purge` command additionally requires network access and a GitHub Personal Access Token with `read:packages`,
 `write:packages`, and `delete:packages` scopes. Export the token before invoking the command:
 
 ```shell

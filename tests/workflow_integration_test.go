@@ -21,7 +21,7 @@ const (
 	workflowIntegrationLogLevelFlag            = "--log-level"
 	workflowIntegrationConfigFlag              = "--config"
 	workflowIntegrationErrorLevel              = "error"
-	workflowIntegrationCommand                 = "workflow-run"
+	workflowIntegrationCommand                 = "workflow"
 	workflowIntegrationRootsFlag               = "--roots"
 	workflowIntegrationYesFlag                 = "--yes"
 	workflowIntegrationGitExecutable           = "git"
@@ -58,8 +58,8 @@ const (
 	workflowIntegrationConfigFlagCaseName      = "config_flag_without_positional"
 	workflowIntegrationRepositoryConfigCase    = "repository_root_configuration"
 	workflowIntegrationHelpCaseName            = "workflow_help_missing_configuration"
-	workflowIntegrationUsageSnippet            = "workflow-run [workflow]"
-	workflowIntegrationMissingConfigMessage    = "workflow-run configuration path required; provide a positional argument or --config flag"
+	workflowIntegrationUsageSnippet            = "workflow [workflow]"
+	workflowIntegrationMissingConfigMessage    = "workflow configuration path required; provide a positional argument or --config flag"
 )
 
 func TestWorkflowRunIntegration(testInstance *testing.T) {

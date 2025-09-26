@@ -12,11 +12,11 @@ import (
 )
 
 const (
-	packagesPurgeCommandUseConstant              = "packages-purge"
+	packagesPurgeCommandUseConstant              = "repo-packages-purge"
 	packagesPurgeCommandShortDescriptionConstant = "Delete untagged GHCR versions"
-	packagesPurgeCommandLongDescriptionConstant  = "packages-purge removes untagged container versions from GitHub Container Registry."
-	unexpectedArgumentsErrorMessageConstant      = "packages-purge does not accept positional arguments"
-	commandExecutionErrorTemplateConstant        = "packages-purge failed: %w"
+	packagesPurgeCommandLongDescriptionConstant  = "repo-packages-purge removes untagged container versions from GitHub Container Registry."
+	unexpectedArgumentsErrorMessageConstant      = "repo-packages-purge does not accept positional arguments"
+	commandExecutionErrorTemplateConstant        = "repo-packages-purge failed: %w"
 	ownerFlagNameConstant                        = "owner"
 	ownerFlagDescriptionConstant                 = "GitHub user or organization that owns the package"
 	packageFlagNameConstant                      = "package"
@@ -42,7 +42,7 @@ type PurgeServiceResolver interface {
 	Resolve(logger *zap.Logger) (PurgeExecutor, error)
 }
 
-// CommandBuilder assembles the packages-purge command.
+// CommandBuilder assembles the repo-packages-purge command.
 type CommandBuilder struct {
 	LoggerProvider        LoggerProvider
 	ConfigurationProvider ConfigurationProvider
@@ -55,7 +55,7 @@ type CommandBuilder struct {
 	TokenResolver         TokenResolver
 }
 
-// Build constructs the packages-purge command with purge functionality.
+// Build constructs the repo-packages-purge command with purge functionality.
 func (builder *CommandBuilder) Build() (*cobra.Command, error) {
 	purgeCommand := &cobra.Command{
 		Use:   packagesPurgeCommandUseConstant,

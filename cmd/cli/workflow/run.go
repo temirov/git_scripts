@@ -16,9 +16,9 @@ import (
 )
 
 const (
-	commandUseConstant                        = "workflow-run [workflow]"
+	commandUseConstant                        = "workflow [workflow]"
 	commandShortDescriptionConstant           = "Run a workflow configuration file"
-	commandLongDescriptionConstant            = "workflow-run executes operations defined in a YAML or JSON configuration file across discovered repositories."
+	commandLongDescriptionConstant            = "workflow executes operations defined in a YAML or JSON configuration file across discovered repositories."
 	rootsFlagNameConstant                     = "roots"
 	rootsFlagDescriptionConstant              = "Root directories containing repositories"
 	dryRunFlagNameConstant                    = "dry-run"
@@ -26,14 +26,14 @@ const (
 	assumeYesFlagNameConstant                 = "yes"
 	assumeYesFlagShorthandConstant            = "y"
 	assumeYesFlagDescriptionConstant          = "Automatically confirm prompts"
-	configurationPathRequiredMessageConstant  = "workflow-run configuration path required; provide a positional argument or --config flag"
+	configurationPathRequiredMessageConstant  = "workflow configuration path required; provide a positional argument or --config flag"
 	loadConfigurationErrorTemplateConstant    = "unable to load workflow configuration: %w"
 	buildOperationsErrorTemplateConstant      = "unable to build workflow operations: %w"
 	gitRepositoryManagerErrorTemplateConstant = "unable to construct repository manager: %w"
 	gitHubClientErrorTemplateConstant         = "unable to construct GitHub client: %w"
 )
 
-// CommandBuilder assembles the workflow-run command.
+// CommandBuilder assembles the workflow command.
 type CommandBuilder struct {
 	LoggerProvider               LoggerProvider
 	Discoverer                   shared.RepositoryDiscoverer
@@ -44,7 +44,7 @@ type CommandBuilder struct {
 	ConfigurationProvider        func() CommandConfiguration
 }
 
-// Build constructs the workflow-run command.
+// Build constructs the workflow command.
 func (builder *CommandBuilder) Build() (*cobra.Command, error) {
 	command := &cobra.Command{
 		Use:   commandUseConstant,
