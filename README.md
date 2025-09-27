@@ -97,31 +97,25 @@ Persist defaults and workflow plans in a single configuration file to avoid long
 common:
   log_level: info
   log_format: structured
-tools:
+commands:
   packages:
     purge:
-      operation: repo-packages-purge
-      with:
-        owner: my-org
-        package: my-image
-        owner_type: org
-        token_source: env:GITHUB_PACKAGES_TOKEN
-        page_size: 50
-  reports:
-    audit:
-      operation: audit-report
-      with:
-        output: ./audit.csv
-  conversion_default: &conversion_default
+      owner: my-org
+      package: my-image
+      owner_type: org
+      token_source: env:GITHUB_PACKAGES_TOKEN
+      page_size: 50
+operations:
+  - &conversion_default
     operation: convert-protocol
     with: &conversion_default_options
       from: https
       to: git
-  rename_clean: &rename_clean
+  - &rename_clean
     operation: rename-directories
     with:
       require_clean: true
-  migration_legacy: &migration_legacy
+  - &migration_legacy
     operation: migrate-branch
     with:
       targets:
@@ -130,7 +124,7 @@ tools:
           target_branch: master
           push_to_remote: true
           delete_source_branch: false
-  audit_weekly: &audit_weekly
+  - &audit_weekly
     operation: audit-report
     with: &audit_weekly_options
       output: ./reports/audit.csv
@@ -166,7 +160,7 @@ infrastructure as the standalone commands. Pass additional roots on the command 
 and
 combine `--dry-run`/`--yes` for non-interactive execution.
 
-Each entry in the `workflow` array is a full step definition. Use YAML anchors under `tools` to capture reusable
+Each entry in the `workflow` array is a full step definition. Use YAML anchors under `operations` to capture reusable
 defaults and merge them into individual steps with the merge key (`<<`). Inline overrides remain possible: apply another
 merge inside the `with` map or specify the final values directly alongside the alias.
 

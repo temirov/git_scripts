@@ -47,7 +47,7 @@ const (
 	reposIntegrationProtocolMissingFlagsMessage = "specify both --from and --to"
 	reposIntegrationConfigFlagName              = "--config"
 	reposIntegrationConfigFileName              = "config.yaml"
-	reposIntegrationConfigTemplate              = "tools:\n  repos:\n    remotes:\n      roots:\n        - %s\n      assume_yes: true\n    protocol:\n      roots:\n        - %s\n      assume_yes: true\n      from: https\n      to: ssh\n"
+	reposIntegrationConfigTemplate              = "commands:\n  repos:\n    remotes:\n      roots:\n        - %s\n      assume_yes: true\n    protocol:\n      roots:\n        - %s\n      assume_yes: true\n      from: https\n      to: ssh\n"
 )
 
 func TestReposCommandIntegration(testInstance *testing.T) {
