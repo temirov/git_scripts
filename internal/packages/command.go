@@ -28,6 +28,7 @@ const (
 	dryRunFlagDescriptionConstant                             = "Preview deletions without modifying GHCR"
 	repositoryRootsFlagNameConstant                           = "roots"
 	repositoryRootsFlagDescriptionConstant                    = "Directories that contain repositories for package purging"
+	missingRepositoryRootsErrorMessageConstant                = "no repository roots provided; specify --root or configure defaults"
 	tokenSourceParseErrorTemplateConstant                     = "invalid token source: %w"
 	workingDirectoryResolutionErrorTemplateConstant           = "unable to determine working directory: %w"
 	workingDirectoryEmptyErrorMessageConstant                 = "working directory not provided"
@@ -286,13 +287,10 @@ func (builder *CommandBuilder) determineRepositoryRoots(command *cobra.Command, 
 		if len(sanitizedFlagRoots) > 0 {
 			return sanitizedFlagRoots, nil
 		}
-
-		workingDirectory, workingDirectoryError := builder.resolveWorkingDirectory()
-		if workingDirectoryError != nil {
-			return nil, workingDirectoryError
+		if command != nil {
+			_ = command.Help()
 		}
-
-		return []string{workingDirectory}, nil
+		return nil, errors.New(missingRepositoryRootsErrorMessageConstant)
 	}
 
 	if len(configuration.Purge.RepositoryRoots) > 0 {
@@ -301,12 +299,11 @@ func (builder *CommandBuilder) determineRepositoryRoots(command *cobra.Command, 
 		return rootsCopy, nil
 	}
 
-	workingDirectory, workingDirectoryError := builder.resolveWorkingDirectory()
-	if workingDirectoryError != nil {
-		return nil, workingDirectoryError
+	if command != nil {
+		_ = command.Help()
 	}
 
-	return []string{workingDirectory}, nil
+	return nil, errors.New(missingRepositoryRootsErrorMessageConstant)
 }
 
 func (builder *CommandBuilder) resolveRepositoryMetadataResolver(logger *zap.Logger) (RepositoryMetadataResolver, error) {

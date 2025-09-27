@@ -3,6 +3,7 @@ package packages_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -14,25 +15,26 @@ import (
 )
 
 const (
-	configurationRootOnePathConstant      = "/config/root"
-	configurationRootTwoPathConstant      = "/config/alternate"
-	flagRootPathConstant                  = "/flag/root"
-	workingDirectoryPathConstant          = "/working/directory"
-	discoveredRepositoryOnePathConstant   = "/repositories/one"
-	discoveredRepositoryTwoPathConstant   = "/repositories/two"
-	discoveredRepositoryThreePathConstant = "/repositories/three"
-	repositoryOneIdentifierConstant       = "source/example"
-	repositoryTwoIdentifierConstant       = "source/example-two"
-	repositoryThreeIdentifierConstant     = "source/example-three"
-	repositoryOneRemoteURLConstant        = "https://github.com/source/example.git"
-	repositoryTwoRemoteURLConstant        = "https://github.com/source/example-two.git"
-	repositoryThreeRemoteURLConstant      = "https://github.com/source/example-three.git"
-	repositoryOnePackageNameConstant      = "example"
-	repositoryTwoPackageNameConstant      = "example-two"
-	repositoryThreePackageNameConstant    = "example-three"
-	repositoryOneOwnerConstant            = "canonical"
-	repositoryTwoOwnerConstant            = "second-owner"
-	repositoryThreeOwnerConstant          = "third-owner"
+	configurationRootOnePathConstant           = "/config/root"
+	configurationRootTwoPathConstant           = "/config/alternate"
+	flagRootPathConstant                       = "/flag/root"
+	workingDirectoryPathConstant               = "/working/directory"
+	discoveredRepositoryOnePathConstant        = "/repositories/one"
+	discoveredRepositoryTwoPathConstant        = "/repositories/two"
+	discoveredRepositoryThreePathConstant      = "/repositories/three"
+	repositoryOneIdentifierConstant            = "source/example"
+	repositoryTwoIdentifierConstant            = "source/example-two"
+	repositoryThreeIdentifierConstant          = "source/example-three"
+	repositoryOneRemoteURLConstant             = "https://github.com/source/example.git"
+	repositoryTwoRemoteURLConstant             = "https://github.com/source/example-two.git"
+	repositoryThreeRemoteURLConstant           = "https://github.com/source/example-three.git"
+	repositoryOnePackageNameConstant           = "example"
+	repositoryTwoPackageNameConstant           = "example-two"
+	repositoryThreePackageNameConstant         = "example-three"
+	repositoryOneOwnerConstant                 = "canonical"
+	repositoryTwoOwnerConstant                 = "second-owner"
+	repositoryThreeOwnerConstant               = "third-owner"
+	missingRepositoryRootsErrorMessageConstant = "no repository roots provided; specify --root or configure defaults"
 )
 
 func TestCommandBuilderExecutesAcrossRepositories(testInstance *testing.T) {
@@ -103,25 +105,6 @@ func TestCommandBuilderExecutesAcrossRepositories(testInstance *testing.T) {
 			expectedOwners:     []string{repositoryThreeOwnerConstant},
 			expectedOwnerTypes: []ghcr.OwnerType{ghcr.OrganizationOwnerType},
 			expectedRoots:      []string{flagRootPathConstant},
-		},
-		{
-			name:          "falls_back_to_working_directory",
-			configuration: packages.Configuration{Purge: packages.PurgeConfiguration{}},
-			arguments:     []string{},
-			discoveredRepositories: []string{
-				discoveredRepositoryOnePathConstant,
-			},
-			remoteURLsByRepository: map[string]string{
-				discoveredRepositoryOnePathConstant: repositoryOneRemoteURLConstant,
-			},
-			metadataByRepository: map[string]githubcli.RepositoryMetadata{
-				repositoryOneIdentifierConstant: {NameWithOwner: repositoryOneOwnerConstant + "/ignored", IsInOrganization: true},
-			},
-			expectedPackages:   []string{repositoryOnePackageNameConstant},
-			expectedDryRun:     false,
-			expectedOwners:     []string{repositoryOneOwnerConstant},
-			expectedOwnerTypes: []ghcr.OwnerType{ghcr.OrganizationOwnerType},
-			expectedRoots:      []string{workingDirectoryPathConstant},
 		},
 	}
 
@@ -255,6 +238,60 @@ func TestCommandBuilderPropagatesContextCancellation(testInstance *testing.T) {
 	executionError := command.Execute()
 	require.Error(testInstance, executionError)
 	require.ErrorIs(testInstance, executionError, context.Canceled)
+}
+
+func TestCommandBuilderDisplaysHelpWhenRootsMissing(testInstance *testing.T) {
+	testInstance.Parallel()
+
+	testCases := []struct {
+		name          string
+		configuration packages.Configuration
+		arguments     []string
+	}{
+		{
+			name:          "configuration_and_flags_missing",
+			configuration: packages.Configuration{Purge: packages.PurgeConfiguration{}},
+			arguments:     []string{},
+		},
+		{
+			name:          "flag_provided_without_roots",
+			configuration: packages.Configuration{Purge: packages.PurgeConfiguration{}},
+			arguments: []string{
+				"--roots",
+				"   ",
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		testInstance.Run(testCase.name, func(subTest *testing.T) {
+			subTest.Parallel()
+
+			discoverer := &stubRepositoryDiscoverer{}
+
+			builder := packages.CommandBuilder{
+				LoggerProvider:        func() *zap.Logger { return zap.NewNop() },
+				ConfigurationProvider: func() packages.Configuration { return testCase.configuration },
+				RepositoryDiscoverer:  discoverer,
+			}
+
+			command, buildError := builder.Build()
+			require.NoError(subTest, buildError)
+
+			command.SetContext(context.Background())
+			command.SetArgs(testCase.arguments)
+
+			outputBuffer := &strings.Builder{}
+			command.SetOut(outputBuffer)
+			command.SetErr(outputBuffer)
+
+			executionError := command.Execute()
+			require.Error(subTest, executionError)
+			require.Equal(subTest, missingRepositoryRootsErrorMessageConstant, executionError.Error())
+			require.Contains(subTest, outputBuffer.String(), command.UseLine())
+			require.Empty(subTest, discoverer.recordedRoots)
+		})
+	}
 }
 
 func TestCommandBuilderValidatesArguments(testInstance *testing.T) {
