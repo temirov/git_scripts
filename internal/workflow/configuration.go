@@ -21,6 +21,7 @@ const (
 	configurationToolNameRequiredMessageConstant      = "workflow tool names must be non-empty"
 	configurationDuplicateToolNameMessageConstant     = "workflow configuration defines duplicate tool names"
 	configurationToolOperationMissingTemplateConstant = "workflow tool %s missing operation name"
+	configurationWorkflowTypeErrorMessageConstant     = "workflow block must be either a mapping or a sequence"
 )
 
 // OperationType identifies supported workflow operations.
@@ -74,27 +75,39 @@ func LoadConfiguration(filePath string) (Configuration, error) {
 	}
 
 	var configuration Configuration
-	if unmarshalError := yaml.Unmarshal(contentBytes, &configuration); unmarshalError != nil {
-		var wrapper struct {
-			Workflow Configuration `yaml:"workflow" json:"workflow"`
+	directUnmarshalError := yaml.Unmarshal(contentBytes, &configuration)
+
+	wrapperConfiguration, workflowFound, workflowError := decodeWorkflowBlock(contentBytes)
+
+	if directUnmarshalError != nil {
+		if workflowError != nil {
+			return Configuration{}, fmt.Errorf(configurationParseErrorTemplateConstant, workflowError)
 		}
-		if nestedError := yaml.Unmarshal(contentBytes, &wrapper); nestedError == nil {
-			if len(wrapper.Workflow.Tools) > 0 || len(wrapper.Workflow.Steps) > 0 {
-				configuration = wrapper.Workflow
-			} else {
-				return Configuration{}, fmt.Errorf(configurationParseErrorTemplateConstant, unmarshalError)
+		if !workflowFound {
+			return Configuration{}, fmt.Errorf(configurationParseErrorTemplateConstant, directUnmarshalError)
+		}
+		configuration = wrapperConfiguration
+	} else {
+		if workflowError != nil {
+			return Configuration{}, fmt.Errorf(configurationParseErrorTemplateConstant, workflowError)
+		}
+		if workflowFound {
+			if len(configuration.Tools) == 0 && len(wrapperConfiguration.Tools) > 0 {
+				configuration.Tools = wrapperConfiguration.Tools
 			}
-		} else {
-			return Configuration{}, fmt.Errorf(configurationParseErrorTemplateConstant, unmarshalError)
-		}
-	} else if len(configuration.Tools) == 0 && len(configuration.Steps) == 0 {
-		var wrapper struct {
-			Workflow Configuration `yaml:"workflow" json:"workflow"`
-		}
-		if nestedError := yaml.Unmarshal(contentBytes, &wrapper); nestedError == nil {
-			if len(wrapper.Workflow.Tools) > 0 || len(wrapper.Workflow.Steps) > 0 {
-				configuration = wrapper.Workflow
+			if len(configuration.Steps) == 0 && len(wrapperConfiguration.Steps) > 0 {
+				configuration.Steps = wrapperConfiguration.Steps
 			}
+		}
+	}
+
+	if len(configuration.Tools) == 0 {
+		workflowTools, workflowToolsFound, workflowToolsError := decodeWorkflowTools(contentBytes)
+		if workflowToolsError != nil {
+			return Configuration{}, fmt.Errorf(configurationParseErrorTemplateConstant, workflowToolsError)
+		}
+		if workflowToolsFound {
+			configuration.Tools = workflowTools
 		}
 	}
 
@@ -120,6 +133,58 @@ func LoadConfiguration(filePath string) (Configuration, error) {
 	}
 
 	return configuration, nil
+}
+
+func decodeWorkflowBlock(contentBytes []byte) (Configuration, bool, error) {
+	var workflowWrapper struct {
+		Workflow yaml.Node `yaml:"workflow" json:"workflow"`
+	}
+
+	if unmarshalError := yaml.Unmarshal(contentBytes, &workflowWrapper); unmarshalError != nil {
+		return Configuration{}, false, unmarshalError
+	}
+
+	if workflowWrapper.Workflow.Kind == 0 {
+		return Configuration{}, false, nil
+	}
+
+	switch workflowWrapper.Workflow.Kind {
+	case yaml.MappingNode:
+		var nestedConfiguration Configuration
+		if decodeError := workflowWrapper.Workflow.Decode(&nestedConfiguration); decodeError != nil {
+			return Configuration{}, true, decodeError
+		}
+		return nestedConfiguration, true, nil
+	case yaml.SequenceNode:
+		var stepConfigurations []StepConfiguration
+		if decodeError := workflowWrapper.Workflow.Decode(&stepConfigurations); decodeError != nil {
+			return Configuration{}, true, decodeError
+		}
+		return Configuration{Steps: stepConfigurations}, true, nil
+	default:
+		return Configuration{}, true, errors.New(configurationWorkflowTypeErrorMessageConstant)
+	}
+}
+
+func decodeWorkflowTools(contentBytes []byte) ([]NamedToolConfiguration, bool, error) {
+	var toolsWrapper struct {
+		WorkflowTools yaml.Node `yaml:"workflow_tools" json:"workflow_tools"`
+	}
+
+	if unmarshalError := yaml.Unmarshal(contentBytes, &toolsWrapper); unmarshalError != nil {
+		return nil, false, unmarshalError
+	}
+
+	if toolsWrapper.WorkflowTools.Kind == 0 {
+		return nil, false, nil
+	}
+
+	var namedTools []NamedToolConfiguration
+	if decodeError := toolsWrapper.WorkflowTools.Decode(&namedTools); decodeError != nil {
+		return nil, true, decodeError
+	}
+
+	return namedTools, true, nil
 }
 
 func buildToolLookup(tools []NamedToolConfiguration) (map[string]ToolConfiguration, error) {
