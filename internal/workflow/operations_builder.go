@@ -104,10 +104,23 @@ func resolveStepOptions(step StepConfiguration, tools map[string]ToolConfigurati
 		if strings.EqualFold(key, optionToolReferenceKeyConstant) {
 			continue
 		}
+		removeCaseInsensitiveKey(resolved, key)
 		resolved[key] = value
 	}
 
 	return resolved, nil
+}
+
+func removeCaseInsensitiveKey(options map[string]any, target string) {
+	if options == nil {
+		return
+	}
+	for key := range options {
+		if strings.EqualFold(key, target) {
+			delete(options, key)
+			break
+		}
+	}
 }
 
 func copyOptions(source map[string]any) map[string]any {
