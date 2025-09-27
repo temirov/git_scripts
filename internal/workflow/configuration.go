@@ -37,8 +37,16 @@ const (
 
 // Configuration describes the ordered workflow steps and reusable tool definitions loaded from YAML or JSON.
 type Configuration struct {
-	Tools map[string]ToolConfiguration `yaml:"tools" json:"tools"`
-	Steps []StepConfiguration          `yaml:"steps" json:"steps"`
+	Tools []NamedToolConfiguration `yaml:"tools" json:"tools"`
+	Steps []StepConfiguration      `yaml:"steps" json:"steps"`
+
+	toolLookup map[string]ToolConfiguration
+}
+
+// NamedToolConfiguration captures a reusable operation definition along with its canonical reference name.
+type NamedToolConfiguration struct {
+	Name              string `yaml:"name" json:"name"`
+	ToolConfiguration `yaml:",inline" json:",inline"`
 }
 
 // StepConfiguration associates an operation type with declarative options.
@@ -67,47 +75,90 @@ func LoadConfiguration(filePath string) (Configuration, error) {
 
 	var configuration Configuration
 	if unmarshalError := yaml.Unmarshal(contentBytes, &configuration); unmarshalError != nil {
-		return Configuration{}, fmt.Errorf(configurationParseErrorTemplateConstant, unmarshalError)
+		var wrapper struct {
+			Workflow Configuration `yaml:"workflow" json:"workflow"`
+		}
+		if nestedError := yaml.Unmarshal(contentBytes, &wrapper); nestedError == nil {
+			if len(wrapper.Workflow.Tools) > 0 || len(wrapper.Workflow.Steps) > 0 {
+				configuration = wrapper.Workflow
+			} else {
+				return Configuration{}, fmt.Errorf(configurationParseErrorTemplateConstant, unmarshalError)
+			}
+		} else {
+			return Configuration{}, fmt.Errorf(configurationParseErrorTemplateConstant, unmarshalError)
+		}
+	} else if len(configuration.Tools) == 0 && len(configuration.Steps) == 0 {
+		var wrapper struct {
+			Workflow Configuration `yaml:"workflow" json:"workflow"`
+		}
+		if nestedError := yaml.Unmarshal(contentBytes, &wrapper); nestedError == nil {
+			if len(wrapper.Workflow.Tools) > 0 || len(wrapper.Workflow.Steps) > 0 {
+				configuration = wrapper.Workflow
+			}
+		}
 	}
 
-	normalizedTools, toolsError := normalizeTools(configuration.Tools)
+	toolLookup, toolsError := buildToolLookup(configuration.Tools)
 	if toolsError != nil {
 		return Configuration{}, toolsError
 	}
-	configuration.Tools = normalizedTools
+	configuration.toolLookup = toolLookup
 
 	if len(configuration.Steps) == 0 {
 		return Configuration{}, errors.New(configurationEmptyStepsMessageConstant)
 	}
 
 	for stepIndex := range configuration.Steps {
-		if len(strings.TrimSpace(string(configuration.Steps[stepIndex].Operation))) == 0 {
-			return Configuration{}, errors.New(configurationOperationMissingMessageConstant)
+		trimmedOperation := strings.TrimSpace(string(configuration.Steps[stepIndex].Operation))
+		if len(trimmedOperation) == 0 {
+			if !stepIncludesToolReference(configuration.Steps[stepIndex].Options) {
+				return Configuration{}, errors.New(configurationOperationMissingMessageConstant)
+			}
+		} else {
+			configuration.Steps[stepIndex].Operation = OperationType(trimmedOperation)
 		}
 	}
 
 	return configuration, nil
 }
 
-func normalizeTools(raw map[string]ToolConfiguration) (map[string]ToolConfiguration, error) {
-	if raw == nil {
+func buildToolLookup(tools []NamedToolConfiguration) (map[string]ToolConfiguration, error) {
+	if len(tools) == 0 {
 		return nil, nil
 	}
 
-	normalized := make(map[string]ToolConfiguration, len(raw))
-	for originalName, tool := range raw {
-		trimmedName := strings.TrimSpace(originalName)
+	lookup := make(map[string]ToolConfiguration, len(tools))
+	for toolIndex := range tools {
+		trimmedName := strings.TrimSpace(tools[toolIndex].Name)
 		if len(trimmedName) == 0 {
 			return nil, errors.New(configurationToolNameRequiredMessageConstant)
 		}
-		if _, exists := normalized[trimmedName]; exists {
+		if _, exists := lookup[trimmedName]; exists {
 			return nil, errors.New(configurationDuplicateToolNameMessageConstant)
 		}
-		if len(strings.TrimSpace(string(tool.Operation))) == 0 {
+		if len(strings.TrimSpace(string(tools[toolIndex].Operation))) == 0 {
 			return nil, fmt.Errorf(configurationToolOperationMissingTemplateConstant, trimmedName)
 		}
-		normalized[trimmedName] = tool
+		tools[toolIndex].Name = trimmedName
+		lookup[trimmedName] = ToolConfiguration{
+			Operation: tools[toolIndex].Operation,
+			Options:   tools[toolIndex].Options,
+		}
 	}
 
-	return normalized, nil
+	return lookup, nil
+}
+
+func stepIncludesToolReference(options map[string]any) bool {
+	if len(options) == 0 {
+		return false
+	}
+
+	for rawKey := range options {
+		if strings.EqualFold(strings.TrimSpace(rawKey), optionToolReferenceKeyConstant) {
+			return true
+		}
+	}
+
+	return false
 }

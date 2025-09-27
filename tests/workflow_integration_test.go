@@ -299,7 +299,39 @@ func initializeWorkflowRepository(testInstance *testing.T, repositoryPath string
 }
 
 func buildWorkflowConfiguration(auditPath string) string {
-	return fmt.Sprintf("steps:\n  - operation: convert-protocol\n    with:\n      from: https\n      to: ssh\n  - operation: migrate-branch\n    with:\n      targets:\n        - remote_name: origin\n          source_branch: main\n          target_branch: master\n          push_to_remote: false\n          delete_source_branch: false\n  - operation: audit-report\n    with:\n      output: %s\n", auditPath)
+	return fmt.Sprintf(`common:
+  log_level: error
+tools: {}
+workflow:
+  tools:
+    - name: conversion.default
+      operation: convert-protocol
+      with:
+        from: https
+        to: ssh
+    - name: migration.default
+      operation: migrate-branch
+      with:
+        targets:
+          - remote_name: origin
+            source_branch: main
+            target_branch: master
+            push_to_remote: false
+            delete_source_branch: false
+    - name: audit.weekly
+      operation: audit-report
+      with:
+        output: ./reports/audit.csv
+  steps:
+    - with:
+        tool_ref: conversion.default
+    - operation: update-canonical-remote
+    - with:
+        tool_ref: migration.default
+    - with:
+        tool_ref: audit.weekly
+        output: %s
+`, auditPath)
 }
 
 func buildWorkflowStubScript(stateFilePath string) string {
