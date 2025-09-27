@@ -23,7 +23,7 @@ const (
 	packagesIntegrationTokenValueConstant               = "packages-token-value"
 	packagesIntegrationBaseURLEnvironmentNameConstant   = "GITSCRIPTS_REPO_PACKAGES_PURGE_BASE_URL"
 	packagesIntegrationConfigFileNameConstant           = "config.yaml"
-	packagesIntegrationConfigTemplateConstant           = "common:\n  log_level: error\noperations:\n  - operation: repo-packages-purge\n    with:\n      package: %s\n      dry_run: %t\nworkflow: []\n"
+	packagesIntegrationConfigTemplateConstant           = "common:\n  log_level: error\noperations:\n  - operation: repo-packages-purge\n    with:\n      package: %s\n      dry_run: %t\n      roots:\n        - %s\nworkflow: []\n"
 	packagesIntegrationSubtestNameTemplateConstant      = "%d_%s"
 	packagesIntegrationRunSubcommandConstant            = "run"
 	packagesIntegrationModulePathConstant               = "."
@@ -216,6 +216,7 @@ func TestPackagesCommandIntegration(testInstance *testing.T) {
 				packagesIntegrationConfigTemplateConstant,
 				packagesIntegrationPackageConstant,
 				testCase.dryRun,
+				repositoryRoot,
 			)
 
 			writeError := os.WriteFile(configPath, []byte(configContent), 0o600)

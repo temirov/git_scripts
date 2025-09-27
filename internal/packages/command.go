@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -26,6 +27,8 @@ const (
 	packageFlagDescriptionConstant                      = "Container package name in GHCR"
 	dryRunFlagNameConstant                              = "dry-run"
 	dryRunFlagDescriptionConstant                       = "Preview deletions without modifying GHCR"
+	repositoryRootsFlagNameConstant                     = "roots"
+	repositoryRootsFlagDescriptionConstant              = "Directories that contain repositories for package purging"
 	tokenSourceParseErrorTemplateConstant               = "invalid token source: %w"
 	workingDirectoryResolutionErrorTemplateConstant     = "unable to determine working directory: %w"
 	workingDirectoryEmptyErrorMessageConstant           = "working directory not provided"
@@ -38,6 +41,13 @@ const (
 	repositoryMetadataResolutionErrorTemplateConstant   = "unable to resolve repository metadata: %w"
 	repositoryMetadataOwnerMissingErrorMessageConstant  = "repository metadata did not include owner"
 	repositoryContextResolutionErrorTemplateConstant    = "unable to resolve repository context: %w"
+	repositoryDiscoveryErrorTemplateConstant            = "unable to discover repositories: %w"
+	repositoryDiscoveryFailedMessageConstant            = "Failed to discover repositories"
+	repositoryRootsLogFieldNameConstant                 = "repository_roots"
+	repositoryPathLogFieldNameConstant                  = "repository_path"
+	repositoryContextFailedMessageConstant              = "Failed to resolve repository context"
+	repositoryPurgeFailedMessageConstant                = "repo-packages-purge failed for repository"
+	repositoryPathEmptyErrorMessageConstant             = "repository path not provided"
 	ownerRepoSeparatorConstant                          = "/"
 )
 
@@ -65,6 +75,7 @@ type CommandBuilder struct {
 	RepositoryManager        shared.GitRepositoryManager
 	GitHubResolver           shared.GitHubMetadataResolver
 	WorkingDirectoryResolver WorkingDirectoryResolver
+	RepositoryDiscoverer     shared.RepositoryDiscoverer
 }
 
 // WorkingDirectoryResolver resolves the directory containing the active repository.
@@ -73,6 +84,13 @@ type WorkingDirectoryResolver func() (string, error)
 type repositoryContext struct {
 	Owner     string
 	OwnerType ghcr.OwnerType
+}
+
+type commandExecutionOptions struct {
+	PackageName     string
+	DryRun          bool
+	TokenSource     TokenSourceConfiguration
+	RepositoryRoots []string
 }
 
 // Build constructs the repo-packages-purge command with purge functionality.
@@ -86,6 +104,7 @@ func (builder *CommandBuilder) Build() (*cobra.Command, error) {
 
 	purgeCommand.Flags().String(packageFlagNameConstant, "", packageFlagDescriptionConstant)
 	purgeCommand.Flags().Bool(dryRunFlagNameConstant, false, dryRunFlagDescriptionConstant)
+	purgeCommand.Flags().StringSlice(repositoryRootsFlagNameConstant, nil, repositoryRootsFlagDescriptionConstant)
 
 	return purgeCommand, nil
 }
@@ -97,7 +116,7 @@ func (builder *CommandBuilder) runPurge(command *cobra.Command, arguments []stri
 
 	logger := builder.resolveLogger()
 
-	purgeOptions, optionsError := builder.parsePurgeOptions(command, logger)
+	executionOptions, optionsError := builder.parseCommandOptions(command)
 	if optionsError != nil {
 		return optionsError
 	}
@@ -107,51 +126,113 @@ func (builder *CommandBuilder) runPurge(command *cobra.Command, arguments []stri
 		return serviceError
 	}
 
-	_, executionError := purgeService.Execute(command.Context(), purgeOptions)
-	if executionError != nil {
-		return fmt.Errorf(commandExecutionErrorTemplateConstant, executionError)
+	repositoryManager, githubResolver, dependenciesError := builder.resolveRepositoryDependencies(logger)
+	if dependenciesError != nil {
+		return dependenciesError
+	}
+
+	repositoryDiscoverer := dependencies.ResolveRepositoryDiscoverer(builder.RepositoryDiscoverer)
+	repositoryPaths, discoveryError := repositoryDiscoverer.DiscoverRepositories(executionOptions.RepositoryRoots)
+	if discoveryError != nil {
+		logger.Error(
+			repositoryDiscoveryFailedMessageConstant,
+			zap.Strings(repositoryRootsLogFieldNameConstant, executionOptions.RepositoryRoots),
+			zap.Error(discoveryError),
+		)
+		return fmt.Errorf(repositoryDiscoveryErrorTemplateConstant, discoveryError)
+	}
+
+	var executionErrors []error
+
+	for _, repositoryPath := range repositoryPaths {
+		normalizedRepositoryPath := filepath.Clean(repositoryPath)
+
+		repositoryContext, contextError := builder.resolveRepositoryContext(command.Context(), repositoryManager, githubResolver, normalizedRepositoryPath)
+		if contextError != nil {
+			if errors.Is(contextError, context.Canceled) || errors.Is(contextError, context.DeadlineExceeded) {
+				return contextError
+			}
+
+			logger.Error(
+				repositoryContextFailedMessageConstant,
+				zap.String(repositoryPathLogFieldNameConstant, normalizedRepositoryPath),
+				zap.Error(contextError),
+			)
+
+			wrappedContextError := fmt.Errorf(repositoryContextResolutionErrorTemplateConstant, contextError)
+			executionErrors = append(executionErrors, wrappedContextError)
+			continue
+		}
+
+		purgeOptions := PurgeOptions{
+			Owner:       repositoryContext.Owner,
+			PackageName: executionOptions.PackageName,
+			OwnerType:   repositoryContext.OwnerType,
+			TokenSource: executionOptions.TokenSource,
+			DryRun:      executionOptions.DryRun,
+		}
+
+		_, executionError := purgeService.Execute(command.Context(), purgeOptions)
+		if executionError != nil {
+			if errors.Is(executionError, context.Canceled) || errors.Is(executionError, context.DeadlineExceeded) {
+				return executionError
+			}
+
+			logger.Error(
+				repositoryPurgeFailedMessageConstant,
+				zap.String(repositoryPathLogFieldNameConstant, normalizedRepositoryPath),
+				zap.Error(executionError),
+			)
+
+			wrappedExecutionError := fmt.Errorf(commandExecutionErrorTemplateConstant, executionError)
+			executionErrors = append(executionErrors, wrappedExecutionError)
+			continue
+		}
+	}
+
+	if len(executionErrors) > 0 {
+		return errors.Join(executionErrors...)
 	}
 
 	return nil
 }
 
-func (builder *CommandBuilder) parsePurgeOptions(command *cobra.Command, logger *zap.Logger) (PurgeOptions, error) {
+func (builder *CommandBuilder) parseCommandOptions(command *cobra.Command) (commandExecutionOptions, error) {
 	configuration := builder.resolveConfiguration()
 
 	packageFlagValue, packageFlagError := command.Flags().GetString(packageFlagNameConstant)
 	if packageFlagError != nil {
-		return PurgeOptions{}, packageFlagError
+		return commandExecutionOptions{}, packageFlagError
 	}
 	packageValue := selectStringValue(packageFlagValue, configuration.Purge.PackageName)
 
-	repositoryContext, contextError := builder.resolveRepositoryContext(command.Context(), logger)
-	if contextError != nil {
-		return PurgeOptions{}, fmt.Errorf(repositoryContextResolutionErrorTemplateConstant, contextError)
-	}
-
 	parsedTokenSource, tokenParseError := ParseTokenSource(defaultTokenSourceValueConstant)
 	if tokenParseError != nil {
-		return PurgeOptions{}, fmt.Errorf(tokenSourceParseErrorTemplateConstant, tokenParseError)
+		return commandExecutionOptions{}, fmt.Errorf(tokenSourceParseErrorTemplateConstant, tokenParseError)
 	}
 
 	dryRunValue := configuration.Purge.DryRun
 	if command.Flags().Changed(dryRunFlagNameConstant) {
 		flagDryRunValue, dryRunFlagError := command.Flags().GetBool(dryRunFlagNameConstant)
 		if dryRunFlagError != nil {
-			return PurgeOptions{}, dryRunFlagError
+			return commandExecutionOptions{}, dryRunFlagError
 		}
 		dryRunValue = flagDryRunValue
 	}
 
-	purgeOptions := PurgeOptions{
-		Owner:       repositoryContext.Owner,
-		PackageName: packageValue,
-		OwnerType:   repositoryContext.OwnerType,
-		TokenSource: parsedTokenSource,
-		DryRun:      dryRunValue,
+	repositoryRoots, rootsError := builder.determineRepositoryRoots(command, configuration)
+	if rootsError != nil {
+		return commandExecutionOptions{}, rootsError
 	}
 
-	return purgeOptions, nil
+	executionOptions := commandExecutionOptions{
+		PackageName:     packageValue,
+		DryRun:          dryRunValue,
+		TokenSource:     parsedTokenSource,
+		RepositoryRoots: repositoryRoots,
+	}
+
+	return executionOptions, nil
 }
 
 func (builder *CommandBuilder) resolveLogger() *zap.Logger {
@@ -173,7 +254,7 @@ func (builder *CommandBuilder) resolveConfiguration() Configuration {
 		configuration = builder.ConfigurationProvider()
 	}
 
-	return configuration
+	return configuration.sanitize()
 }
 
 func (builder *CommandBuilder) resolvePurgeService(logger *zap.Logger) (PurgeExecutor, error) {
@@ -200,18 +281,52 @@ func selectStringValue(flagValue string, configurationValue string) string {
 	return strings.TrimSpace(configurationValue)
 }
 
-func (builder *CommandBuilder) resolveRepositoryContext(executionContext context.Context, logger *zap.Logger) (repositoryContext, error) {
+func (builder *CommandBuilder) determineRepositoryRoots(command *cobra.Command, configuration Configuration) ([]string, error) {
+	if command != nil && command.Flags().Changed(repositoryRootsFlagNameConstant) {
+		flagRoots, flagError := command.Flags().GetStringSlice(repositoryRootsFlagNameConstant)
+		if flagError != nil {
+			return nil, flagError
+		}
+
+		sanitizedFlagRoots := sanitizeRoots(flagRoots)
+		if len(sanitizedFlagRoots) > 0 {
+			return sanitizedFlagRoots, nil
+		}
+
+		workingDirectory, workingDirectoryError := builder.resolveWorkingDirectory()
+		if workingDirectoryError != nil {
+			return nil, workingDirectoryError
+		}
+
+		return []string{workingDirectory}, nil
+	}
+
+	if len(configuration.Purge.RepositoryRoots) > 0 {
+		rootsCopy := make([]string, len(configuration.Purge.RepositoryRoots))
+		copy(rootsCopy, configuration.Purge.RepositoryRoots)
+		return rootsCopy, nil
+	}
+
 	workingDirectory, workingDirectoryError := builder.resolveWorkingDirectory()
 	if workingDirectoryError != nil {
-		return repositoryContext{}, workingDirectoryError
+		return nil, workingDirectoryError
 	}
 
-	repositoryManager, githubResolver, resolutionError := builder.resolveRepositoryDependencies(logger)
-	if resolutionError != nil {
-		return repositoryContext{}, resolutionError
+	return []string{workingDirectory}, nil
+}
+
+func (builder *CommandBuilder) resolveRepositoryContext(
+	executionContext context.Context,
+	repositoryManager shared.GitRepositoryManager,
+	githubResolver shared.GitHubMetadataResolver,
+	repositoryPath string,
+) (repositoryContext, error) {
+	trimmedRepositoryPath := strings.TrimSpace(repositoryPath)
+	if len(trimmedRepositoryPath) == 0 {
+		return repositoryContext{}, errors.New(repositoryPathEmptyErrorMessageConstant)
 	}
 
-	originURL, originError := repositoryManager.GetRemoteURL(executionContext, workingDirectory, shared.OriginRemoteNameConstant)
+	originURL, originError := repositoryManager.GetRemoteURL(executionContext, trimmedRepositoryPath, shared.OriginRemoteNameConstant)
 	if originError != nil {
 		return repositoryContext{}, fmt.Errorf(originRemoteResolutionErrorTemplateConstant, originError)
 	}
