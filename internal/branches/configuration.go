@@ -1,6 +1,12 @@
 package branches
 
-import "strings"
+import (
+	"strings"
+
+	pathutils "github.com/temirov/git_scripts/internal/utils/path"
+)
+
+var branchConfigurationHomeDirectoryExpander = pathutils.NewHomeExpander()
 
 // CommandConfiguration captures configuration values for the branch cleanup command.
 type CommandConfiguration struct {
@@ -20,8 +26,8 @@ func DefaultCommandConfiguration() CommandConfiguration {
 	}
 }
 
-// sanitize trims configuration values without applying implicit defaults.
-func (configuration CommandConfiguration) sanitize() CommandConfiguration {
+// Sanitize trims configuration values without applying implicit defaults.
+func (configuration CommandConfiguration) Sanitize() CommandConfiguration {
 	sanitized := configuration
 
 	sanitized.RemoteName = strings.TrimSpace(configuration.RemoteName)
@@ -32,12 +38,13 @@ func (configuration CommandConfiguration) sanitize() CommandConfiguration {
 
 func sanitizeRoots(raw []string) []string {
 	sanitized := make([]string, 0, len(raw))
-	for _, candidate := range raw {
-		trimmed := strings.TrimSpace(candidate)
+	for _, rootCandidate := range raw {
+		trimmed := strings.TrimSpace(rootCandidate)
 		if len(trimmed) == 0 {
 			continue
 		}
-		sanitized = append(sanitized, trimmed)
+		expandedRoot := branchConfigurationHomeDirectoryExpander.Expand(trimmed)
+		sanitized = append(sanitized, expandedRoot)
 	}
 	return sanitized
 }

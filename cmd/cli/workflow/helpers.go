@@ -14,7 +14,8 @@ type LoggerProvider func() *zap.Logger
 // PrompterFactory constructs confirmation prompters scoped to a command.
 type PrompterFactory func(*cobra.Command) shared.ConfirmationPrompter
 
-func determineRoots(flagValues []string, configured []string, preferFlag bool) []string {
+// DetermineRoots selects the effective repository roots from flags and configuration.
+func DetermineRoots(flagValues []string, configured []string, preferFlag bool) []string {
 	if preferFlag {
 		trimmed := sanitizeRoots(flagValues)
 		if len(trimmed) > 0 {
@@ -27,9 +28,9 @@ func determineRoots(flagValues []string, configured []string, preferFlag bool) [
 		return configuredRoots
 	}
 
-	trimmed := sanitizeRoots(flagValues)
-	if len(trimmed) > 0 {
-		return trimmed
+	trimmedFlagRoots := sanitizeRoots(flagValues)
+	if len(trimmedFlagRoots) > 0 {
+		return trimmedFlagRoots
 	}
 
 	return nil

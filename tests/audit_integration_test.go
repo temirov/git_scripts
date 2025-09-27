@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -12,28 +13,33 @@ import (
 )
 
 const (
-	auditIntegrationTimeout               = 10 * time.Second
-	auditIntegrationLogLevelFlag          = "--log-level"
-	auditIntegrationErrorLevel            = "error"
-	auditIntegrationRunSubcommand         = "run"
-	auditIntegrationModulePathConstant    = "."
-	auditIntegrationAuditCommandName      = "audit"
-	auditIntegrationRootFlag              = "--root"
-	auditIntegrationDebugFlag             = "--debug"
-	auditIntegrationGitExecutable         = "git"
-	auditIntegrationInitFlag              = "init"
-	auditIntegrationInitialBranchFlag     = "--initial-branch=main"
-	auditIntegrationRemoteSubcommand      = "remote"
-	auditIntegrationAddSubcommand         = "add"
-	auditIntegrationOriginRemoteName      = "origin"
-	auditIntegrationOriginURL             = "https://github.com/origin/example.git"
-	auditIntegrationStubExecutableName    = "gh"
-	auditIntegrationStubScript            = "#!/bin/sh\nif [ \"$1\" = \"repo\" ] && [ \"$2\" = \"view\" ]; then\n  cat <<'EOF'\n{\"nameWithOwner\":\"canonical/example\",\"defaultBranchRef\":{\"name\":\"main\"},\"description\":\"\"}\nEOF\n  exit 0\nfi\nexit 0\n"
-	auditIntegrationCSVOutput             = "final_github_repo,folder_name,name_matches,remote_default_branch,local_branch,in_sync,remote_protocol,origin_matches_canonical\ncanonical/example,legacy,no,main,,n/a,https,no\n"
-	auditIntegrationDebugOutput           = "DEBUG: discovered 1 candidate repos under: %[1]s\nDEBUG: checking %[2]s\n" + auditIntegrationCSVOutput
-	auditIntegrationCSVCaseNameConstant   = "audit_csv"
-	auditIntegrationDebugCaseNameConstant = "audit_debug"
-	auditIntegrationSubtestNameTemplate   = "%d_%s"
+	auditIntegrationTimeout                    = 10 * time.Second
+	auditIntegrationLogLevelFlag               = "--log-level"
+	auditIntegrationErrorLevel                 = "error"
+	auditIntegrationRunSubcommand              = "run"
+	auditIntegrationModulePathConstant         = "."
+	auditIntegrationAuditCommandName           = "audit"
+	auditIntegrationRootFlag                   = "--root"
+	auditIntegrationDebugFlag                  = "--debug"
+	auditIntegrationGitExecutable              = "git"
+	auditIntegrationInitFlag                   = "init"
+	auditIntegrationInitialBranchFlag          = "--initial-branch=main"
+	auditIntegrationRemoteSubcommand           = "remote"
+	auditIntegrationAddSubcommand              = "add"
+	auditIntegrationOriginRemoteName           = "origin"
+	auditIntegrationOriginURL                  = "https://github.com/origin/example.git"
+	auditIntegrationStubExecutableName         = "gh"
+	auditIntegrationStubScript                 = "#!/bin/sh\nif [ \"$1\" = \"repo\" ] && [ \"$2\" = \"view\" ]; then\n  cat <<'EOF'\n{\"nameWithOwner\":\"canonical/example\",\"defaultBranchRef\":{\"name\":\"main\"},\"description\":\"\"}\nEOF\n  exit 0\nfi\nexit 0\n"
+	auditIntegrationRepositoryPrefixConstant   = "audit-integration-repository-"
+	auditIntegrationHomeShortcutPrefixConstant = "~/"
+	auditIntegrationCSVHeaderConstant          = "final_github_repo,folder_name,name_matches,remote_default_branch,local_branch,in_sync,remote_protocol,origin_matches_canonical\n"
+	auditIntegrationCSVRowTemplate             = "canonical/example,%[1]s,no,main,,n/a,https,no\n"
+	auditIntegrationCSVTemplate                = auditIntegrationCSVHeaderConstant + auditIntegrationCSVRowTemplate
+	auditIntegrationDebugPrefixTemplate        = "DEBUG: discovered 1 candidate repos under: %[1]s\nDEBUG: checking %[2]s\n"
+	auditIntegrationCSVCaseNameConstant        = "audit_csv"
+	auditIntegrationDebugCaseNameConstant      = "audit_debug"
+	auditIntegrationTildeCaseNameConstant      = "audit_tilde"
+	auditIntegrationSubtestNameTemplate        = "%d_%s"
 )
 
 func TestAuditRunCommandIntegration(testInstance *testing.T) {
@@ -41,8 +47,16 @@ func TestAuditRunCommandIntegration(testInstance *testing.T) {
 	require.NoError(testInstance, workingDirectoryError)
 	repositoryRoot := filepath.Dir(workingDirectory)
 
+	homeDirectory, homeDirectoryError := os.UserHomeDir()
+	require.NoError(testInstance, homeDirectoryError)
+
+	repositoryPath, repositoryPathError := os.MkdirTemp(homeDirectory, auditIntegrationRepositoryPrefixConstant)
+	require.NoError(testInstance, repositoryPathError)
+	testInstance.Cleanup(func() {
+		_ = os.RemoveAll(repositoryPath)
+	})
+
 	tempDirectory := testInstance.TempDir()
-	repositoryPath := filepath.Join(tempDirectory, "legacy")
 
 	initCommand := exec.Command(auditIntegrationGitExecutable, auditIntegrationInitFlag, auditIntegrationInitialBranchFlag, repositoryPath)
 	initCommand.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
@@ -65,6 +79,14 @@ func TestAuditRunCommandIntegration(testInstance *testing.T) {
 
 	extendedPath := pathWithStub + string(os.PathListSeparator) + os.Getenv("PATH")
 
+	repositoryFolderName := filepath.Base(repositoryPath)
+	expectedCSVOutput := fmt.Sprintf(auditIntegrationCSVTemplate, repositoryFolderName)
+	expectedDebugOutput := fmt.Sprintf(auditIntegrationDebugPrefixTemplate, repositoryPath, repositoryPath) + expectedCSVOutput
+
+	relativeRepositoryPath := strings.TrimPrefix(repositoryPath, homeDirectory)
+	relativeRepositoryPath = strings.TrimPrefix(relativeRepositoryPath, string(os.PathSeparator))
+	tildeRootArgument := auditIntegrationHomeShortcutPrefixConstant + filepath.ToSlash(relativeRepositoryPath)
+
 	rootFlagArguments := []string{
 		auditIntegrationRunSubcommand,
 		auditIntegrationModulePathConstant,
@@ -78,6 +100,16 @@ func TestAuditRunCommandIntegration(testInstance *testing.T) {
 	debugFlagArguments := append([]string{}, rootFlagArguments...)
 	debugFlagArguments = append(debugFlagArguments, auditIntegrationDebugFlag)
 
+	tildeRootArguments := []string{
+		auditIntegrationRunSubcommand,
+		auditIntegrationModulePathConstant,
+		auditIntegrationLogLevelFlag,
+		auditIntegrationErrorLevel,
+		auditIntegrationAuditCommandName,
+		auditIntegrationRootFlag,
+		tildeRootArgument,
+	}
+
 	testCases := []struct {
 		name           string
 		arguments      []string
@@ -86,12 +118,17 @@ func TestAuditRunCommandIntegration(testInstance *testing.T) {
 		{
 			name:           auditIntegrationCSVCaseNameConstant,
 			arguments:      rootFlagArguments,
-			expectedOutput: auditIntegrationCSVOutput,
+			expectedOutput: expectedCSVOutput,
 		},
 		{
 			name:           auditIntegrationDebugCaseNameConstant,
 			arguments:      debugFlagArguments,
-			expectedOutput: fmt.Sprintf(auditIntegrationDebugOutput, repositoryPath, repositoryPath),
+			expectedOutput: expectedDebugOutput,
+		},
+		{
+			name:           auditIntegrationTildeCaseNameConstant,
+			arguments:      tildeRootArguments,
+			expectedOutput: expectedCSVOutput,
 		},
 	}
 
