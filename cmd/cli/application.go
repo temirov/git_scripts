@@ -284,9 +284,6 @@ func NewApplication() *Application {
 		HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
 		ConfigurationProvider:        application.branchMigrateConfiguration,
 	}
-	if workingDirectory, workingDirectoryError := os.Getwd(); workingDirectoryError == nil {
-		branchMigrationBuilder.WorkingDirectory = workingDirectory
-	}
 	branchMigrationCommand, branchMigrationBuildError := branchMigrationBuilder.Build()
 	if branchMigrationBuildError == nil {
 		cobraCommand.AddCommand(branchMigrationCommand)
