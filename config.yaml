@@ -5,11 +5,18 @@ common:
 tools:
   packages:
     purge:
-      owner: my-org
-      package: my-image
-      owner_type: org
-      token_source: env:GITHUB_PACKAGES_TOKEN
-      page_size: 50
+      operation: repo-packages-purge
+      with:
+        owner: my-org
+        package: my-image
+        owner_type: org
+        token_source: env:GITHUB_PACKAGES_TOKEN
+        page_size: 50
+  reports:
+    audit:
+      operation: audit-report
+      with:
+        output: ./audit.csv
 steps:
   - operation: convert-protocol
     with:
@@ -27,6 +34,7 @@ steps:
           target_branch: master
           push_to_remote: true
           delete_source_branch: false
-  - operation: audit-report
+  - tool_ref: packages.purge
+  - tool_ref: reports.audit
     with:
-      output: ./audit.csv
+      output: ./reports/audit-latest.csv
