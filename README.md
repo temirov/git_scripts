@@ -87,13 +87,15 @@ with the registered command names and flags.
 | `repo-protocol-convert` | Convert repository origin remotes between protocols           | Flags: `--from`, `--to`, `--dry-run`, `--yes`. Example: `go run . repo-protocol-convert --from https --to ssh --yes ~/Development`                                                                                          |
 | `repo-prs-purge`        | Remove remote and local branches for closed pull requests     | Flags: `--remote`, `--limit`, `--dry-run`. Example: `go run . repo-prs-purge --remote origin --limit 100 ~/Development`                                                                                                     |
 | `branch-migrate`        | Migrate repository defaults from main to master               | Flag: `--debug` for verbose diagnostics. Example: `go run . branch-migrate --debug ~/Development/project-repo`                                                                                                              |
-| `repo-packages-purge`   | Delete untagged GHCR versions                                 | Flags: `--package`, `--dry-run`. Example: `go run . repo-packages-purge --package my-image --dry-run` |
+| `repo-packages-purge`   | Delete untagged GHCR versions                                 | Flags: `--package`, `--dry-run`, `--roots`. Example: `go run . repo-packages-purge --package my-image --dry-run --roots ~/Development` |
 | `workflow`              | Run a workflow configuration file                             | Flags: `--roots`, `--dry-run`, `--yes`. Example: `go run . workflow config.yaml --roots ~/Development --dry-run`                                                                                                            |
 
 Persist defaults and workflow plans in a single configuration file to avoid long flag lists and keep the runner in sync:
 
-The purge command derives the GHCR owner and owner type from the active repository's `origin` remote. Ensure the remote
-points at the desired GitHub repository before running the command.
+The purge command derives the GHCR owner and owner type from each repository's `origin` remote. Ensure the remotes
+point at the desired GitHub repositories before running the command. Provide one or more roots with `--roots` or in
+configuration to run the purge across multiple repositories; the command discovers Git repositories beneath every root
+and executes the purge workflow for each repository, continuing after non-fatal errors.
 
 ```yaml
 # config.yaml
@@ -113,6 +115,8 @@ operations:
     operation: repo-packages-purge
     with:
       package: my-image
+      roots:
+        - ~/Development
 
   - &branch_cleanup_defaults
     operation: repo-prs-purge
