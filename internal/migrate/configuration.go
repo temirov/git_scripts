@@ -2,11 +2,7 @@ package migrate
 
 import "strings"
 
-const (
-	migrateConfigurationDebugKeyConstant = "debug"
-	migrateConfigurationRootsKeyConstant = "roots"
-	defaultRepositoryRootConstant        = "."
-)
+const defaultRepositoryRootConstant = "."
 
 // CommandConfiguration captures persisted configuration for branch migration.
 type CommandConfiguration struct {
@@ -19,16 +15,6 @@ func DefaultCommandConfiguration() CommandConfiguration {
 	return CommandConfiguration{
 		EnableDebugLogging: false,
 		RepositoryRoots:    nil,
-	}
-}
-
-// DefaultConfigurationValues exposes configuration defaults for integration with Viper.
-func DefaultConfigurationValues(rootKey string) map[string]any {
-	defaults := DefaultCommandConfiguration()
-
-	return map[string]any{
-		rootKey + "." + migrateConfigurationDebugKeyConstant: defaults.EnableDebugLogging,
-		rootKey + "." + migrateConfigurationRootsKeyConstant: defaults.RepositoryRoots,
 	}
 }
 

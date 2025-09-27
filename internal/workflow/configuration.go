@@ -10,17 +10,12 @@ import (
 )
 
 const (
-	configurationStepsFieldNameConstant               = "steps"
-	configurationOperationFieldNameConstant           = "operation"
-	configurationOptionsFieldNameConstant             = "with"
-	configurationLoadErrorTemplateConstant            = "failed to load workflow configuration: %w"
-	configurationParseErrorTemplateConstant           = "failed to parse workflow configuration: %w"
-	configurationPathRequiredMessageConstant          = "workflow configuration path must be provided"
-	configurationEmptyStepsMessageConstant            = "workflow configuration must define at least one step"
-	configurationOperationMissingMessageConstant      = "workflow step missing operation name"
-	configurationToolNameRequiredMessageConstant      = "workflow tool names must be non-empty"
-	configurationDuplicateToolNameMessageConstant     = "workflow configuration defines duplicate tool names"
-	configurationToolOperationMissingTemplateConstant = "workflow tool %s missing operation name"
+	configurationLoadErrorTemplateConstant       = "failed to load workflow configuration: %w"
+	configurationParseErrorTemplateConstant      = "failed to parse workflow configuration: %w"
+	configurationPathRequiredMessageConstant     = "workflow configuration path must be provided"
+	configurationEmptyStepsMessageConstant       = "workflow configuration must define at least one step"
+	configurationOperationMissingMessageConstant = "workflow step missing operation name"
+	configurationWorkflowSequenceMessageConstant = "workflow block must be defined as a sequence of steps"
 )
 
 // OperationType identifies supported workflow operations.
@@ -35,20 +30,21 @@ const (
 	OperationTypeAuditReport        OperationType = OperationType("audit-report")
 )
 
-// Configuration describes the ordered workflow steps and reusable tool definitions loaded from YAML or JSON.
+// Configuration describes the ordered workflow steps loaded from YAML or JSON.
 type Configuration struct {
-	Tools map[string]ToolConfiguration `yaml:"tools" json:"tools"`
-	Steps []StepConfiguration          `yaml:"steps" json:"steps"`
+	Steps []StepConfiguration
+}
+
+type workflowFile struct {
+	Workflow []workflowStepWrapper `yaml:"workflow" json:"workflow"`
+}
+
+type workflowStepWrapper struct {
+	Step StepConfiguration `yaml:"step" json:"step"`
 }
 
 // StepConfiguration associates an operation type with declarative options.
 type StepConfiguration struct {
-	Operation OperationType  `yaml:"operation" json:"operation"`
-	Options   map[string]any `yaml:"with" json:"with"`
-}
-
-// ToolConfiguration describes reusable workflow options for a specific operation type.
-type ToolConfiguration struct {
 	Operation OperationType  `yaml:"operation" json:"operation"`
 	Options   map[string]any `yaml:"with" json:"with"`
 }
@@ -65,49 +61,52 @@ func LoadConfiguration(filePath string) (Configuration, error) {
 		return Configuration{}, fmt.Errorf(configurationLoadErrorTemplateConstant, readError)
 	}
 
-	var configuration Configuration
-	if unmarshalError := yaml.Unmarshal(contentBytes, &configuration); unmarshalError != nil {
+	var parsedWorkflow workflowFile
+	if unmarshalError := yaml.Unmarshal(contentBytes, &parsedWorkflow); unmarshalError != nil {
 		return Configuration{}, fmt.Errorf(configurationParseErrorTemplateConstant, unmarshalError)
 	}
 
-	normalizedTools, toolsError := normalizeTools(configuration.Tools)
-	if toolsError != nil {
-		return Configuration{}, toolsError
+	if workflowError := ensureWorkflowSequence(contentBytes); workflowError != nil {
+		return Configuration{}, fmt.Errorf(configurationParseErrorTemplateConstant, workflowError)
 	}
-	configuration.Tools = normalizedTools
+
+	configuration := Configuration{Steps: make([]StepConfiguration, 0, len(parsedWorkflow.Workflow))}
+	for index := range parsedWorkflow.Workflow {
+		configuration.Steps = append(configuration.Steps, parsedWorkflow.Workflow[index].Step)
+	}
 
 	if len(configuration.Steps) == 0 {
 		return Configuration{}, errors.New(configurationEmptyStepsMessageConstant)
 	}
 
 	for stepIndex := range configuration.Steps {
-		if len(strings.TrimSpace(string(configuration.Steps[stepIndex].Operation))) == 0 {
+		trimmedOperation := strings.TrimSpace(string(configuration.Steps[stepIndex].Operation))
+		if len(trimmedOperation) == 0 {
 			return Configuration{}, errors.New(configurationOperationMissingMessageConstant)
 		}
+		configuration.Steps[stepIndex].Operation = OperationType(trimmedOperation)
 	}
 
 	return configuration, nil
 }
 
-func normalizeTools(raw map[string]ToolConfiguration) (map[string]ToolConfiguration, error) {
-	if raw == nil {
-		return nil, nil
+func ensureWorkflowSequence(contentBytes []byte) error {
+	var workflowWrapper struct {
+		Workflow yaml.Node `yaml:"workflow" json:"workflow"`
 	}
 
-	normalized := make(map[string]ToolConfiguration, len(raw))
-	for originalName, tool := range raw {
-		trimmedName := strings.TrimSpace(originalName)
-		if len(trimmedName) == 0 {
-			return nil, errors.New(configurationToolNameRequiredMessageConstant)
-		}
-		if _, exists := normalized[trimmedName]; exists {
-			return nil, errors.New(configurationDuplicateToolNameMessageConstant)
-		}
-		if len(strings.TrimSpace(string(tool.Operation))) == 0 {
-			return nil, fmt.Errorf(configurationToolOperationMissingTemplateConstant, trimmedName)
-		}
-		normalized[trimmedName] = tool
+	if unmarshalError := yaml.Unmarshal(contentBytes, &workflowWrapper); unmarshalError != nil {
+		return unmarshalError
 	}
 
-	return normalized, nil
+	if workflowWrapper.Workflow.Kind == 0 {
+		return nil
+	}
+
+	switch workflowWrapper.Workflow.Kind {
+	case yaml.SequenceNode:
+		return nil
+	default:
+		return errors.New(configurationWorkflowSequenceMessageConstant)
+	}
 }

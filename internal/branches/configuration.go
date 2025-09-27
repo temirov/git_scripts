@@ -3,11 +3,7 @@ package branches
 import "strings"
 
 const (
-	branchCleanupConfigurationRemoteKeyConstant = "remote"
-	branchCleanupConfigurationLimitKeyConstant  = "limit"
-	branchCleanupConfigurationDryRunKeyConstant = "dry_run"
-	branchCleanupConfigurationRootsKeyConstant  = "roots"
-	defaultRepositoryRootConstant               = "."
+	defaultRepositoryRootConstant = "."
 )
 
 // CommandConfiguration captures configuration values for the branch cleanup command.
@@ -25,18 +21,6 @@ func DefaultCommandConfiguration() CommandConfiguration {
 		PullRequestLimit: defaultPullRequestLimitConstant,
 		DryRun:           false,
 		RepositoryRoots:  []string{defaultRepositoryRootConstant},
-	}
-}
-
-// DefaultConfigurationValues returns Viper-ready defaults for branch cleanup settings.
-func DefaultConfigurationValues(rootKey string) map[string]any {
-	defaults := DefaultCommandConfiguration()
-
-	return map[string]any{
-		rootKey + "." + branchCleanupConfigurationRemoteKeyConstant: defaults.RemoteName,
-		rootKey + "." + branchCleanupConfigurationLimitKeyConstant:  defaults.PullRequestLimit,
-		rootKey + "." + branchCleanupConfigurationDryRunKeyConstant: defaults.DryRun,
-		rootKey + "." + branchCleanupConfigurationRootsKeyConstant:  defaults.RepositoryRoots,
 	}
 }
 

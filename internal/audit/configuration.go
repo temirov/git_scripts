@@ -2,11 +2,6 @@ package audit
 
 import "strings"
 
-const (
-	configurationRootsKeyConstant = "roots"
-	configurationDebugKeyConstant = "debug"
-)
-
 // CommandConfiguration captures persistent settings for the audit command.
 type CommandConfiguration struct {
 	Roots []string `mapstructure:"roots"`
@@ -18,16 +13,6 @@ func DefaultCommandConfiguration() CommandConfiguration {
 	return CommandConfiguration{
 		Roots: []string{defaultRootPathConstant},
 		Debug: false,
-	}
-}
-
-// DefaultConfigurationValues exposes Viper-ready defaults for audit configuration keys.
-func DefaultConfigurationValues(rootKey string) map[string]any {
-	defaults := DefaultCommandConfiguration()
-
-	return map[string]any{
-		rootKey + "." + configurationRootsKeyConstant: defaults.Roots,
-		rootKey + "." + configurationDebugKeyConstant: defaults.Debug,
 	}
 }
 

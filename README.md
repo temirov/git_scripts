@@ -97,31 +97,91 @@ Persist defaults and workflow plans in a single configuration file to avoid long
 common:
   log_level: info
   log_format: structured
-tools:
-  packages:
-    purge:
-      operation: repo-packages-purge
-      with:
-        owner: my-org
-        package: my-image
-        owner_type: org
-        token_source: env:GITHUB_PACKAGES_TOKEN
-        page_size: 50
-  reports:
-    audit:
-      operation: audit-report
-      with:
-        output: ./audit.csv
-steps:
-  - operation: convert-protocol
+
+operations:
+  - &audit_defaults
+    operation: audit
+    with:
+      roots:
+        - ~/Development
+      debug: false
+
+  - &packages_purge_defaults
+    operation: repo-packages-purge
+    with:
+      owner: my-org
+      package: my-image
+      owner_type: org
+      token_source: env:GITHUB_PACKAGES_TOKEN
+      page_size: 50
+
+  - &branch_cleanup_defaults
+    operation: repo-prs-purge
+    with:
+      remote: origin
+      limit: 100
+      dry_run: false
+      roots:
+        - ~/Development
+
+  - &repo_remotes_defaults
+    operation: repo-remote-update
+    with:
+      dry_run: false
+      assume_yes: true
+      roots:
+        - ~/Development
+
+  - &repo_protocol_defaults
+    operation: repo-protocol-convert
+    with:
+      dry_run: false
+      assume_yes: true
+      roots:
+        - ~/Development
+      from: https
+      to: git
+
+  - &repo_rename_defaults
+    operation: repo-folders-rename
+    with:
+      dry_run: false
+      assume_yes: true
+      require_clean: true
+      roots:
+        - ~/Development
+
+  - &workflow_command_defaults
+    operation: workflow
+    with:
+      roots:
+        - ~/Development
+      dry_run: false
+      assume_yes: false
+
+  - &branch_migrate_defaults
+    operation: branch-migrate
+    with:
+      debug: false
+      roots:
+        - ~/Development
+
+  - &convert_protocol_step
+    operation: convert-protocol
     with:
       from: https
       to: git
-  - operation: update-canonical-remote
-  - operation: rename-directories
+
+  - &canonical_remote_step
+    operation: update-canonical-remote
+
+  - &rename_directories_step
+    operation: rename-directories
     with:
       require_clean: true
-  - operation: migrate-branch
+
+  - &migrate_branch_step
+    operation: migrate-branch
     with:
       targets:
         - remote_name: origin
@@ -129,10 +189,34 @@ steps:
           target_branch: master
           push_to_remote: true
           delete_source_branch: false
-  - tool_ref: packages.purge
-  - tool_ref: reports.audit
+
+  - &audit_report_step
+    operation: audit-report
     with:
-      output: ./reports/audit-latest.csv
+      output: ./reports/audit.csv
+
+workflow:
+  - step:
+      order: 1
+      <<: *convert_protocol_step
+
+  - step:
+      order: 2
+      <<: *canonical_remote_step
+
+  - step:
+      order: 3
+      <<: *rename_directories_step
+
+  - step:
+      order: 4
+      <<: *migrate_branch_step
+
+  - step:
+      order: 5
+      <<: *audit_report_step
+      with:
+        output: ./reports/audit-latest.csv
 ```
 
 ```shell
@@ -151,15 +235,14 @@ go run . workflow --roots ~/Development --dry-run
 go run . workflow --roots ~/Development --yes
 ```
 
-`workflow` reads the `steps` array from `config.yaml`, reusing the same repository discovery, prompting, and logging
+`workflow` reads the `workflow` array from `config.yaml`, reusing the same repository discovery, prompting, and logging
 infrastructure as the standalone commands. Pass additional roots on the command line to override the configuration file
 and
 combine `--dry-run`/`--yes` for non-interactive execution.
 
-Each entry in `steps` can either specify an explicit `operation` with its `with` map or reference a reusable tool
-definition via `tool_ref`. When you supply `tool_ref`, the runner copies the shared defaults defined under `tools` and
-applies any inline overrides you add alongside the reference. Reach for inline `with` maps when a step is unique; prefer
-`tool_ref` when several steps share the same configuration and you want a single place to update future adjustments.
+Each entry in the `workflow` array is a full step definition. Use YAML anchors in the top-level `operations` list to capture reusable
+defaults and merge them into individual steps with the merge key (`<<`). Inline overrides remain possible: apply another
+merge inside the `with` map or specify the final values directly alongside the alias.
 
 ## Development and testing
 

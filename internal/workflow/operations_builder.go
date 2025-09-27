@@ -9,13 +9,10 @@ import (
 )
 
 const (
-	protocolConversionInvalidFromMessageConstant   = "convert-protocol step requires a valid 'from' protocol"
-	protocolConversionInvalidToMessageConstant     = "convert-protocol step requires a valid 'to' protocol"
-	protocolConversionSameProtocolMessageConstant  = "convert-protocol step requires distinct source and target protocols"
-	branchMigrationTargetsRequiredMessageConstant  = "migrate-branch step requires at least one target"
-	toolReferenceEmptyNameMessageConstant          = "workflow step tool_ref value must not be empty"
-	toolReferenceOperationMismatchTemplateConstant = "workflow step references tool %s with mismatched operation %s"
-	toolReferenceNotFoundTemplateConstant          = "workflow step references undefined tool: %s"
+	protocolConversionInvalidFromMessageConstant  = "convert-protocol step requires a valid 'from' protocol"
+	protocolConversionInvalidToMessageConstant    = "convert-protocol step requires a valid 'to' protocol"
+	protocolConversionSameProtocolMessageConstant = "convert-protocol step requires distinct source and target protocols"
+	branchMigrationTargetsRequiredMessageConstant = "migrate-branch step requires at least one target"
 )
 
 // BuildOperations converts the declarative configuration into executable operations.
@@ -23,7 +20,7 @@ func BuildOperations(configuration Configuration) ([]Operation, error) {
 	operations := make([]Operation, 0, len(configuration.Steps))
 	for stepIndex := range configuration.Steps {
 		step := configuration.Steps[stepIndex]
-		operation, buildError := buildOperationFromStep(step, configuration.Tools)
+		operation, buildError := buildOperationFromStep(step)
 		if buildError != nil {
 			return nil, buildError
 		}
@@ -32,122 +29,28 @@ func BuildOperations(configuration Configuration) ([]Operation, error) {
 	return operations, nil
 }
 
-func buildOperationFromStep(step StepConfiguration, tools map[string]ToolConfiguration) (Operation, error) {
-	resolvedOptions, resolveError := resolveStepOptions(step, tools)
-	if resolveError != nil {
-		return nil, resolveError
+func buildOperationFromStep(step StepConfiguration) (Operation, error) {
+	resolvedOperation := OperationType(strings.TrimSpace(string(step.Operation)))
+	if len(resolvedOperation) == 0 {
+		return nil, errors.New(configurationOperationMissingMessageConstant)
 	}
 
-	switch step.Operation {
+	normalizedOptions := step.Options
+
+	switch resolvedOperation {
 	case OperationTypeProtocolConversion:
-		return buildProtocolConversionOperation(resolvedOptions)
+		return buildProtocolConversionOperation(normalizedOptions)
 	case OperationTypeCanonicalRemote:
 		return &CanonicalRemoteOperation{}, nil
 	case OperationTypeRenameDirectories:
-		return buildRenameOperation(resolvedOptions)
+		return buildRenameOperation(normalizedOptions)
 	case OperationTypeBranchMigration:
-		return buildBranchMigrationOperation(resolvedOptions)
+		return buildBranchMigrationOperation(normalizedOptions)
 	case OperationTypeAuditReport:
-		return buildAuditReportOperation(resolvedOptions)
+		return buildAuditReportOperation(normalizedOptions)
 	default:
-		return nil, fmt.Errorf("unsupported workflow operation: %s", step.Operation)
+		return nil, fmt.Errorf("unsupported workflow operation: %s", resolvedOperation)
 	}
-}
-
-// ToolReferenceNotFoundError indicates that a workflow step referenced a tool that is not defined in the configuration.
-type ToolReferenceNotFoundError struct {
-	ToolName string
-}
-
-// Error implements the error interface.
-func (errorInstance ToolReferenceNotFoundError) Error() string {
-	return fmt.Sprintf(toolReferenceNotFoundTemplateConstant, errorInstance.ToolName)
-}
-
-func resolveStepOptions(step StepConfiguration, tools map[string]ToolConfiguration) (map[string]any, error) {
-	inlineOptions := step.Options
-	if inlineOptions == nil {
-		inlineOptions = map[string]any{}
-	}
-
-	reader := newOptionReader(inlineOptions)
-	toolReferenceValue, toolReferenceExists, toolReferenceError := reader.stringValue(optionToolReferenceKeyConstant)
-	if toolReferenceError != nil {
-		return nil, toolReferenceError
-	}
-
-	mergedOptions := copyOptions(inlineOptions)
-	if !toolReferenceExists {
-		return removeToolReferenceKey(mergedOptions), nil
-	}
-
-	trimmedReference := strings.TrimSpace(toolReferenceValue)
-	if len(trimmedReference) == 0 {
-		return nil, errors.New(toolReferenceEmptyNameMessageConstant)
-	}
-
-	if len(tools) == 0 {
-		return nil, ToolReferenceNotFoundError{ToolName: trimmedReference}
-	}
-
-	toolConfiguration, toolExists := tools[trimmedReference]
-	if !toolExists {
-		return nil, ToolReferenceNotFoundError{ToolName: trimmedReference}
-	}
-
-	if step.Operation != toolConfiguration.Operation {
-		return nil, fmt.Errorf(toolReferenceOperationMismatchTemplateConstant, trimmedReference, step.Operation)
-	}
-
-	resolved := copyOptions(toolConfiguration.Options)
-	for key, value := range mergedOptions {
-		if strings.EqualFold(key, optionToolReferenceKeyConstant) {
-			continue
-		}
-		removeCaseInsensitiveKey(resolved, key)
-		resolved[key] = value
-	}
-
-	return resolved, nil
-}
-
-func removeCaseInsensitiveKey(options map[string]any, target string) {
-	if options == nil {
-		return
-	}
-	for key := range options {
-		if strings.EqualFold(key, target) {
-			delete(options, key)
-			break
-		}
-	}
-}
-
-func copyOptions(source map[string]any) map[string]any {
-	if source == nil {
-		return map[string]any{}
-	}
-	cloned := make(map[string]any, len(source))
-	for key, value := range source {
-		cloned[key] = value
-	}
-	return cloned
-}
-
-func removeToolReferenceKey(options map[string]any) map[string]any {
-	if options == nil {
-		return map[string]any{}
-	}
-
-	cleaned := make(map[string]any, len(options))
-	for key, value := range options {
-		if strings.EqualFold(key, optionToolReferenceKeyConstant) {
-			continue
-		}
-		cleaned[key] = value
-	}
-
-	return cleaned
 }
 
 func buildProtocolConversionOperation(options map[string]any) (Operation, error) {
