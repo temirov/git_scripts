@@ -8,6 +8,7 @@ import (
 	"strings"
 	"syscall"
 
+	mapstructure "github.com/go-viper/mapstructure/v2"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"go.uber.org/zap"
@@ -52,18 +53,23 @@ const (
 	loggerNotInitializedMessageConstant                = "logger not initialized"
 	defaultConfigurationSearchPathConstant             = "."
 	configurationSearchPathEnvironmentVariableConstant = "GITSCRIPTS_CONFIG_SEARCH_PATH"
-	toolsConfigurationKeyConstant                      = "tools"
-	branchCleanupConfigurationKeyConstant              = toolsConfigurationKeyConstant + ".branch_cleanup"
-	reposConfigurationKeyConstant                      = toolsConfigurationKeyConstant + ".repos"
-	workflowConfigurationKeyConstant                   = toolsConfigurationKeyConstant + ".workflow"
-	migrateConfigurationKeyConstant                    = toolsConfigurationKeyConstant + ".migrate"
-	auditConfigurationKeyConstant                      = toolsConfigurationKeyConstant + ".audit"
+	auditOperationNameConstant                         = "audit"
+	packagesPurgeOperationNameConstant                 = "repo-packages-purge"
+	branchCleanupOperationNameConstant                 = "repo-prs-purge"
+	reposRenameOperationNameConstant                   = "repo-folders-rename"
+	reposRemotesOperationNameConstant                  = "repo-remote-update"
+	reposProtocolOperationNameConstant                 = "repo-protocol-convert"
+	workflowCommandOperationNameConstant               = "workflow"
+	branchMigrateOperationNameConstant                 = "branch-migrate"
+	operationDecodeErrorMessageConstant                = "unable to decode operation defaults"
+	operationNameLogFieldConstant                      = "operation"
+	operationErrorLogFieldConstant                     = "error"
 )
 
 // ApplicationConfiguration describes the persisted configuration for the CLI entrypoint.
 type ApplicationConfiguration struct {
-	Common ApplicationCommonConfiguration `mapstructure:"common"`
-	Tools  ApplicationToolsConfiguration  `mapstructure:"tools"`
+	Common     ApplicationCommonConfiguration      `mapstructure:"common"`
+	Operations []ApplicationOperationConfiguration `mapstructure:"operations"`
 }
 
 // ApplicationCommonConfiguration stores logging configuration shared across commands.
@@ -72,28 +78,84 @@ type ApplicationCommonConfiguration struct {
 	LogFormat string `mapstructure:"log_format"`
 }
 
-// ApplicationToolsConfiguration holds configuration for CLI subcommands grouped by command family.
-type ApplicationToolsConfiguration struct {
-	Audit         audit.CommandConfiguration       `mapstructure:"audit"`
-	Packages      packages.Configuration           `mapstructure:"packages"`
-	BranchCleanup branches.CommandConfiguration    `mapstructure:"branch_cleanup"`
-	Repos         repos.ToolsConfiguration         `mapstructure:"repos"`
-	Workflow      workflowcmd.CommandConfiguration `mapstructure:"workflow"`
-	Migrate       migrate.CommandConfiguration     `mapstructure:"migrate"`
+// ApplicationOperationConfiguration captures reusable operation defaults from the configuration file.
+type ApplicationOperationConfiguration struct {
+	Name    string         `mapstructure:"operation"`
+	Options map[string]any `mapstructure:"with"`
+}
+
+// OperationConfigurations stores reusable operation defaults indexed by normalized operation name.
+type OperationConfigurations struct {
+	entries map[string]map[string]any
+}
+
+func newOperationConfigurations(definitions []ApplicationOperationConfiguration) OperationConfigurations {
+	entries := make(map[string]map[string]any)
+	for index := range definitions {
+		normalizedName := normalizeOperationName(definitions[index].Name)
+		if len(normalizedName) == 0 {
+			continue
+		}
+
+		options := make(map[string]any)
+		for key, value := range definitions[index].Options {
+			options[key] = value
+		}
+
+		entries[normalizedName] = options
+	}
+
+	return OperationConfigurations{entries: entries}
+}
+
+func (configurations OperationConfigurations) decode(operationName string, target any) error {
+	if target == nil {
+		return nil
+	}
+
+	normalizedName := normalizeOperationName(operationName)
+	if len(normalizedName) == 0 {
+		return nil
+	}
+
+	if configurations.entries == nil {
+		return nil
+	}
+
+	options, exists := configurations.entries[normalizedName]
+	if !exists || len(options) == 0 {
+		return nil
+	}
+
+	decoder, decoderError := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+		TagName:          "mapstructure",
+		Result:           target,
+		WeaklyTypedInput: true,
+	})
+	if decoderError != nil {
+		return decoderError
+	}
+
+	return decoder.Decode(options)
+}
+
+func normalizeOperationName(raw string) string {
+	return strings.ToLower(strings.TrimSpace(raw))
 }
 
 // Application wires the Cobra root command, configuration loader, and structured logger.
 type Application struct {
-	rootCommand            *cobra.Command
-	configurationLoader    *utils.ConfigurationLoader
-	loggerFactory          *utils.LoggerFactory
-	logger                 *zap.Logger
-	configuration          ApplicationConfiguration
-	configurationMetadata  utils.LoadedConfiguration
-	configurationFilePath  string
-	logLevelFlagValue      string
-	logFormatFlagValue     string
-	commandContextAccessor utils.CommandContextAccessor
+	rootCommand             *cobra.Command
+	configurationLoader     *utils.ConfigurationLoader
+	loggerFactory           *utils.LoggerFactory
+	logger                  *zap.Logger
+	configuration           ApplicationConfiguration
+	configurationMetadata   utils.LoadedConfiguration
+	configurationFilePath   string
+	logLevelFlagValue       string
+	logFormatFlagValue      string
+	commandContextAccessor  utils.CommandContextAccessor
+	operationConfigurations OperationConfigurations
 }
 
 // NewApplication assembles a fully wired CLI application instance.
@@ -135,9 +197,7 @@ func NewApplication() *Application {
 			return application.logger
 		},
 		HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
-		ConfigurationProvider: func() audit.CommandConfiguration {
-			return application.configuration.Tools.Audit
-		},
+		ConfigurationProvider:        application.auditCommandConfiguration,
 	}
 	auditCommand, auditBuildError := auditBuilder.Build()
 	if auditBuildError == nil {
@@ -149,9 +209,7 @@ func NewApplication() *Application {
 			return application.logger
 		},
 		HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
-		ConfigurationProvider: func() branches.CommandConfiguration {
-			return application.configuration.Tools.BranchCleanup
-		},
+		ConfigurationProvider:        application.branchCleanupConfiguration,
 	}
 	branchCleanupCommand, branchCleanupBuildError := branchCleanupBuilder.Build()
 	if branchCleanupBuildError == nil {
@@ -163,9 +221,7 @@ func NewApplication() *Application {
 			return application.logger
 		},
 		HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
-		ConfigurationProvider: func() migrate.CommandConfiguration {
-			return application.configuration.Tools.Migrate
-		},
+		ConfigurationProvider:        application.branchMigrateConfiguration,
 	}
 	if workingDirectory, workingDirectoryError := os.Getwd(); workingDirectoryError == nil {
 		branchMigrationBuilder.WorkingDirectory = workingDirectory
@@ -179,9 +235,7 @@ func NewApplication() *Application {
 		LoggerProvider: func() *zap.Logger {
 			return application.logger
 		},
-		ConfigurationProvider: func() packages.Configuration {
-			return application.configuration.Tools.Packages
-		},
+		ConfigurationProvider: application.packagesConfiguration,
 	}
 	repoPackagesPurgeCommand, packagesBuildError := packagesBuilder.Build()
 	if packagesBuildError == nil {
@@ -193,9 +247,7 @@ func NewApplication() *Application {
 			return application.logger
 		},
 		HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
-		ConfigurationProvider: func() repos.RenameConfiguration {
-			return application.configuration.Tools.Repos.Rename
-		},
+		ConfigurationProvider:        application.reposRenameConfiguration,
 	}
 	renameCommand, renameBuildError := renameBuilder.Build()
 	if renameBuildError == nil {
@@ -207,9 +259,7 @@ func NewApplication() *Application {
 			return application.logger
 		},
 		HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
-		ConfigurationProvider: func() repos.RemotesConfiguration {
-			return application.configuration.Tools.Repos.Remotes
-		},
+		ConfigurationProvider:        application.reposRemotesConfiguration,
 	}
 	remotesCommand, remotesBuildError := remotesBuilder.Build()
 	if remotesBuildError == nil {
@@ -221,9 +271,7 @@ func NewApplication() *Application {
 			return application.logger
 		},
 		HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
-		ConfigurationProvider: func() repos.ProtocolConfiguration {
-			return application.configuration.Tools.Repos.Protocol
-		},
+		ConfigurationProvider:        application.reposProtocolConfiguration,
 	}
 	protocolCommand, protocolBuildError := protocolBuilder.Build()
 	if protocolBuildError == nil {
@@ -235,9 +283,7 @@ func NewApplication() *Application {
 			return application.logger
 		},
 		HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
-		ConfigurationProvider: func() workflowcmd.CommandConfiguration {
-			return application.configuration.Tools.Workflow
-		},
+		ConfigurationProvider:        application.workflowCommandConfiguration,
 	}
 	workflowCommand, workflowBuildError := workflowBuilder.Build()
 	if workflowBuildError == nil {
@@ -294,24 +340,6 @@ func (application *Application) initializeConfiguration(command *cobra.Command) 
 		commonLogLevelConfigKeyConstant:  string(utils.LogLevelInfo),
 		commonLogFormatConfigKeyConstant: string(utils.LogFormatStructured),
 	}
-	for configurationKey, configurationValue := range audit.DefaultConfigurationValues(auditConfigurationKeyConstant) {
-		defaultValues[configurationKey] = configurationValue
-	}
-	for configurationKey, configurationValue := range packages.DefaultConfigurationValues() {
-		defaultValues[configurationKey] = configurationValue
-	}
-	for configurationKey, configurationValue := range branches.DefaultConfigurationValues(branchCleanupConfigurationKeyConstant) {
-		defaultValues[configurationKey] = configurationValue
-	}
-	for configurationKey, configurationValue := range repos.DefaultConfigurationValues(reposConfigurationKeyConstant) {
-		defaultValues[configurationKey] = configurationValue
-	}
-	for configurationKey, configurationValue := range workflowcmd.DefaultConfigurationValues(workflowConfigurationKeyConstant) {
-		defaultValues[configurationKey] = configurationValue
-	}
-	for configurationKey, configurationValue := range migrate.DefaultConfigurationValues(migrateConfigurationKeyConstant) {
-		defaultValues[configurationKey] = configurationValue
-	}
 
 	loadedConfiguration, loadError := application.configurationLoader.LoadConfiguration(application.configurationFilePath, defaultValues, &application.configuration)
 	if loadError != nil {
@@ -319,6 +347,7 @@ func (application *Application) initializeConfiguration(command *cobra.Command) 
 	}
 
 	application.configurationMetadata = loadedConfiguration
+	application.operationConfigurations = newOperationConfigurations(application.configuration.Operations)
 
 	if application.persistentFlagChanged(command, logLevelFlagNameConstant) {
 		application.configuration.Common.LogLevel = application.logLevelFlagValue
@@ -362,6 +391,67 @@ func (application *Application) initializeConfiguration(command *cobra.Command) 
 func (application *Application) humanReadableLoggingEnabled() bool {
 	logFormatValue := strings.TrimSpace(application.configuration.Common.LogFormat)
 	return strings.EqualFold(logFormatValue, string(utils.LogFormatConsole))
+}
+
+func (application *Application) auditCommandConfiguration() audit.CommandConfiguration {
+	configuration := audit.DefaultCommandConfiguration()
+	application.decodeOperationConfiguration(auditOperationNameConstant, &configuration)
+	return configuration
+}
+
+func (application *Application) packagesConfiguration() packages.Configuration {
+	configuration := packages.DefaultConfiguration()
+	application.decodeOperationConfiguration(packagesPurgeOperationNameConstant, &configuration.Purge)
+	return configuration
+}
+
+func (application *Application) branchCleanupConfiguration() branches.CommandConfiguration {
+	configuration := branches.DefaultCommandConfiguration()
+	application.decodeOperationConfiguration(branchCleanupOperationNameConstant, &configuration)
+	return configuration
+}
+
+func (application *Application) reposRenameConfiguration() repos.RenameConfiguration {
+	configuration := repos.DefaultToolsConfiguration()
+	application.decodeOperationConfiguration(reposRenameOperationNameConstant, &configuration.Rename)
+	return configuration.Rename
+}
+
+func (application *Application) reposRemotesConfiguration() repos.RemotesConfiguration {
+	configuration := repos.DefaultToolsConfiguration()
+	application.decodeOperationConfiguration(reposRemotesOperationNameConstant, &configuration.Remotes)
+	return configuration.Remotes
+}
+
+func (application *Application) reposProtocolConfiguration() repos.ProtocolConfiguration {
+	configuration := repos.DefaultToolsConfiguration()
+	application.decodeOperationConfiguration(reposProtocolOperationNameConstant, &configuration.Protocol)
+	return configuration.Protocol
+}
+
+func (application *Application) workflowCommandConfiguration() workflowcmd.CommandConfiguration {
+	configuration := workflowcmd.DefaultCommandConfiguration()
+	application.decodeOperationConfiguration(workflowCommandOperationNameConstant, &configuration)
+	return configuration
+}
+
+func (application *Application) branchMigrateConfiguration() migrate.CommandConfiguration {
+	configuration := migrate.DefaultCommandConfiguration()
+	application.decodeOperationConfiguration(branchMigrateOperationNameConstant, &configuration)
+	return configuration
+}
+
+func (application *Application) decodeOperationConfiguration(operationName string, target any) {
+	if decodeError := application.operationConfigurations.decode(operationName, target); decodeError != nil {
+		if application.logger == nil {
+			return
+		}
+		application.logger.Warn(
+			operationDecodeErrorMessageConstant,
+			zap.String(operationNameLogFieldConstant, operationName),
+			zap.Error(decodeError),
+		)
+	}
 }
 
 func (application *Application) runRootCommand(command *cobra.Command, arguments []string) error {

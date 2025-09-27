@@ -98,44 +98,43 @@ common:
   log_level: info
   log_format: structured
 
-tools:
-  audit:
-    roots:
-      - ~/Development
-    debug: false
+operations:
+  - &audit_defaults
+    operation: audit
+    with:
+      roots:
+        - ~/Development
+      debug: false
 
-  branch_cleanup:
-    remote: origin
-    limit: 100
-    dry_run: false
-    roots:
-      - ~/Development
-
-  migrate:
-    dry_run: false
-    debug: false
-
-  packages:
-    purge:
+  - &packages_purge_defaults
+    operation: repo-packages-purge
+    with:
       owner: my-org
       package: my-image
       owner_type: org
       token_source: env:GITHUB_PACKAGES_TOKEN
       page_size: 50
 
-  repos:
-    rename:
+  - &branch_cleanup_defaults
+    operation: repo-prs-purge
+    with:
+      remote: origin
+      limit: 100
       dry_run: false
-      assume_yes: true
-      require_clean: true
       roots:
         - ~/Development
-    remotes:
+
+  - &repo_remotes_defaults
+    operation: repo-remote-update
+    with:
       dry_run: false
       assume_yes: true
       roots:
         - ~/Development
-    protocol: &workflow_convert_protocol_options
+
+  - &repo_protocol_defaults
+    operation: repo-protocol-convert
+    with:
       dry_run: false
       assume_yes: true
       roots:
@@ -143,46 +142,81 @@ tools:
       from: https
       to: git
 
-  workflow:
-    roots:
-      - ~/Development
-    dry_run: false
-    assume_yes: false
-    steps:
-      convert_protocol: &workflow_convert_protocol_step
-        operation: convert-protocol
-        with:
-          from: https
-          to: git
-      update_canonical_remote: &workflow_update_canonical_remote_step
-        operation: update-canonical-remote
-      rename_directories: &workflow_rename_directories_step
-        operation: rename-directories
-        with:
-          require_clean: true
-      migrate_branch: &workflow_migrate_branch_step
-        operation: migrate-branch
-        with:
-          targets:
-            - remote_name: origin
-              source_branch: main
-              target_branch: master
-              push_to_remote: true
-              delete_source_branch: false
-      audit_report: &workflow_audit_report_step
-        operation: audit-report
-        with: &workflow_audit_report_options
-          output: ./reports/audit.csv
+  - &repo_rename_defaults
+    operation: repo-folders-rename
+    with:
+      dry_run: false
+      assume_yes: true
+      require_clean: true
+      roots:
+        - ~/Development
+
+  - &workflow_command_defaults
+    operation: workflow
+    with:
+      roots:
+        - ~/Development
+      dry_run: false
+      assume_yes: false
+
+  - &branch_migrate_defaults
+    operation: branch-migrate
+    with:
+      debug: false
+      roots:
+        - ~/Development
+
+  - &convert_protocol_step
+    operation: convert-protocol
+    with:
+      from: https
+      to: git
+
+  - &canonical_remote_step
+    operation: update-canonical-remote
+
+  - &rename_directories_step
+    operation: rename-directories
+    with:
+      require_clean: true
+
+  - &migrate_branch_step
+    operation: migrate-branch
+    with:
+      targets:
+        - remote_name: origin
+          source_branch: main
+          target_branch: master
+          push_to_remote: true
+          delete_source_branch: false
+
+  - &audit_report_step
+    operation: audit-report
+    with:
+      output: ./reports/audit.csv
 
 workflow:
-  - *workflow_convert_protocol_step
-  - *workflow_update_canonical_remote_step
-  - *workflow_rename_directories_step
-  - *workflow_migrate_branch_step
-  - <<: *workflow_audit_report_step
-    with:
-      <<: *workflow_audit_report_options
-      output: ./reports/audit-latest.csv
+  - step:
+      order: 1
+      <<: *convert_protocol_step
+
+  - step:
+      order: 2
+      <<: *canonical_remote_step
+
+  - step:
+      order: 3
+      <<: *rename_directories_step
+
+  - step:
+      order: 4
+      <<: *migrate_branch_step
+
+  - step:
+      order: 5
+      <<: *audit_report_step
+      with:
+        output: ./reports/audit-latest.csv
 ```
 
 ```shell
@@ -206,7 +240,7 @@ infrastructure as the standalone commands. Pass additional roots on the command 
 and
 combine `--dry-run`/`--yes` for non-interactive execution.
 
-Each entry in the `workflow` array is a full step definition. Use YAML anchors under `tools.workflow.steps` to capture reusable
+Each entry in the `workflow` array is a full step definition. Use YAML anchors in the top-level `operations` list to capture reusable
 defaults and merge them into individual steps with the merge key (`<<`). Inline overrides remain possible: apply another
 merge inside the `with` map or specify the final values directly alongside the alias.
 

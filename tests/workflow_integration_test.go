@@ -301,35 +301,37 @@ func initializeWorkflowRepository(testInstance *testing.T, repositoryPath string
 func buildWorkflowConfiguration(auditPath string) string {
 	return fmt.Sprintf(`common:
   log_level: error
-tools:
-  workflow:
-    steps:
-      convert_protocol: &conversion_default
-        operation: convert-protocol
-        with:
-          from: https
-          to: ssh
-      migrate_branch: &migration_default
-        operation: migrate-branch
-        with:
-          targets:
-            - remote_name: origin
-              source_branch: main
-              target_branch: master
-              push_to_remote: false
-              delete_source_branch: false
-      audit_weekly: &audit_weekly
-        operation: audit-report
-        with: &audit_weekly_options
-          output: ./reports/audit.csv
-workflow:
-  - *conversion_default
-  - operation: update-canonical-remote
-  - *migration_default
-  - <<: *audit_weekly
+operations:
+  - &conversion_default
+    operation: convert-protocol
     with:
-      <<: *audit_weekly_options
-      output: %s
+      from: https
+      to: ssh
+  - &migration_default
+    operation: migrate-branch
+    with:
+      targets:
+        - remote_name: origin
+          source_branch: main
+          target_branch: master
+          push_to_remote: false
+          delete_source_branch: false
+  - &audit_weekly
+    operation: audit-report
+    with: &audit_weekly_options
+      output: ./reports/audit.csv
+workflow:
+  - step:
+      <<: *conversion_default
+  - step:
+      operation: update-canonical-remote
+  - step:
+      <<: *migration_default
+  - step:
+      <<: *audit_weekly
+      with:
+        <<: *audit_weekly_options
+        output: %s
 `, auditPath)
 }
 

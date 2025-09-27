@@ -2,12 +2,6 @@ package workflow
 
 import "strings"
 
-const (
-	workflowConfigurationRootsKeyConstant     = "roots"
-	workflowConfigurationDryRunKeyConstant    = "dry_run"
-	workflowConfigurationAssumeYesKeyConstant = "assume_yes"
-)
-
 // CommandConfiguration captures configuration values for workflow.
 type CommandConfiguration struct {
 	Roots     []string `mapstructure:"roots"`
@@ -21,16 +15,6 @@ func DefaultCommandConfiguration() CommandConfiguration {
 		Roots:     []string{defaultWorkflowRootConstant},
 		DryRun:    false,
 		AssumeYes: false,
-	}
-}
-
-// DefaultConfigurationValues returns configuration defaults keyed for Viper.
-func DefaultConfigurationValues(rootKey string) map[string]any {
-	defaults := DefaultCommandConfiguration()
-	return map[string]any{
-		rootKey + "." + workflowConfigurationRootsKeyConstant:     defaults.Roots,
-		rootKey + "." + workflowConfigurationDryRunKeyConstant:    defaults.DryRun,
-		rootKey + "." + workflowConfigurationAssumeYesKeyConstant: defaults.AssumeYes,
 	}
 }
 
