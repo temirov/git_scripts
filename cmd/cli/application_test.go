@@ -58,7 +58,7 @@ func TestApplicationInitializeConfiguration(t *testing.T) {
 			commandUse:            testPackagesCommandNameConstant,
 		},
 		{
-			name: "MissingOperationConfiguration",
+			name: "CommandConfigurationMissingForTargetCommandIgnored",
 			operationNames: []string{
 				"audit",
 				"repo-packages-purge",
@@ -68,9 +68,7 @@ func TestApplicationInitializeConfiguration(t *testing.T) {
 				"repo-protocol-convert",
 				"workflow",
 			},
-			expectedErrorSample:   &cli.MissingOperationConfigurationError{},
-			expectedOperationName: "branch-migrate",
-			commandUse:            testBranchMigrateCommandNameConstant,
+			commandUse: testBranchMigrateCommandNameConstant,
 		},
 	}
 
