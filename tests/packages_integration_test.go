@@ -23,7 +23,7 @@ const (
 	packagesIntegrationTokenReferenceConstant           = "env:PACKAGES_TOKEN"
 	packagesIntegrationTokenValueConstant               = "packages-token-value"
 	packagesIntegrationConfigFileNameConstant           = "config.yaml"
-	packagesIntegrationConfigTemplateConstant           = "common:\n  log_level: error\ntools:\n  packages:\n    purge:\n      owner: %s\n      package: %s\n      owner_type: %s\n      token_source: %s\n      dry_run: %t\n      service_base_url: %s\n      page_size: %d\n"
+	packagesIntegrationConfigTemplateConstant           = "common:\n  log_level: error\noperations:\n  - operation: repo-packages-purge\n    with:\n      owner: %s\n      package: %s\n      owner_type: %s\n      token_source: %s\n      dry_run: %t\n      service_base_url: %s\n      page_size: %d\nworkflow: []\n"
 	packagesIntegrationSubtestNameTemplateConstant      = "%d_%s"
 	packagesIntegrationRunSubcommandConstant            = "run"
 	packagesIntegrationModulePathConstant               = "."

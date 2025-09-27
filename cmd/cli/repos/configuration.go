@@ -2,18 +2,6 @@ package repos
 
 import "strings"
 
-const (
-	remotesConfigurationKeyConstant      = "remotes"
-	protocolConfigurationKeyConstant     = "protocol"
-	renameConfigurationKeyConstant       = "rename"
-	configurationDryRunKeyConstant       = "dry_run"
-	configurationAssumeYesKeyConstant    = "assume_yes"
-	configurationRequireCleanKeyConstant = "require_clean"
-	configurationRootsKeyConstant        = "roots"
-	protocolConfigurationFromKeyConstant = "from"
-	protocolConfigurationToKeyConstant   = "to"
-)
-
 // ToolsConfiguration captures repository command configuration sections.
 type ToolsConfiguration struct {
 	Remotes  RemotesConfiguration  `mapstructure:"remotes"`
@@ -66,25 +54,6 @@ func DefaultToolsConfiguration() ToolsConfiguration {
 			RequireCleanWorktree: false,
 			RepositoryRoots:      []string{defaultRepositoryRootConstant},
 		},
-	}
-}
-
-// DefaultConfigurationValues produces Viper defaults for repository commands.
-func DefaultConfigurationValues(rootKey string) map[string]any {
-	defaults := DefaultToolsConfiguration()
-	return map[string]any{
-		rootKey + "." + remotesConfigurationKeyConstant + "." + configurationDryRunKeyConstant:        defaults.Remotes.DryRun,
-		rootKey + "." + remotesConfigurationKeyConstant + "." + configurationAssumeYesKeyConstant:     defaults.Remotes.AssumeYes,
-		rootKey + "." + remotesConfigurationKeyConstant + "." + configurationRootsKeyConstant:         defaults.Remotes.RepositoryRoots,
-		rootKey + "." + protocolConfigurationKeyConstant + "." + configurationDryRunKeyConstant:       defaults.Protocol.DryRun,
-		rootKey + "." + protocolConfigurationKeyConstant + "." + configurationAssumeYesKeyConstant:    defaults.Protocol.AssumeYes,
-		rootKey + "." + protocolConfigurationKeyConstant + "." + configurationRootsKeyConstant:        defaults.Protocol.RepositoryRoots,
-		rootKey + "." + protocolConfigurationKeyConstant + "." + protocolConfigurationFromKeyConstant: defaults.Protocol.FromProtocol,
-		rootKey + "." + protocolConfigurationKeyConstant + "." + protocolConfigurationToKeyConstant:   defaults.Protocol.ToProtocol,
-		rootKey + "." + renameConfigurationKeyConstant + "." + configurationDryRunKeyConstant:         defaults.Rename.DryRun,
-		rootKey + "." + renameConfigurationKeyConstant + "." + configurationAssumeYesKeyConstant:      defaults.Rename.AssumeYes,
-		rootKey + "." + renameConfigurationKeyConstant + "." + configurationRequireCleanKeyConstant:   defaults.Rename.RequireCleanWorktree,
-		rootKey + "." + renameConfigurationKeyConstant + "." + configurationRootsKeyConstant:          defaults.Rename.RepositoryRoots,
 	}
 }
 

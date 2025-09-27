@@ -31,10 +31,16 @@ const (
 )
 
 // Configuration describes the ordered workflow steps loaded from YAML or JSON.
-// Additional sections such as `tools.workflow.steps` are ignored by the workflow loader but remain available for YAML anchors
-// and reuse when authoring configuration files.
 type Configuration struct {
-	Steps []StepConfiguration `yaml:"workflow" json:"workflow"`
+	Steps []StepConfiguration
+}
+
+type workflowFile struct {
+	Workflow []workflowStepWrapper `yaml:"workflow" json:"workflow"`
+}
+
+type workflowStepWrapper struct {
+	Step StepConfiguration `yaml:"step" json:"step"`
 }
 
 // StepConfiguration associates an operation type with declarative options.
@@ -55,13 +61,18 @@ func LoadConfiguration(filePath string) (Configuration, error) {
 		return Configuration{}, fmt.Errorf(configurationLoadErrorTemplateConstant, readError)
 	}
 
-	var configuration Configuration
-	if unmarshalError := yaml.Unmarshal(contentBytes, &configuration); unmarshalError != nil {
+	var parsedWorkflow workflowFile
+	if unmarshalError := yaml.Unmarshal(contentBytes, &parsedWorkflow); unmarshalError != nil {
 		return Configuration{}, fmt.Errorf(configurationParseErrorTemplateConstant, unmarshalError)
 	}
 
 	if workflowError := ensureWorkflowSequence(contentBytes); workflowError != nil {
 		return Configuration{}, fmt.Errorf(configurationParseErrorTemplateConstant, workflowError)
+	}
+
+	configuration := Configuration{Steps: make([]StepConfiguration, 0, len(parsedWorkflow.Workflow))}
+	for index := range parsedWorkflow.Workflow {
+		configuration.Steps = append(configuration.Steps, parsedWorkflow.Workflow[index].Step)
 	}
 
 	if len(configuration.Steps) == 0 {
