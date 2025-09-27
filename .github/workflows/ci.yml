@@ -2,7 +2,8 @@ name: Go CI
 
 on:
   push:
-    branches: [ main, master ]
+    branches:
+      - master
     paths:
       - '**/*.go'
   pull_request:
