@@ -106,40 +106,35 @@ common:
   log_format: structured
 
 operations:
-  - &audit_defaults
-    operation: audit
-    with:
+  - operation: audit
+    with: &audit_defaults
       roots:
         - ~/Development
       debug: false
 
-  - &packages_purge_defaults
-    operation: repo-packages-purge
-    with:
+  - operation: repo-packages-purge
+    with: &packages_purge_defaults
       # package: my-image  # Optional override; defaults to the repository name
       roots:
         - ~/Development
 
-  - &branch_cleanup_defaults
-    operation: repo-prs-purge
-    with:
+  - operation: repo-prs-purge
+    with: &branch_cleanup_defaults
       remote: origin
       limit: 100
       dry_run: false
       roots:
         - ~/Development
 
-  - &repo_remotes_defaults
-    operation: repo-remote-update
-    with:
+  - operation: repo-remote-update
+    with: &repo_remotes_defaults
       dry_run: false
       assume_yes: true
       roots:
         - ~/Development
 
-  - &repo_protocol_defaults
-    operation: repo-protocol-convert
-    with:
+  - operation: repo-protocol-convert
+    with: &repo_protocol_defaults
       dry_run: false
       assume_yes: true
       roots:
@@ -147,79 +142,61 @@ operations:
       from: https
       to: git
 
-  - &repo_rename_defaults
-    operation: repo-folders-rename
-    with:
+  - operation: repo-folders-rename
+    with: &repo_rename_defaults
       dry_run: false
       assume_yes: true
       require_clean: true
       roots:
         - ~/Development
 
-  - &workflow_command_defaults
-    operation: workflow
-    with:
+  - operation: workflow
+    with: &workflow_command_defaults
       roots:
         - ~/Development
       dry_run: false
       assume_yes: false
 
-  - &branch_migrate_defaults
-    operation: branch-migrate
-    with:
+  - operation: branch-migrate
+    with: &branch_migrate_defaults
       debug: false
       roots:
         - ~/Development
 
-  - &convert_protocol_step
-    operation: convert-protocol
-    with:
-      from: https
-      to: git
-
-  - &canonical_remote_step
-    operation: update-canonical-remote
-
-  - &rename_directories_step
-    operation: rename-directories
-    with:
-      require_clean: true
-
-  - &migrate_branch_step
-    operation: migrate-branch
-    with:
-      targets:
-        - remote_name: origin
-          source_branch: main
-          target_branch: master
-          push_to_remote: true
-          delete_source_branch: false
-
-  - &audit_report_step
-    operation: audit-report
-    with:
-      output: ./reports/audit.csv
-
 workflow:
   - step:
       order: 1
-      <<: *convert_protocol_step
+      operation: convert-protocol
+      with:
+        <<: *repo_protocol_defaults
 
   - step:
       order: 2
-      <<: *canonical_remote_step
+      operation: update-canonical-remote
+      with:
+        <<: *repo_remotes_defaults
 
   - step:
       order: 3
-      <<: *rename_directories_step
+      operation: rename-directories
+      with:
+        <<: *repo_rename_defaults
 
   - step:
       order: 4
-      <<: *migrate_branch_step
+      operation: migrate-branch
+      with:
+        <<: *branch_migrate_defaults
+        targets:
+          - remote_name: origin
+            source_branch: main
+            target_branch: master
+            push_to_remote: true
+            delete_source_branch: false
 
   - step:
       order: 5
-      <<: *audit_report_step
+      operation: audit-report
       with:
         output: ./reports/audit-latest.csv
 ```
@@ -249,9 +226,9 @@ infrastructure as the standalone commands. Pass additional roots on the command 
 and
 combine `--dry-run`/`--yes` for non-interactive execution.
 
-Each entry in the `workflow` array is a full step definition. Use YAML anchors in the top-level `operations` list to capture reusable
-defaults and merge them into individual steps with the merge key (`<<`). Inline overrides remain possible: apply another
-merge inside the `with` map or specify the final values directly alongside the alias.
+Each entry in the `workflow` array is a full step definition. Reuse the option maps defined for CLI commands (for example,
+`*repo_protocol_defaults`) to keep workflow steps and direct invocations in sync. Inline overrides remain possible: apply
+another merge inside the `with` map or specify the final values directly alongside the alias.
 
 ## Development and testing
 
