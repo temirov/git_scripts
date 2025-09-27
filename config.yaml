@@ -14,7 +14,7 @@ operations:
   - &packages_purge_defaults
     operation: repo-packages-purge
     with:
-      package: my-image
+      # package: my-image  # Optional override; defaults to the repository name
       roots:
         - ~/Development
 
