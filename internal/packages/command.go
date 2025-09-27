@@ -48,8 +48,6 @@ type CommandBuilder struct {
 	ConfigurationProvider ConfigurationProvider
 	ServiceResolver       PurgeServiceResolver
 	HTTPClient            ghcr.HTTPClient
-	ServiceBaseURL        string
-	PageSize              int
 	EnvironmentLookup     EnvironmentLookup
 	FileReader            FileReader
 	TokenResolver         TokenResolver
@@ -178,21 +176,6 @@ func (builder *CommandBuilder) resolveConfiguration() Configuration {
 		configuration.Purge.TokenSource = defaultTokenSourceValueConstant
 	}
 
-	configuration.Purge.ServiceBaseURL = strings.TrimSpace(configuration.Purge.ServiceBaseURL)
-	if configuration.Purge.PageSize < 0 {
-		configuration.Purge.PageSize = 0
-	}
-
-	trimmedServiceBaseURL := strings.TrimSpace(builder.ServiceBaseURL)
-	if len(trimmedServiceBaseURL) == 0 {
-		trimmedServiceBaseURL = configuration.Purge.ServiceBaseURL
-	}
-	builder.ServiceBaseURL = trimmedServiceBaseURL
-
-	if builder.PageSize <= 0 && configuration.Purge.PageSize > 0 {
-		builder.PageSize = configuration.Purge.PageSize
-	}
-
 	return configuration
 }
 
@@ -203,8 +186,6 @@ func (builder *CommandBuilder) resolvePurgeService(logger *zap.Logger) (PurgeExe
 
 	defaultResolver := &DefaultPurgeServiceResolver{
 		HTTPClient:        builder.HTTPClient,
-		ServiceBaseURL:    builder.ServiceBaseURL,
-		PageSize:          builder.PageSize,
 		EnvironmentLookup: builder.EnvironmentLookup,
 		FileReader:        builder.FileReader,
 		TokenResolver:     builder.TokenResolver,

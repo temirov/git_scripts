@@ -22,15 +22,16 @@ const (
 	packagesIntegrationTokenEnvNameConstant             = "PACKAGES_TOKEN"
 	packagesIntegrationTokenReferenceConstant           = "env:PACKAGES_TOKEN"
 	packagesIntegrationTokenValueConstant               = "packages-token-value"
+	packagesIntegrationBaseURLEnvironmentNameConstant   = "GITSCRIPTS_REPO_PACKAGES_PURGE_BASE_URL"
 	packagesIntegrationConfigFileNameConstant           = "config.yaml"
-	packagesIntegrationConfigTemplateConstant           = "common:\n  log_level: error\noperations:\n  - operation: repo-packages-purge\n    with:\n      owner: %s\n      package: %s\n      owner_type: %s\n      token_source: %s\n      dry_run: %t\n      service_base_url: %s\n      page_size: %d\nworkflow: []\n"
+	packagesIntegrationConfigTemplateConstant           = "common:\n  log_level: error\noperations:\n  - operation: repo-packages-purge\n    with:\n      owner: %s\n      package: %s\n      owner_type: %s\n      token_source: %s\n      dry_run: %t\nworkflow: []\n"
 	packagesIntegrationSubtestNameTemplateConstant      = "%d_%s"
 	packagesIntegrationRunSubcommandConstant            = "run"
 	packagesIntegrationModulePathConstant               = "."
 	packagesIntegrationConfigFlagTemplateConstant       = "--config=%s"
 	packagesIntegrationPackagesPurgeCommandNameConstant = "repo-packages-purge"
 	packagesIntegrationCommandTimeout                   = 10 * time.Second
-	packagesIntegrationPageSizeConstant                 = 3
+	packagesIntegrationExpectedPageSizeConstant         = 100
 	packagesIntegrationTaggedVersionIDConstant          = 101
 	packagesIntegrationFirstUntaggedVersionIDConstant   = 202
 	packagesIntegrationSecondUntaggedVersionIDConstant  = 303
@@ -207,14 +208,13 @@ func TestPackagesCommandIntegration(testInstance *testing.T) {
 				packagesIntegrationOwnerTypeConstant,
 				packagesIntegrationTokenReferenceConstant,
 				testCase.dryRun,
-				server.URL,
-				packagesIntegrationPageSizeConstant,
 			)
 
 			writeError := os.WriteFile(configPath, []byte(configContent), 0o600)
 			require.NoError(subtest, writeError)
 
 			subtest.Setenv(packagesIntegrationTokenEnvNameConstant, packagesIntegrationTokenValueConstant)
+			subtest.Setenv(packagesIntegrationBaseURLEnvironmentNameConstant, server.URL)
 
 			arguments := []string{
 				packagesIntegrationRunSubcommandConstant,
@@ -238,11 +238,11 @@ func TestPackagesCommandIntegration(testInstance *testing.T) {
 
 			require.Equal(subtest, expectedVersionsPath, listRequests[0].path)
 			require.Equal(subtest, 1, listRequests[0].page)
-			require.Equal(subtest, packagesIntegrationPageSizeConstant, listRequests[0].perPage)
+			require.Equal(subtest, packagesIntegrationExpectedPageSizeConstant, listRequests[0].perPage)
 
 			require.Equal(subtest, expectedVersionsPath, listRequests[1].path)
 			require.Equal(subtest, 2, listRequests[1].page)
-			require.Equal(subtest, packagesIntegrationPageSizeConstant, listRequests[1].perPage)
+			require.Equal(subtest, packagesIntegrationExpectedPageSizeConstant, listRequests[1].perPage)
 
 			deleteRequests := serverState.snapshotDeleteRequests()
 			if len(testCase.expectedDeleteIDs) == 0 {

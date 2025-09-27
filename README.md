@@ -113,7 +113,6 @@ operations:
       package: my-image
       owner_type: org
       token_source: env:GITHUB_PACKAGES_TOKEN
-      page_size: 50
 
   - &branch_cleanup_defaults
     operation: repo-prs-purge
@@ -218,6 +217,10 @@ workflow:
       with:
         output: ./reports/audit-latest.csv
 ```
+
+The purge command automatically targets the public GitHub API. Set the
+`GITSCRIPTS_REPO_PACKAGES_PURGE_BASE_URL` environment variable when you need to
+point at a GitHub Enterprise instance during local testing.
 
 ```shell
 go run . repo-packages-purge --dry-run=false

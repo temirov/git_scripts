@@ -18,7 +18,6 @@ operations:
       package: my-image
       owner_type: org
       token_source: env:GITHUB_PACKAGES_TOKEN
-      page_size: 50
 
   - &branch_cleanup_defaults
     operation: repo-prs-purge
