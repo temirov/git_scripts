@@ -112,41 +112,40 @@ tools:
       operation: audit-report
       with:
         output: ./audit.csv
+workflow_tools:
+  - name: conversion.default
+    operation: convert-protocol
+    with:
+      from: https
+      to: git
+  - name: rename.clean
+    operation: rename-directories
+    with:
+      require_clean: true
+  - name: migration.legacy
+    operation: migrate-branch
+    with:
+      targets:
+        - remote_name: origin
+          source_branch: main
+          target_branch: master
+          push_to_remote: true
+          delete_source_branch: false
+  - name: audit.weekly
+    operation: audit-report
+    with:
+      output: ./reports/audit.csv
 workflow:
-  tools:
-    - name: conversion.default
-      operation: convert-protocol
-      with:
-        from: https
-        to: git
-    - name: rename.clean
-      operation: rename-directories
-      with:
-        require_clean: true
-    - name: migration.legacy
-      operation: migrate-branch
-      with:
-        targets:
-          - remote_name: origin
-            source_branch: main
-            target_branch: master
-            push_to_remote: true
-            delete_source_branch: false
-    - name: audit.weekly
-      operation: audit-report
-      with:
-        output: ./reports/audit.csv
-  steps:
-    - with:
-        tool_ref: conversion.default
-    - operation: update-canonical-remote
-    - with:
-        tool_ref: rename.clean
-    - with:
-        tool_ref: migration.legacy
-    - with:
-        tool_ref: audit.weekly
-        output: ./reports/audit-latest.csv
+  - with:
+      tool_ref: conversion.default
+  - operation: update-canonical-remote
+  - with:
+      tool_ref: rename.clean
+  - with:
+      tool_ref: migration.legacy
+  - with:
+      tool_ref: audit.weekly
+      output: ./reports/audit-latest.csv
 ```
 
 ```shell
@@ -165,14 +164,14 @@ go run . workflow --roots ~/Development --dry-run
 go run . workflow --roots ~/Development --yes
 ```
 
-`workflow` reads the `workflow.steps` array from `config.yaml`, reusing the same repository discovery, prompting, and logging
+`workflow` reads the `workflow` array from `config.yaml`, reusing the same repository discovery, prompting, and logging
 infrastructure as the standalone commands. Pass additional roots on the command line to override the configuration file
 and
 combine `--dry-run`/`--yes` for non-interactive execution.
 
-Each entry in `workflow.steps` can either specify an explicit `operation` with its `with` map or reference a reusable
+Each entry in the `workflow` array can either specify an explicit `operation` with its `with` map or reference a reusable
 tool definition by placing `tool_ref` inside the step's `with` block. When you supply `tool_ref`, the runner copies the
-shared defaults defined under `workflow.tools` and applies any inline overrides you add alongside the reference. Reach
+shared defaults defined under `workflow_tools` and applies any inline overrides you add alongside the reference. Reach
 for inline `with` maps when a step is unique; prefer `tool_ref` when several steps share the same configuration and you
 want a single place to update future adjustments.
 
