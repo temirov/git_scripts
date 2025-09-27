@@ -13,7 +13,10 @@ import (
 	"github.com/temirov/git_scripts/internal/githubcli"
 	"github.com/temirov/git_scripts/internal/gitrepo"
 	"github.com/temirov/git_scripts/internal/repos/shared"
+	pathutils "github.com/temirov/git_scripts/internal/utils/path"
 )
+
+var workflowExecutorHomeDirectoryExpander = pathutils.NewHomeExpander()
 
 const (
 	defaultWorkflowRootConstant            = "."
@@ -118,7 +121,8 @@ func sanitizeRoots(rawRoots []string) []string {
 		if len(trimmed) == 0 {
 			continue
 		}
-		sanitized = append(sanitized, trimmed)
+		expandedRoot := workflowExecutorHomeDirectoryExpander.Expand(trimmed)
+		sanitized = append(sanitized, expandedRoot)
 	}
 
 	if len(sanitized) == 0 {

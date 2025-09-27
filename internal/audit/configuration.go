@@ -1,6 +1,12 @@
 package audit
 
-import "strings"
+import (
+	"strings"
+
+	pathutils "github.com/temirov/git_scripts/internal/utils/path"
+)
+
+var auditConfigurationHomeDirectoryExpander = pathutils.NewHomeExpander()
 
 // CommandConfiguration captures persistent settings for the audit command.
 type CommandConfiguration struct {
@@ -16,8 +22,8 @@ func DefaultCommandConfiguration() CommandConfiguration {
 	}
 }
 
-// sanitize trims whitespace and applies defaults to unset configuration values.
-func (configuration CommandConfiguration) sanitize() CommandConfiguration {
+// Sanitize trims whitespace and applies defaults to unset configuration values.
+func (configuration CommandConfiguration) Sanitize() CommandConfiguration {
 	sanitized := configuration
 
 	sanitized.Roots = sanitizeRoots(configuration.Roots)
@@ -27,12 +33,13 @@ func (configuration CommandConfiguration) sanitize() CommandConfiguration {
 
 func sanitizeRoots(raw []string) []string {
 	sanitized := make([]string, 0, len(raw))
-	for index := range raw {
-		trimmed := strings.TrimSpace(raw[index])
+	for rawRootIndex := range raw {
+		trimmed := strings.TrimSpace(raw[rawRootIndex])
 		if len(trimmed) == 0 {
 			continue
 		}
-		sanitized = append(sanitized, trimmed)
+		expandedRoot := auditConfigurationHomeDirectoryExpander.Expand(trimmed)
+		sanitized = append(sanitized, expandedRoot)
 	}
 	return sanitized
 }

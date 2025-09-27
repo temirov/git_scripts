@@ -249,7 +249,7 @@ func (builder *CommandBuilder) resolveConfiguration() Configuration {
 		configuration = builder.ConfigurationProvider()
 	}
 
-	return configuration.sanitize()
+	return configuration.Sanitize()
 }
 
 func (builder *CommandBuilder) resolvePurgeService(logger *zap.Logger) (PurgeExecutor, error) {
