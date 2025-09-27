@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"syscall"
 
@@ -64,7 +65,42 @@ const (
 	operationDecodeErrorMessageConstant                = "unable to decode operation defaults"
 	operationNameLogFieldConstant                      = "operation"
 	operationErrorLogFieldConstant                     = "error"
+	duplicateOperationConfigurationTemplateConstant    = "duplicate configuration for operation %q"
+	missingOperationConfigurationTemplateConstant      = "missing configuration for operation %q"
 )
+
+var commandOperationRequirements = map[string][]string{
+	auditOperationNameConstant:           {auditOperationNameConstant},
+	packagesPurgeOperationNameConstant:   {packagesPurgeOperationNameConstant},
+	branchCleanupOperationNameConstant:   {branchCleanupOperationNameConstant},
+	reposRenameOperationNameConstant:     {reposRenameOperationNameConstant},
+	reposRemotesOperationNameConstant:    {reposRemotesOperationNameConstant},
+	reposProtocolOperationNameConstant:   {reposProtocolOperationNameConstant},
+	workflowCommandOperationNameConstant: {workflowCommandOperationNameConstant},
+	branchMigrateOperationNameConstant:   {branchMigrateOperationNameConstant},
+}
+
+var requiredOperationConfigurationNames = collectRequiredOperationConfigurationNames()
+
+// DuplicateOperationConfigurationError indicates that the configuration file defines the same operation multiple times.
+type DuplicateOperationConfigurationError struct {
+	OperationName string
+}
+
+// Error implements the error interface.
+func (errorDetails DuplicateOperationConfigurationError) Error() string {
+	return fmt.Sprintf(duplicateOperationConfigurationTemplateConstant, errorDetails.OperationName)
+}
+
+// MissingOperationConfigurationError indicates that a referenced operation configuration is absent.
+type MissingOperationConfigurationError struct {
+	OperationName string
+}
+
+// Error implements the error interface.
+func (errorDetails MissingOperationConfigurationError) Error() string {
+	return fmt.Sprintf(missingOperationConfigurationTemplateConstant, errorDetails.OperationName)
+}
 
 // ApplicationConfiguration describes the persisted configuration for the CLI entrypoint.
 type ApplicationConfiguration struct {
@@ -89,23 +125,53 @@ type OperationConfigurations struct {
 	entries map[string]map[string]any
 }
 
-func newOperationConfigurations(definitions []ApplicationOperationConfiguration) OperationConfigurations {
+func newOperationConfigurations(definitions []ApplicationOperationConfiguration) (OperationConfigurations, error) {
 	entries := make(map[string]map[string]any)
-	for index := range definitions {
-		normalizedName := normalizeOperationName(definitions[index].Name)
+	seenOperations := make(map[string]struct{})
+	for definitionIndex := range definitions {
+		normalizedName := normalizeOperationName(definitions[definitionIndex].Name)
 		if len(normalizedName) == 0 {
 			continue
 		}
 
+		if _, exists := seenOperations[normalizedName]; exists {
+			return OperationConfigurations{}, DuplicateOperationConfigurationError{OperationName: normalizedName}
+		}
+		seenOperations[normalizedName] = struct{}{}
+
 		options := make(map[string]any)
-		for key, value := range definitions[index].Options {
-			options[key] = value
+		for optionKey, optionValue := range definitions[definitionIndex].Options {
+			options[optionKey] = optionValue
 		}
 
 		entries[normalizedName] = options
 	}
 
-	return OperationConfigurations{entries: entries}
+	return OperationConfigurations{entries: entries}, nil
+}
+
+// Lookup returns the configuration options for the provided operation name or an error if the configuration is absent.
+func (configurations OperationConfigurations) Lookup(operationName string) (map[string]any, error) {
+	normalizedName := normalizeOperationName(operationName)
+	if len(normalizedName) == 0 {
+		return nil, MissingOperationConfigurationError{OperationName: operationName}
+	}
+
+	if configurations.entries == nil {
+		return nil, MissingOperationConfigurationError{OperationName: normalizedName}
+	}
+
+	options, exists := configurations.entries[normalizedName]
+	if !exists {
+		return nil, MissingOperationConfigurationError{OperationName: normalizedName}
+	}
+
+	duplicatedOptions := make(map[string]any, len(options))
+	for optionKey, optionValue := range options {
+		duplicatedOptions[optionKey] = optionValue
+	}
+
+	return duplicatedOptions, nil
 }
 
 func (configurations OperationConfigurations) decode(operationName string, target any) error {
@@ -113,17 +179,12 @@ func (configurations OperationConfigurations) decode(operationName string, targe
 		return nil
 	}
 
-	normalizedName := normalizeOperationName(operationName)
-	if len(normalizedName) == 0 {
-		return nil
+	options, lookupError := configurations.Lookup(operationName)
+	if lookupError != nil {
+		return lookupError
 	}
 
-	if configurations.entries == nil {
-		return nil
-	}
-
-	options, exists := configurations.entries[normalizedName]
-	if !exists || len(options) == 0 {
+	if len(options) == 0 {
 		return nil
 	}
 
@@ -347,7 +408,16 @@ func (application *Application) initializeConfiguration(command *cobra.Command) 
 	}
 
 	application.configurationMetadata = loadedConfiguration
-	application.operationConfigurations = newOperationConfigurations(application.configuration.Operations)
+
+	operationConfigurations, configurationBuildError := newOperationConfigurations(application.configuration.Operations)
+	if configurationBuildError != nil {
+		return configurationBuildError
+	}
+	application.operationConfigurations = operationConfigurations
+
+	if validationError := application.validateOperationConfigurations(command); validationError != nil {
+		return validationError
+	}
 
 	if application.persistentFlagChanged(command, logLevelFlagNameConstant) {
 		application.configuration.Common.LogLevel = application.logLevelFlagValue
@@ -386,6 +456,12 @@ func (application *Application) initializeConfiguration(command *cobra.Command) 
 	}
 
 	return nil
+}
+
+// InitializeForCommand prepares application state for the provided command name without executing command logic.
+func (application *Application) InitializeForCommand(commandUse string) error {
+	command := &cobra.Command{Use: commandUse}
+	return application.initializeConfiguration(command)
 }
 
 func (application *Application) humanReadableLoggingEnabled() bool {
@@ -452,6 +528,65 @@ func (application *Application) decodeOperationConfiguration(operationName strin
 			zap.Error(decodeError),
 		)
 	}
+}
+
+func (application *Application) validateOperationConfigurations(command *cobra.Command) error {
+	if len(application.configuration.Operations) == 0 {
+		return nil
+	}
+
+	requiredOperations := application.operationsRequiredForCommand(command)
+	if len(requiredOperations) == 0 {
+		return nil
+	}
+
+	for index := range requiredOperations {
+		operationName := requiredOperations[index]
+		if _, lookupError := application.operationConfigurations.Lookup(operationName); lookupError != nil {
+			return lookupError
+		}
+	}
+
+	return nil
+}
+
+func (application *Application) operationsRequiredForCommand(command *cobra.Command) []string {
+	if command == nil {
+		return requiredOperationConfigurationNames
+	}
+
+	commandName := strings.TrimSpace(command.Name())
+	if len(commandName) == 0 {
+		return requiredOperationConfigurationNames
+	}
+
+	if requiredOperations, exists := commandOperationRequirements[commandName]; exists {
+		return requiredOperations
+	}
+
+	if command.HasParent() {
+		return application.operationsRequiredForCommand(command.Parent())
+	}
+
+	return nil
+}
+
+func collectRequiredOperationConfigurationNames() []string {
+	uniqueNames := make(map[string]struct{})
+	for _, operationNames := range commandOperationRequirements {
+		for _, operationName := range operationNames {
+			uniqueNames[operationName] = struct{}{}
+		}
+	}
+
+	orderedNames := make([]string, 0, len(uniqueNames))
+	for operationName := range uniqueNames {
+		orderedNames = append(orderedNames, operationName)
+	}
+
+	sort.Strings(orderedNames)
+
+	return orderedNames
 }
 
 func (application *Application) runRootCommand(command *cobra.Command, arguments []string) error {
