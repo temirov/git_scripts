@@ -280,7 +280,7 @@ func (builder *CommandBuilder) resolveConfiguration() CommandConfiguration {
 	}
 
 	provided := builder.ConfigurationProvider()
-	return provided.sanitize()
+	return provided.Sanitize()
 }
 
 func (builder *CommandBuilder) logMigrationFailure(logger *zap.Logger, repositoryPath string, failure error) {

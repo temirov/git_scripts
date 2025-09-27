@@ -134,7 +134,7 @@ func (builder *CommandBuilder) run(command *cobra.Command, arguments []string) e
 
 	rootValues, _ := command.Flags().GetStringSlice(rootsFlagNameConstant)
 	preferFlagRoots := command != nil && command.Flags().Changed(rootsFlagNameConstant)
-	roots := determineRoots(rootValues, commandConfiguration.Roots, preferFlagRoots)
+	roots := DetermineRoots(rootValues, commandConfiguration.Roots, preferFlagRoots)
 	if len(roots) == 0 {
 		if helpError := displayCommandHelp(command); helpError != nil {
 			return helpError
@@ -163,5 +163,5 @@ func (builder *CommandBuilder) resolveConfiguration() CommandConfiguration {
 	}
 
 	provided := builder.ConfigurationProvider()
-	return provided.sanitize()
+	return provided.Sanitize()
 }

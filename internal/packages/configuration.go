@@ -1,6 +1,12 @@
 package packages
 
-import "strings"
+import (
+	"strings"
+
+	pathutils "github.com/temirov/git_scripts/internal/utils/path"
+)
+
+var packagesConfigurationHomeDirectoryExpander = pathutils.NewHomeExpander()
 
 const (
 	defaultTokenSourceValueConstant = "env:GITHUB_PACKAGES_TOKEN"
@@ -25,14 +31,15 @@ func DefaultConfiguration() Configuration {
 	}
 }
 
-// sanitize trims configured values and removes empty entries.
-func (configuration Configuration) sanitize() Configuration {
+// Sanitize trims configured values and removes empty entries.
+func (configuration Configuration) Sanitize() Configuration {
 	sanitized := configuration
-	sanitized.Purge = configuration.Purge.sanitize()
+	sanitized.Purge = configuration.Purge.Sanitize()
 	return sanitized
 }
 
-func (configuration PurgeConfiguration) sanitize() PurgeConfiguration {
+// Sanitize trims purge configuration values and removes empty entries.
+func (configuration PurgeConfiguration) Sanitize() PurgeConfiguration {
 	sanitized := configuration
 	sanitized.RepositoryRoots = sanitizeRoots(configuration.RepositoryRoots)
 	return sanitized
@@ -45,7 +52,8 @@ func sanitizeRoots(candidateRoots []string) []string {
 		if len(trimmedRoot) == 0 {
 			continue
 		}
-		sanitizedRoots = append(sanitizedRoots, trimmedRoot)
+		expandedRoot := packagesConfigurationHomeDirectoryExpander.Expand(trimmedRoot)
+		sanitizedRoots = append(sanitizedRoots, expandedRoot)
 	}
 	if len(sanitizedRoots) == 0 {
 		return nil

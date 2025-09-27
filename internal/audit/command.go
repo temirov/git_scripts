@@ -129,5 +129,5 @@ func (builder *CommandBuilder) resolveConfiguration() CommandConfiguration {
 		return DefaultCommandConfiguration()
 	}
 	provided := builder.ConfigurationProvider()
-	return provided.sanitize()
+	return provided.Sanitize()
 }
