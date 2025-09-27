@@ -11,18 +11,13 @@ type Configuration struct {
 
 // PurgeConfiguration stores options for purging container versions.
 type PurgeConfiguration struct {
-	Owner       string `mapstructure:"owner"`
 	PackageName string `mapstructure:"package"`
-	OwnerType   string `mapstructure:"owner_type"`
-	TokenSource string `mapstructure:"token_source"`
 	DryRun      bool   `mapstructure:"dry_run"`
 }
 
 // DefaultConfiguration supplies baseline values for packages configuration.
 func DefaultConfiguration() Configuration {
 	return Configuration{
-		Purge: PurgeConfiguration{
-			TokenSource: defaultTokenSourceValueConstant,
-		},
+		Purge: PurgeConfiguration{},
 	}
 }
