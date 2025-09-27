@@ -1,0 +1,90 @@
+package repos
+
+import "strings"
+
+// ToolsConfiguration captures repository command configuration sections.
+type ToolsConfiguration struct {
+	Remotes  RemotesConfiguration  `mapstructure:"remotes"`
+	Protocol ProtocolConfiguration `mapstructure:"protocol"`
+	Rename   RenameConfiguration   `mapstructure:"rename"`
+}
+
+// RemotesConfiguration describes configuration values for repo-remote-update.
+type RemotesConfiguration struct {
+	DryRun          bool     `mapstructure:"dry_run"`
+	AssumeYes       bool     `mapstructure:"assume_yes"`
+	RepositoryRoots []string `mapstructure:"roots"`
+}
+
+// ProtocolConfiguration describes configuration values for repo-protocol-convert.
+type ProtocolConfiguration struct {
+	DryRun          bool     `mapstructure:"dry_run"`
+	AssumeYes       bool     `mapstructure:"assume_yes"`
+	RepositoryRoots []string `mapstructure:"roots"`
+	FromProtocol    string   `mapstructure:"from"`
+	ToProtocol      string   `mapstructure:"to"`
+}
+
+// RenameConfiguration describes configuration values for repo-folders-rename.
+type RenameConfiguration struct {
+	DryRun               bool     `mapstructure:"dry_run"`
+	AssumeYes            bool     `mapstructure:"assume_yes"`
+	RequireCleanWorktree bool     `mapstructure:"require_clean"`
+	RepositoryRoots      []string `mapstructure:"roots"`
+}
+
+// DefaultToolsConfiguration returns baseline configuration values for repository commands.
+func DefaultToolsConfiguration() ToolsConfiguration {
+	return ToolsConfiguration{
+		Remotes: RemotesConfiguration{
+			DryRun:          false,
+			AssumeYes:       false,
+			RepositoryRoots: []string{defaultRepositoryRootConstant},
+		},
+		Protocol: ProtocolConfiguration{
+			DryRun:          false,
+			AssumeYes:       false,
+			RepositoryRoots: []string{defaultRepositoryRootConstant},
+			FromProtocol:    "",
+			ToProtocol:      "",
+		},
+		Rename: RenameConfiguration{
+			DryRun:               false,
+			AssumeYes:            false,
+			RequireCleanWorktree: false,
+			RepositoryRoots:      []string{defaultRepositoryRootConstant},
+		},
+	}
+}
+
+// sanitize normalizes repository configuration values.
+func (configuration RemotesConfiguration) sanitize() RemotesConfiguration {
+	sanitized := configuration
+	sanitized.RepositoryRoots = trimRoots(configuration.RepositoryRoots)
+	if len(sanitized.RepositoryRoots) == 0 {
+		sanitized.RepositoryRoots = append([]string{}, defaultRepositoryRootConstant)
+	}
+	return sanitized
+}
+
+// sanitize normalizes protocol configuration values.
+func (configuration ProtocolConfiguration) sanitize() ProtocolConfiguration {
+	sanitized := configuration
+	sanitized.RepositoryRoots = trimRoots(configuration.RepositoryRoots)
+	if len(sanitized.RepositoryRoots) == 0 {
+		sanitized.RepositoryRoots = append([]string{}, defaultRepositoryRootConstant)
+	}
+	sanitized.FromProtocol = strings.TrimSpace(configuration.FromProtocol)
+	sanitized.ToProtocol = strings.TrimSpace(configuration.ToProtocol)
+	return sanitized
+}
+
+// sanitize normalizes rename configuration values.
+func (configuration RenameConfiguration) sanitize() RenameConfiguration {
+	sanitized := configuration
+	sanitized.RepositoryRoots = trimRoots(configuration.RepositoryRoots)
+	if len(sanitized.RepositoryRoots) == 0 {
+		sanitized.RepositoryRoots = append([]string{}, defaultRepositoryRootConstant)
+	}
+	return sanitized
+}
