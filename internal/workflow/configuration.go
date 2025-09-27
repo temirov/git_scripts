@@ -31,8 +31,8 @@ const (
 )
 
 // Configuration describes the ordered workflow steps loaded from YAML or JSON.
-// Additional sections such as the top-level operations list are ignored by the workflow loader but remain available for
-// YAML anchors and reuse when authoring configuration files.
+// Additional sections such as `tools.workflow.steps` are ignored by the workflow loader but remain available for YAML anchors
+// and reuse when authoring configuration files.
 type Configuration struct {
 	Steps []StepConfiguration `yaml:"workflow" json:"workflow"`
 }
