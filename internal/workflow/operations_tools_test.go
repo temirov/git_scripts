@@ -2,6 +2,8 @@ package workflow_test
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -18,6 +20,23 @@ const (
 	testMissingToolNameConstant                  = "missing-tool"
 	testMismatchedOperationErrorTemplateConstant = "workflow step references tool %s expecting operation %s but step configured %s"
 	testMissingOperationMessageConstant          = "workflow step missing operation name"
+	testWorkflowConfigFileNameConstant           = "workflow.yaml"
+	testSequenceWithToolReferenceCaseName        = "sequence with reusable tool reference"
+	testSequenceWithInlineOperationCaseName      = "sequence with inline operation"
+	emptyOperationTypeConstant                   = workflow.OperationType("")
+	testWorkflowSequenceWithToolReferenceYAML    = `workflow_tools:
+  - name: shared-protocol
+    operation: convert-protocol
+    with:
+      from: https
+      to: ssh
+workflow:
+  - with:
+      tool_ref: shared-protocol
+`
+	testWorkflowSequenceWithoutToolReferenceYAML = `workflow:
+  - operation: update-canonical-remote
+`
 )
 
 func TestBuildOperationsToolReferenceResolution(testInstance *testing.T) {
@@ -164,6 +183,71 @@ func TestBuildOperationsToolReferenceOperationValidation(testInstance *testing.T
 			_, buildError := workflow.BuildOperations(testCase.configuration)
 			require.Error(subtest, buildError)
 			require.ErrorContains(subtest, buildError, testCase.expectedError)
+		})
+	}
+}
+
+func TestLoadConfigurationWorkflowSequence(testInstance *testing.T) {
+	testCases := []struct {
+		name                 string
+		workflowContents     string
+		expectedOperations   []workflow.OperationType
+		expectedOptionsSlice []map[string]any
+		expectedToolCount    int
+	}{
+		{
+			name:             testSequenceWithToolReferenceCaseName,
+			workflowContents: testWorkflowSequenceWithToolReferenceYAML,
+			expectedOperations: []workflow.OperationType{
+				emptyOperationTypeConstant,
+			},
+			expectedOptionsSlice: []map[string]any{
+				{
+					testToolReferenceKeyConstant: testToolNameConstant,
+				},
+			},
+			expectedToolCount: 1,
+		},
+		{
+			name:             testSequenceWithInlineOperationCaseName,
+			workflowContents: testWorkflowSequenceWithoutToolReferenceYAML,
+			expectedOperations: []workflow.OperationType{
+				workflow.OperationTypeCanonicalRemote,
+			},
+			expectedOptionsSlice: []map[string]any{nil},
+			expectedToolCount:    0,
+		},
+	}
+
+	for testCaseIndex := range testCases {
+		testCase := testCases[testCaseIndex]
+		testInstance.Run(testCase.name, func(testingInstance *testing.T) {
+			tempDirectory := testingInstance.TempDir()
+			configurationPath := filepath.Join(tempDirectory, testWorkflowConfigFileNameConstant)
+			require.NoError(testingInstance, os.WriteFile(configurationPath, []byte(testCase.workflowContents), 0o644))
+
+			configuration, loadError := workflow.LoadConfiguration(configurationPath)
+			require.NoError(testingInstance, loadError)
+
+			require.Len(testingInstance, configuration.Steps, len(testCase.expectedOperations))
+			for stepIndex := range configuration.Steps {
+				if testCase.expectedOperations[stepIndex] == emptyOperationTypeConstant {
+					require.Empty(testingInstance, configuration.Steps[stepIndex].Operation)
+				} else {
+					require.Equal(testingInstance, testCase.expectedOperations[stepIndex], configuration.Steps[stepIndex].Operation)
+				}
+				require.Equal(testingInstance, testCase.expectedOptionsSlice[stepIndex], configuration.Steps[stepIndex].Options)
+			}
+
+			require.Len(testingInstance, configuration.Tools, testCase.expectedToolCount)
+			if testCase.expectedToolCount > 0 {
+				require.Equal(testingInstance, testToolNameConstant, configuration.Tools[0].Name)
+				require.Equal(testingInstance, workflow.OperationTypeProtocolConversion, configuration.Tools[0].Operation)
+				require.Equal(testingInstance, map[string]any{
+					testOptionFromKeyConstant: string(shared.RemoteProtocolHTTPS),
+					testOptionToKeyConstant:   string(shared.RemoteProtocolSSH),
+				}, configuration.Tools[0].Options)
+			}
 		})
 	}
 }
