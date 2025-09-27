@@ -112,17 +112,16 @@ tools:
       operation: audit-report
       with:
         output: ./audit.csv
-operations:
-  - &conversion_default
+  conversion_default: &conversion_default
     operation: convert-protocol
     with: &conversion_default_options
       from: https
       to: git
-  - &rename_clean
+  rename_clean: &rename_clean
     operation: rename-directories
     with:
       require_clean: true
-  - &migration_legacy
+  migration_legacy: &migration_legacy
     operation: migrate-branch
     with:
       targets:
@@ -131,7 +130,7 @@ operations:
           target_branch: master
           push_to_remote: true
           delete_source_branch: false
-  - &audit_weekly
+  audit_weekly: &audit_weekly
     operation: audit-report
     with: &audit_weekly_options
       output: ./reports/audit.csv
@@ -167,7 +166,7 @@ infrastructure as the standalone commands. Pass additional roots on the command 
 and
 combine `--dry-run`/`--yes` for non-interactive execution.
 
-Each entry in the `workflow` array is a full step definition. Use YAML anchors under `operations` to capture reusable
+Each entry in the `workflow` array is a full step definition. Use YAML anchors under `tools` to capture reusable
 defaults and merge them into individual steps with the merge key (`<<`). Inline overrides remain possible: apply another
 merge inside the `with` map or specify the final values directly alongside the alias.
 

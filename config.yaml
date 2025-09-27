@@ -17,17 +17,16 @@ tools:
       operation: audit-report
       with:
         output: ./audit.csv
-operations:
-  - &conversion_default
+  conversion_default: &conversion_default
     operation: convert-protocol
     with: &conversion_default_options
       from: https
       to: git
-  - &rename_clean
+  rename_clean: &rename_clean
     operation: rename-directories
     with:
       require_clean: true
-  - &migration_legacy
+  migration_legacy: &migration_legacy
     operation: migrate-branch
     with:
       targets:
@@ -36,7 +35,7 @@ operations:
           target_branch: master
           push_to_remote: true
           delete_source_branch: false
-  - &audit_weekly
+  audit_weekly: &audit_weekly
     operation: audit-report
     with: &audit_weekly_options
       output: ./reports/audit.csv
