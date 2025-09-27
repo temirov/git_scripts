@@ -24,49 +24,51 @@ import (
 )
 
 const (
-	applicationNameConstant                            = "git-scripts"
-	applicationShortDescriptionConstant                = "Command-line interface for git_scripts utilities"
-	applicationLongDescriptionConstant                 = "git_scripts ships reusable helpers that integrate Git, GitHub CLI, and related tooling."
-	configFileFlagNameConstant                         = "config"
-	configFileFlagUsageConstant                        = "Optional path to a configuration file (YAML or JSON)."
-	logLevelFlagNameConstant                           = "log-level"
-	logLevelFlagUsageConstant                          = "Override the configured log level."
-	logFormatFlagNameConstant                          = "log-format"
-	logFormatFlagUsageConstant                         = "Override the configured log format (structured or console)."
-	commonConfigurationKeyConstant                     = "common"
-	commonLogLevelConfigKeyConstant                    = commonConfigurationKeyConstant + ".log_level"
-	commonLogFormatConfigKeyConstant                   = commonConfigurationKeyConstant + ".log_format"
-	environmentPrefixConstant                          = "GITSCRIPTS"
-	configurationNameConstant                          = "config"
-	configurationTypeConstant                          = "yaml"
-	configurationInitializedMessageConstant            = "configuration initialized"
-	configurationLogLevelFieldConstant                 = "log_level"
-	configurationLogFormatFieldConstant                = "log_format"
-	configurationFileFieldConstant                     = "config_file"
-	configurationLoadErrorTemplateConstant             = "unable to load configuration: %w"
-	loggerCreationErrorTemplateConstant                = "unable to create logger: %w"
-	loggerSyncErrorTemplateConstant                    = "unable to flush logger: %w"
-	rootCommandInfoMessageConstant                     = "git_scripts CLI executed"
-	rootCommandDebugMessageConstant                    = "git_scripts CLI diagnostics"
-	logFieldCommandNameConstant                        = "command_name"
-	logFieldArgumentCountConstant                      = "argument_count"
-	logFieldArgumentsConstant                          = "arguments"
-	loggerNotInitializedMessageConstant                = "logger not initialized"
-	defaultConfigurationSearchPathConstant             = "."
-	configurationSearchPathEnvironmentVariableConstant = "GITSCRIPTS_CONFIG_SEARCH_PATH"
-	auditOperationNameConstant                         = "audit"
-	packagesPurgeOperationNameConstant                 = "repo-packages-purge"
-	branchCleanupOperationNameConstant                 = "repo-prs-purge"
-	reposRenameOperationNameConstant                   = "repo-folders-rename"
-	reposRemotesOperationNameConstant                  = "repo-remote-update"
-	reposProtocolOperationNameConstant                 = "repo-protocol-convert"
-	workflowCommandOperationNameConstant               = "workflow"
-	branchMigrateOperationNameConstant                 = "branch-migrate"
-	operationDecodeErrorMessageConstant                = "unable to decode operation defaults"
-	operationNameLogFieldConstant                      = "operation"
-	operationErrorLogFieldConstant                     = "error"
-	duplicateOperationConfigurationTemplateConstant    = "duplicate configuration for operation %q"
-	missingOperationConfigurationTemplateConstant      = "missing configuration for operation %q"
+	applicationNameConstant                             = "git-scripts"
+	applicationShortDescriptionConstant                 = "Command-line interface for git_scripts utilities"
+	applicationLongDescriptionConstant                  = "git_scripts ships reusable helpers that integrate Git, GitHub CLI, and related tooling."
+	configFileFlagNameConstant                          = "config"
+	configFileFlagUsageConstant                         = "Optional path to a configuration file (YAML or JSON)."
+	logLevelFlagNameConstant                            = "log-level"
+	logLevelFlagUsageConstant                           = "Override the configured log level."
+	logFormatFlagNameConstant                           = "log-format"
+	logFormatFlagUsageConstant                          = "Override the configured log format (structured or console)."
+	commonConfigurationKeyConstant                      = "common"
+	commonLogLevelConfigKeyConstant                     = commonConfigurationKeyConstant + ".log_level"
+	commonLogFormatConfigKeyConstant                    = commonConfigurationKeyConstant + ".log_format"
+	environmentPrefixConstant                           = "GITSCRIPTS"
+	configurationNameConstant                           = "config"
+	configurationTypeConstant                           = "yaml"
+	configurationInitializedMessageConstant             = "configuration initialized"
+	configurationLogLevelFieldConstant                  = "log_level"
+	configurationLogFormatFieldConstant                 = "log_format"
+	configurationFileFieldConstant                      = "config_file"
+	configurationLoadErrorTemplateConstant              = "unable to load configuration: %w"
+	loggerCreationErrorTemplateConstant                 = "unable to create logger: %w"
+	loggerSyncErrorTemplateConstant                     = "unable to flush logger: %w"
+	rootCommandInfoMessageConstant                      = "git_scripts CLI executed"
+	rootCommandDebugMessageConstant                     = "git_scripts CLI diagnostics"
+	logFieldCommandNameConstant                         = "command_name"
+	logFieldArgumentCountConstant                       = "argument_count"
+	logFieldArgumentsConstant                           = "arguments"
+	loggerNotInitializedMessageConstant                 = "logger not initialized"
+	defaultConfigurationSearchPathConstant              = "."
+	configurationSearchPathEnvironmentVariableConstant  = "GITSCRIPTS_CONFIG_SEARCH_PATH"
+	auditOperationNameConstant                          = "audit"
+	packagesPurgeOperationNameConstant                  = "repo-packages-purge"
+	branchCleanupOperationNameConstant                  = "repo-prs-purge"
+	reposRenameOperationNameConstant                    = "repo-folders-rename"
+	reposRemotesOperationNameConstant                   = "repo-remote-update"
+	reposProtocolOperationNameConstant                  = "repo-protocol-convert"
+	workflowCommandOperationNameConstant                = "workflow"
+	branchMigrateOperationNameConstant                  = "branch-migrate"
+	operationDecodeErrorMessageConstant                 = "unable to decode operation defaults"
+	operationNameLogFieldConstant                       = "operation"
+	operationErrorLogFieldConstant                      = "error"
+	duplicateOperationConfigurationTemplateConstant     = "duplicate configuration for operation %q"
+	missingOperationConfigurationTemplateConstant       = "missing configuration for operation %q"
+	missingOperationConfigurationSkippedMessageConstant = "operation configuration missing; continuing without defaults"
+	unknownCommandNamePlaceholderConstant               = "unknown"
 )
 
 var commandOperationRequirements = map[string][]string{
@@ -537,14 +539,46 @@ func (application *Application) validateOperationConfigurations(command *cobra.C
 		return nil
 	}
 
-	for index := range requiredOperations {
-		operationName := requiredOperations[index]
-		if _, lookupError := application.operationConfigurations.Lookup(operationName); lookupError != nil {
-			return lookupError
+	for operationIndex := range requiredOperations {
+		operationName := requiredOperations[operationIndex]
+		_, lookupError := application.operationConfigurations.Lookup(operationName)
+		if lookupError == nil {
+			continue
 		}
+
+		var missingConfigurationError MissingOperationConfigurationError
+		if errors.As(lookupError, &missingConfigurationError) && command != nil {
+			commandName := strings.TrimSpace(command.Name())
+			if len(commandName) == 0 && command.HasParent() {
+				parentCommand := command.Parent()
+				commandName = strings.TrimSpace(parentCommand.Name())
+			}
+
+			application.logMissingOperationConfiguration(commandName, operationName)
+			continue
+		}
+
+		return lookupError
 	}
 
 	return nil
+}
+
+func (application *Application) logMissingOperationConfiguration(commandName string, operationName string) {
+	if application.logger == nil {
+		return
+	}
+
+	normalizedCommandName := strings.TrimSpace(commandName)
+	if len(normalizedCommandName) == 0 {
+		normalizedCommandName = unknownCommandNamePlaceholderConstant
+	}
+
+	application.logger.Info(
+		missingOperationConfigurationSkippedMessageConstant,
+		zap.String(logFieldCommandNameConstant, normalizedCommandName),
+		zap.String(operationNameLogFieldConstant, operationName),
+	)
 }
 
 func (application *Application) operationsRequiredForCommand(command *cobra.Command) []string {
