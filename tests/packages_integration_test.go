@@ -23,7 +23,8 @@ const (
 	packagesIntegrationTokenValueConstant               = "packages-token-value"
 	packagesIntegrationBaseURLEnvironmentNameConstant   = "GITSCRIPTS_REPO_PACKAGES_PURGE_BASE_URL"
 	packagesIntegrationConfigFileNameConstant           = "config.yaml"
-	packagesIntegrationConfigTemplateConstant           = "common:\n  log_level: error\noperations:\n  - operation: repo-packages-purge\n    with:\n      package: %s\n      dry_run: %t\n      roots:\n        - %s\nworkflow: []\n"
+	packagesIntegrationConfigTemplateConstant           = "common:\n  log_level: error\noperations:\n  - operation: repo-packages-purge\n    with:\n%s      dry_run: %t\n      roots:\n        - %s\nworkflow: []\n"
+	packagesIntegrationPackageLineTemplateConstant      = "      package: %s\n"
 	packagesIntegrationSubtestNameTemplateConstant      = "%d_%s"
 	packagesIntegrationRunSubcommandConstant            = "run"
 	packagesIntegrationModulePathConstant               = "."
@@ -183,16 +184,19 @@ func TestPackagesCommandIntegration(testInstance *testing.T) {
 	testCases := []struct {
 		name              string
 		dryRun            bool
+		packageOverride   string
 		expectedDeleteIDs []int64
 	}{
 		{
 			name:              "purge_deletes_untagged_versions",
 			dryRun:            false,
+			packageOverride:   packagesIntegrationPackageConstant,
 			expectedDeleteIDs: []int64{packagesIntegrationFirstUntaggedVersionIDConstant, packagesIntegrationSecondUntaggedVersionIDConstant},
 		},
 		{
-			name:              "dry_run_skips_deletion",
+			name:              "dry_run_skips_deletion_with_derived_package",
 			dryRun:            true,
+			packageOverride:   "",
 			expectedDeleteIDs: nil,
 		},
 	}
@@ -212,9 +216,17 @@ func TestPackagesCommandIntegration(testInstance *testing.T) {
 
 			configDirectory := subtest.TempDir()
 			configPath := filepath.Join(configDirectory, packagesIntegrationConfigFileNameConstant)
+			packageBlock := ""
+			expectedPackageName := repositoryName
+			trimmedOverride := strings.TrimSpace(testCase.packageOverride)
+			if len(trimmedOverride) > 0 {
+				packageBlock = fmt.Sprintf(packagesIntegrationPackageLineTemplateConstant, trimmedOverride)
+				expectedPackageName = trimmedOverride
+			}
+
 			configContent := fmt.Sprintf(
 				packagesIntegrationConfigTemplateConstant,
-				packagesIntegrationPackageConstant,
+				packageBlock,
 				testCase.dryRun,
 				repositoryRoot,
 			)
@@ -243,7 +255,7 @@ func TestPackagesCommandIntegration(testInstance *testing.T) {
 			expectedVersionsPath := fmt.Sprintf(
 				packagesIntegrationVersionsPathTemplateConstant,
 				packagesIntegrationOwnerConstant,
-				packagesIntegrationPackageConstant,
+				expectedPackageName,
 			)
 
 			require.Equal(subtest, expectedVersionsPath, listRequests[0].path)
@@ -265,7 +277,7 @@ func TestPackagesCommandIntegration(testInstance *testing.T) {
 					expectedDeletePath := fmt.Sprintf(
 						packagesIntegrationDeletePathTemplateConstant,
 						packagesIntegrationOwnerConstant,
-						packagesIntegrationPackageConstant,
+						expectedPackageName,
 						expectedIdentifier,
 					)
 					require.Equal(subtest, expectedDeletePath, deleteRequest.path)

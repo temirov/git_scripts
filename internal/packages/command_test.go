@@ -27,6 +27,9 @@ const (
 	repositoryOneRemoteURLConstant        = "https://github.com/source/example.git"
 	repositoryTwoRemoteURLConstant        = "https://github.com/source/example-two.git"
 	repositoryThreeRemoteURLConstant      = "https://github.com/source/example-three.git"
+	repositoryOnePackageNameConstant      = "example"
+	repositoryTwoPackageNameConstant      = "example-two"
+	repositoryThreePackageNameConstant    = "example-three"
 	repositoryOneOwnerConstant            = "canonical"
 	repositoryTwoOwnerConstant            = "second-owner"
 	repositoryThreeOwnerConstant          = "third-owner"
@@ -42,7 +45,7 @@ func TestCommandBuilderExecutesAcrossRepositories(testInstance *testing.T) {
 		discoveredRepositories []string
 		remoteURLsByRepository map[string]string
 		metadataByRepository   map[string]githubcli.RepositoryMetadata
-		expectedPackage        string
+		expectedPackages       []string
 		expectedDryRun         bool
 		expectedOwners         []string
 		expectedOwnerTypes     []ghcr.OwnerType
@@ -68,7 +71,7 @@ func TestCommandBuilderExecutesAcrossRepositories(testInstance *testing.T) {
 				repositoryOneIdentifierConstant: {NameWithOwner: repositoryOneOwnerConstant + "/ignored", IsInOrganization: true},
 				repositoryTwoIdentifierConstant: {NameWithOwner: repositoryTwoOwnerConstant + "/ignored", IsInOrganization: false},
 			},
-			expectedPackage:    "config-package",
+			expectedPackages:   []string{"config-package", "config-package"},
 			expectedDryRun:     true,
 			expectedOwners:     []string{repositoryOneOwnerConstant, repositoryTwoOwnerConstant},
 			expectedOwnerTypes: []ghcr.OwnerType{ghcr.OrganizationOwnerType, ghcr.UserOwnerType},
@@ -95,18 +98,16 @@ func TestCommandBuilderExecutesAcrossRepositories(testInstance *testing.T) {
 			metadataByRepository: map[string]githubcli.RepositoryMetadata{
 				repositoryThreeIdentifierConstant: {NameWithOwner: repositoryThreeOwnerConstant + "/ignored", IsInOrganization: true},
 			},
-			expectedPackage:    "flag-package",
+			expectedPackages:   []string{"flag-package"},
 			expectedDryRun:     true,
 			expectedOwners:     []string{repositoryThreeOwnerConstant},
 			expectedOwnerTypes: []ghcr.OwnerType{ghcr.OrganizationOwnerType},
 			expectedRoots:      []string{flagRootPathConstant},
 		},
 		{
-			name: "falls_back_to_working_directory",
-			configuration: packages.Configuration{Purge: packages.PurgeConfiguration{
-				PackageName: "config-package",
-			}},
-			arguments: []string{},
+			name:          "falls_back_to_working_directory",
+			configuration: packages.Configuration{Purge: packages.PurgeConfiguration{}},
+			arguments:     []string{},
 			discoveredRepositories: []string{
 				discoveredRepositoryOnePathConstant,
 			},
@@ -116,7 +117,7 @@ func TestCommandBuilderExecutesAcrossRepositories(testInstance *testing.T) {
 			metadataByRepository: map[string]githubcli.RepositoryMetadata{
 				repositoryOneIdentifierConstant: {NameWithOwner: repositoryOneOwnerConstant + "/ignored", IsInOrganization: true},
 			},
-			expectedPackage:    "config-package",
+			expectedPackages:   []string{repositoryOnePackageNameConstant},
 			expectedDryRun:     false,
 			expectedOwners:     []string{repositoryOneOwnerConstant},
 			expectedOwnerTypes: []ghcr.OwnerType{ghcr.OrganizationOwnerType},
@@ -153,8 +154,9 @@ func TestCommandBuilderExecutesAcrossRepositories(testInstance *testing.T) {
 			require.NoError(subTest, executionError)
 
 			require.Len(subTest, executor.executions, len(testCase.discoveredRepositories))
+			require.Len(subTest, testCase.expectedPackages, len(testCase.discoveredRepositories))
 			for executionIndex, execution := range executor.executions {
-				require.Equal(subTest, testCase.expectedPackage, execution.PackageName)
+				require.Equal(subTest, testCase.expectedPackages[executionIndex], execution.PackageName)
 				require.Equal(subTest, testCase.expectedDryRun, execution.DryRun)
 				require.Equal(subTest, testCase.expectedOwners[executionIndex], execution.Owner)
 				require.Equal(subTest, testCase.expectedOwnerTypes[executionIndex], execution.OwnerType)
@@ -212,7 +214,7 @@ func TestCommandBuilderAggregatesErrorsAcrossRepositories(testInstance *testing.
 	command.SetContext(context.Background())
 	executionErrorResult := command.Execute()
 	require.Error(testInstance, executionErrorResult)
-	require.ErrorContains(testInstance, executionErrorResult, "unable to resolve repository context")
+	require.ErrorContains(testInstance, executionErrorResult, "unable to resolve repository metadata")
 	require.ErrorContains(testInstance, executionErrorResult, "repo-packages-purge failed")
 	require.Len(testInstance, executor.executions, 1)
 	require.Equal(testInstance, repositoryThreeOwnerConstant, executor.executions[0].Owner)
