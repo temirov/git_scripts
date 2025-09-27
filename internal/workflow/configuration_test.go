@@ -18,8 +18,8 @@ const (
 	configurationInvalidWorkflowMappingCase = "workflow mapping is rejected"
 	configurationOptionFromKey              = "from"
 	configurationOptionToKey                = "to"
-	anchoredWorkflowConfigurationTemplate   = `operations:
-  - &protocol_conversion_defaults
+	anchoredWorkflowConfigurationTemplate   = `tools:
+  protocol_conversion_defaults: &protocol_conversion_defaults
     operation: convert-protocol
     with:
       from: https
@@ -27,7 +27,8 @@ const (
 workflow:
   - <<: *protocol_conversion_defaults
 `
-	inlineWorkflowConfiguration = `workflow:
+	inlineWorkflowConfiguration = `tools: {}
+workflow:
   - operation: update-canonical-remote
 `
 	invalidWorkflowMappingConfiguration = `workflow:

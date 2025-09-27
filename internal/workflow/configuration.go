@@ -30,16 +30,11 @@ const (
 	OperationTypeAuditReport        OperationType = OperationType("audit-report")
 )
 
-// Configuration describes the ordered workflow steps and reusable operation defaults loaded from YAML or JSON.
+// Configuration describes the ordered workflow steps loaded from YAML or JSON.
+// Additional sections such as top-level tool defaults are ignored by the workflow loader but remain available for
+// YAML anchors and reuse when authoring configuration files.
 type Configuration struct {
-	Operations []OperationDefaults `yaml:"operations" json:"operations"`
-	Steps      []StepConfiguration `yaml:"workflow" json:"workflow"`
-}
-
-// OperationDefaults captures a reusable operation definition for documentation and anchor references.
-type OperationDefaults struct {
-	Operation OperationType  `yaml:"operation" json:"operation"`
-	Options   map[string]any `yaml:"with" json:"with"`
+	Steps []StepConfiguration `yaml:"workflow" json:"workflow"`
 }
 
 // StepConfiguration associates an operation type with declarative options.
