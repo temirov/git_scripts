@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -16,21 +17,22 @@ import (
 )
 
 const (
-	commandRemoteFlagConstant       = "--remote"
-	commandLimitFlagConstant        = "--limit"
-	commandDryRunFlagConstant       = "--dry-run"
-	commandLimitValueConstant       = "5"
-	multiRootFirstArgumentConstant  = "root-one"
-	multiRootSecondArgumentConstant = "root-two"
-	defaultRootArgumentConstant     = "."
-	repositoryOnePathConstant       = "/tmp/repository-one"
-	repositoryTwoPathConstant       = "/tmp/repository-two"
-	cleanupBranchNameConstant       = "feature/shared"
-	repositoryLogFieldNameConstant  = "repository"
-	configurationRemoteNameConstant = "configured-remote"
-	configurationRootConstant       = "/tmp/config-root"
-	flagOverrideRemoteConstant      = "override-remote"
-	flagOverrideLimitValueConstant  = 7
+	commandRemoteFlagConstant        = "--remote"
+	commandLimitFlagConstant         = "--limit"
+	commandDryRunFlagConstant        = "--dry-run"
+	commandLimitValueConstant        = "5"
+	multiRootFirstArgumentConstant   = "root-one"
+	multiRootSecondArgumentConstant  = "root-two"
+	defaultRootArgumentConstant      = "."
+	repositoryOnePathConstant        = "/tmp/repository-one"
+	repositoryTwoPathConstant        = "/tmp/repository-two"
+	cleanupBranchNameConstant        = "feature/shared"
+	repositoryLogFieldNameConstant   = "repository"
+	configurationRemoteNameConstant  = "configured-remote"
+	configurationRootConstant        = "/tmp/config-root"
+	flagOverrideRemoteConstant       = "override-remote"
+	flagOverrideLimitValueConstant   = 7
+	missingRootsErrorMessageConstant = "no repository roots provided; specify --root or configure defaults"
 )
 
 type fakeRepositoryDiscoverer struct {
@@ -106,6 +108,7 @@ func TestCommandRunScenarios(testInstance *testing.T) {
 				testRemoteNameConstant,
 				commandLimitFlagConstant,
 				commandLimitValueConstant,
+				defaultRootArgumentConstant,
 			},
 			discoveredRepositories: []string{repositoryOnePathConstant},
 			expectedRoots:          []string{defaultRootArgumentConstant},
@@ -213,6 +216,29 @@ func TestCommandRunScenarios(testInstance *testing.T) {
 	}
 }
 
+func TestCommandRunDisplaysHelpWhenRootsMissing(testInstance *testing.T) {
+	fakeExecutorInstance := &fakeCommandExecutor{}
+	fakeDiscoverer := &fakeRepositoryDiscoverer{}
+
+	builder := branches.CommandBuilder{
+		Executor:             fakeExecutorInstance,
+		RepositoryDiscoverer: fakeDiscoverer,
+	}
+
+	command, buildError := builder.Build()
+	require.NoError(testInstance, buildError)
+
+	outputBuffer := &strings.Builder{}
+	command.SetOut(outputBuffer)
+	command.SetErr(outputBuffer)
+	command.SetArgs([]string{commandDryRunFlagConstant})
+
+	executionError := command.Execute()
+	require.Error(testInstance, executionError)
+	require.Equal(testInstance, missingRootsErrorMessageConstant, executionError.Error())
+	require.Contains(testInstance, outputBuffer.String(), command.UseLine())
+}
+
 func TestCommandConfigurationPrecedence(testInstance *testing.T) {
 	remoteBranches := []string{cleanupBranchNameConstant}
 	remoteOutput := buildRemoteOutput(remoteBranches)
@@ -223,13 +249,15 @@ func TestCommandConfigurationPrecedence(testInstance *testing.T) {
 	defaultLimitValue := branches.DefaultCommandConfiguration().PullRequestLimit
 
 	testCases := []struct {
-		name           string
-		configuration  branches.CommandConfiguration
-		arguments      []string
-		expectedRoots  []string
-		expectedRemote string
-		expectedLimit  int
-		expectDryRun   bool
+		name                 string
+		configuration        branches.CommandConfiguration
+		arguments            []string
+		expectedRoots        []string
+		expectedRemote       string
+		expectedLimit        int
+		expectDryRun         bool
+		expectError          bool
+		expectedErrorMessage string
 	}{
 		{
 			name: "configuration_values_apply",
@@ -267,13 +295,14 @@ func TestCommandConfigurationPrecedence(testInstance *testing.T) {
 			expectDryRun:   true,
 		},
 		{
-			name:           "defaults_fill_missing_configuration",
-			configuration:  branches.CommandConfiguration{},
-			arguments:      []string{},
-			expectedRoots:  []string{defaultRootArgumentConstant},
-			expectedRemote: branches.DefaultCommandConfiguration().RemoteName,
-			expectedLimit:  defaultLimitValue,
-			expectDryRun:   false,
+			name:                 "defaults_fill_missing_configuration",
+			configuration:        branches.CommandConfiguration{},
+			arguments:            []string{},
+			expectedRemote:       branches.DefaultCommandConfiguration().RemoteName,
+			expectedLimit:        defaultLimitValue,
+			expectDryRun:         false,
+			expectError:          true,
+			expectedErrorMessage: missingRootsErrorMessageConstant,
 		},
 	}
 
@@ -317,9 +346,19 @@ func TestCommandConfigurationPrecedence(testInstance *testing.T) {
 			require.NoError(subtest, buildError)
 
 			command.SetContext(context.Background())
+			outputBuffer := &strings.Builder{}
+			command.SetOut(outputBuffer)
+			command.SetErr(outputBuffer)
 			command.SetArgs(testCase.arguments)
 
 			executionError := command.Execute()
+			if testCase.expectError {
+				require.Error(subtest, executionError)
+				require.Equal(subtest, testCase.expectedErrorMessage, executionError.Error())
+				require.Empty(subtest, fakeDiscoverer.receivedRoots)
+				return
+			}
+
 			require.NoError(subtest, executionError)
 
 			require.Equal(subtest, testCase.expectedRoots, fakeDiscoverer.receivedRoots)

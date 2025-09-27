@@ -71,7 +71,10 @@ func (builder *RenameCommandBuilder) run(command *cobra.Command, arguments []str
 		requireClean, _ = command.Flags().GetBool(renameRequireCleanFlagName)
 	}
 
-	roots := determineRepositoryRoots(arguments, configuration.RepositoryRoots)
+	roots, rootsError := requireRepositoryRoots(command, arguments, configuration.RepositoryRoots)
+	if rootsError != nil {
+		return rootsError
+	}
 
 	logger := resolveLogger(builder.LoggerProvider)
 	humanReadableLogging := false

@@ -1,6 +1,7 @@
 package repos_test
 
 import (
+	"bytes"
 	"context"
 	"testing"
 
@@ -22,6 +23,7 @@ const (
 	remotesOriginURLConstant         = "https://github.com/origin/example.git"
 	remotesCanonicalRepository       = "canonical/example"
 	remotesMetadataDefaultBranch     = "main"
+	remotesMissingRootsMessage       = "no repository roots provided; specify --root or configure defaults"
 )
 
 func TestRemotesCommandConfigurationPrecedence(testInstance *testing.T) {
@@ -32,6 +34,8 @@ func TestRemotesCommandConfigurationPrecedence(testInstance *testing.T) {
 		expectedRoots           []string
 		expectRemoteUpdates     int
 		expectPromptInvocations int
+		expectError             bool
+		expectedErrorMessage    string
 	}{
 		{
 			name: "configuration_enables_dry_run",
@@ -62,12 +66,11 @@ func TestRemotesCommandConfigurationPrecedence(testInstance *testing.T) {
 			expectPromptInvocations: 0,
 		},
 		{
-			name:                    "defaults_apply_without_configuration",
-			configuration:           repos.RemotesConfiguration{},
-			arguments:               []string{},
-			expectedRoots:           []string{"."},
-			expectRemoteUpdates:     1,
-			expectPromptInvocations: 1,
+			name:                 "error_when_roots_missing",
+			configuration:        repos.RemotesConfiguration{},
+			arguments:            []string{},
+			expectError:          true,
+			expectedErrorMessage: remotesMissingRootsMessage,
 		},
 	}
 
@@ -98,9 +101,24 @@ func TestRemotesCommandConfigurationPrecedence(testInstance *testing.T) {
 			require.NoError(subtest, buildError)
 
 			command.SetContext(context.Background())
+			stdoutBuffer := &bytes.Buffer{}
+			stderrBuffer := &bytes.Buffer{}
+			command.SetOut(stdoutBuffer)
+			command.SetErr(stderrBuffer)
 			command.SetArgs(testCase.arguments)
 
 			executionError := command.Execute()
+			if testCase.expectError {
+				require.Error(subtest, executionError)
+				require.Equal(subtest, testCase.expectedErrorMessage, executionError.Error())
+				combinedOutput := stdoutBuffer.String() + stderrBuffer.String()
+				require.Contains(subtest, combinedOutput, command.UseLine())
+				require.Empty(subtest, discoverer.receivedRoots)
+				require.Zero(subtest, prompter.calls)
+				require.Zero(subtest, len(manager.setCalls))
+				return
+			}
+
 			require.NoError(subtest, executionError)
 
 			require.Equal(subtest, testCase.expectedRoots, discoverer.receivedRoots)

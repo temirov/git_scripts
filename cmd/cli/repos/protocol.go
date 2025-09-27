@@ -104,7 +104,10 @@ func (builder *ProtocolCommandBuilder) run(command *cobra.Command, arguments []s
 		return errors.New(protocolErrorSamePair)
 	}
 
-	roots := determineRepositoryRoots(arguments, configuration.RepositoryRoots)
+	roots, rootsError := requireRepositoryRoots(command, arguments, configuration.RepositoryRoots)
+	if rootsError != nil {
+		return rootsError
+	}
 
 	logger := resolveLogger(builder.LoggerProvider)
 	humanReadableLogging := false

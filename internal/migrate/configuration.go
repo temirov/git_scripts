@@ -2,8 +2,6 @@ package migrate
 
 import "strings"
 
-const defaultRepositoryRootConstant = "."
-
 // CommandConfiguration captures persisted configuration for branch migration.
 type CommandConfiguration struct {
 	EnableDebugLogging bool     `mapstructure:"debug"`
@@ -33,9 +31,6 @@ func sanitizeRoots(raw []string) []string {
 			continue
 		}
 		sanitized = append(sanitized, trimmed)
-	}
-	if len(sanitized) == 0 {
-		return nil
 	}
 	return sanitized
 }

@@ -39,12 +39,12 @@ func DefaultToolsConfiguration() ToolsConfiguration {
 		Remotes: RemotesConfiguration{
 			DryRun:          false,
 			AssumeYes:       false,
-			RepositoryRoots: []string{defaultRepositoryRootConstant},
+			RepositoryRoots: nil,
 		},
 		Protocol: ProtocolConfiguration{
 			DryRun:          false,
 			AssumeYes:       false,
-			RepositoryRoots: []string{defaultRepositoryRootConstant},
+			RepositoryRoots: nil,
 			FromProtocol:    "",
 			ToProtocol:      "",
 		},
@@ -52,7 +52,7 @@ func DefaultToolsConfiguration() ToolsConfiguration {
 			DryRun:               false,
 			AssumeYes:            false,
 			RequireCleanWorktree: false,
-			RepositoryRoots:      []string{defaultRepositoryRootConstant},
+			RepositoryRoots:      nil,
 		},
 	}
 }
@@ -61,9 +61,6 @@ func DefaultToolsConfiguration() ToolsConfiguration {
 func (configuration RemotesConfiguration) sanitize() RemotesConfiguration {
 	sanitized := configuration
 	sanitized.RepositoryRoots = trimRoots(configuration.RepositoryRoots)
-	if len(sanitized.RepositoryRoots) == 0 {
-		sanitized.RepositoryRoots = append([]string{}, defaultRepositoryRootConstant)
-	}
 	return sanitized
 }
 
@@ -71,9 +68,6 @@ func (configuration RemotesConfiguration) sanitize() RemotesConfiguration {
 func (configuration ProtocolConfiguration) sanitize() ProtocolConfiguration {
 	sanitized := configuration
 	sanitized.RepositoryRoots = trimRoots(configuration.RepositoryRoots)
-	if len(sanitized.RepositoryRoots) == 0 {
-		sanitized.RepositoryRoots = append([]string{}, defaultRepositoryRootConstant)
-	}
 	sanitized.FromProtocol = strings.TrimSpace(configuration.FromProtocol)
 	sanitized.ToProtocol = strings.TrimSpace(configuration.ToProtocol)
 	return sanitized
@@ -83,8 +77,5 @@ func (configuration ProtocolConfiguration) sanitize() ProtocolConfiguration {
 func (configuration RenameConfiguration) sanitize() RenameConfiguration {
 	sanitized := configuration
 	sanitized.RepositoryRoots = trimRoots(configuration.RepositoryRoots)
-	if len(sanitized.RepositoryRoots) == 0 {
-		sanitized.RepositoryRoots = append([]string{}, defaultRepositoryRootConstant)
-	}
 	return sanitized
 }
