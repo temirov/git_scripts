@@ -1,6 +1,7 @@
 package workflow_test
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -10,11 +11,13 @@ import (
 )
 
 const (
-	testToolReferenceKeyConstant = "tool_ref"
-	testToolNameConstant         = "shared-protocol"
-	testOptionFromKeyConstant    = "from"
-	testOptionToKeyConstant      = "to"
-	testMissingToolNameConstant  = "missing-tool"
+	testToolReferenceKeyConstant                 = "tool_ref"
+	testToolNameConstant                         = "shared-protocol"
+	testOptionFromKeyConstant                    = "from"
+	testOptionToKeyConstant                      = "to"
+	testMissingToolNameConstant                  = "missing-tool"
+	testMismatchedOperationErrorTemplateConstant = "workflow step references tool %s expecting operation %s but step configured %s"
+	testMissingOperationMessageConstant          = "workflow step missing operation name"
 )
 
 func TestBuildOperationsToolReferenceResolution(testInstance *testing.T) {
@@ -27,18 +30,20 @@ func TestBuildOperationsToolReferenceResolution(testInstance *testing.T) {
 		{
 			name: "uses tool defaults when only reference provided",
 			configuration: workflow.Configuration{
-				Tools: map[string]workflow.ToolConfiguration{
-					testToolNameConstant: {
-						Operation: workflow.OperationTypeProtocolConversion,
-						Options: map[string]any{
-							testOptionFromKeyConstant: string(shared.RemoteProtocolHTTPS),
-							testOptionToKeyConstant:   string(shared.RemoteProtocolSSH),
+				Tools: []workflow.NamedToolConfiguration{
+					{
+						Name: testToolNameConstant,
+						ToolConfiguration: workflow.ToolConfiguration{
+							Operation: workflow.OperationTypeProtocolConversion,
+							Options: map[string]any{
+								testOptionFromKeyConstant: string(shared.RemoteProtocolHTTPS),
+								testOptionToKeyConstant:   string(shared.RemoteProtocolSSH),
+							},
 						},
 					},
 				},
 				Steps: []workflow.StepConfiguration{
 					{
-						Operation: workflow.OperationTypeProtocolConversion,
 						Options: map[string]any{
 							testToolReferenceKeyConstant: testToolNameConstant,
 						},
@@ -51,18 +56,20 @@ func TestBuildOperationsToolReferenceResolution(testInstance *testing.T) {
 		{
 			name: "inline overrides replace tool defaults",
 			configuration: workflow.Configuration{
-				Tools: map[string]workflow.ToolConfiguration{
-					testToolNameConstant: {
-						Operation: workflow.OperationTypeProtocolConversion,
-						Options: map[string]any{
-							testOptionFromKeyConstant: string(shared.RemoteProtocolHTTPS),
-							testOptionToKeyConstant:   string(shared.RemoteProtocolSSH),
+				Tools: []workflow.NamedToolConfiguration{
+					{
+						Name: testToolNameConstant,
+						ToolConfiguration: workflow.ToolConfiguration{
+							Operation: workflow.OperationTypeProtocolConversion,
+							Options: map[string]any{
+								testOptionFromKeyConstant: string(shared.RemoteProtocolHTTPS),
+								testOptionToKeyConstant:   string(shared.RemoteProtocolSSH),
+							},
 						},
 					},
 				},
 				Steps: []workflow.StepConfiguration{
 					{
-						Operation: workflow.OperationTypeProtocolConversion,
 						Options: map[string]any{
 							testToolReferenceKeyConstant: testToolNameConstant,
 							testOptionToKeyConstant:      string(shared.RemoteProtocolGit),
@@ -91,10 +98,9 @@ func TestBuildOperationsToolReferenceResolution(testInstance *testing.T) {
 
 func TestBuildOperationsMissingToolReference(testInstance *testing.T) {
 	configuration := workflow.Configuration{
-		Tools: map[string]workflow.ToolConfiguration{},
+		Tools: []workflow.NamedToolConfiguration{},
 		Steps: []workflow.StepConfiguration{
 			{
-				Operation: workflow.OperationTypeProtocolConversion,
 				Options: map[string]any{
 					testToolReferenceKeyConstant: testMissingToolNameConstant,
 				},
@@ -108,4 +114,56 @@ func TestBuildOperationsMissingToolReference(testInstance *testing.T) {
 	var notFoundError workflow.ToolReferenceNotFoundError
 	require.ErrorAs(testInstance, buildError, &notFoundError)
 	require.Equal(testInstance, testMissingToolNameConstant, notFoundError.ToolName)
+}
+
+func TestBuildOperationsToolReferenceOperationValidation(testInstance *testing.T) {
+	testCases := []struct {
+		name          string
+		configuration workflow.Configuration
+		expectedError string
+	}{
+		{
+			name: "missing operation without tool reference",
+			configuration: workflow.Configuration{
+				Steps: []workflow.StepConfiguration{{}},
+			},
+			expectedError: testMissingOperationMessageConstant,
+		},
+		{
+			name: "tool reference with mismatched operation",
+			configuration: workflow.Configuration{
+				Tools: []workflow.NamedToolConfiguration{
+					{
+						Name: testToolNameConstant,
+						ToolConfiguration: workflow.ToolConfiguration{
+							Operation: workflow.OperationTypeProtocolConversion,
+						},
+					},
+				},
+				Steps: []workflow.StepConfiguration{
+					{
+						Operation: workflow.OperationTypeRenameDirectories,
+						Options: map[string]any{
+							testToolReferenceKeyConstant: testToolNameConstant,
+						},
+					},
+				},
+			},
+			expectedError: fmt.Sprintf(
+				testMismatchedOperationErrorTemplateConstant,
+				testToolNameConstant,
+				workflow.OperationTypeProtocolConversion,
+				workflow.OperationTypeRenameDirectories,
+			),
+		},
+	}
+
+	for testCaseIndex := range testCases {
+		testCase := testCases[testCaseIndex]
+		testInstance.Run(testCase.name, func(subtest *testing.T) {
+			_, buildError := workflow.BuildOperations(testCase.configuration)
+			require.Error(subtest, buildError)
+			require.ErrorContains(subtest, buildError, testCase.expectedError)
+		})
+	}
 }

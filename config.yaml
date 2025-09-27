@@ -17,24 +17,38 @@ tools:
       operation: audit-report
       with:
         output: ./audit.csv
-steps:
-  - operation: convert-protocol
-    with:
-      from: https
-      to: git
-  - operation: update-canonical-remote
-  - operation: rename-directories
-    with:
-      require_clean: true
-  - operation: migrate-branch
-    with:
-      targets:
-        - remote_name: origin
-          source_branch: main
-          target_branch: master
-          push_to_remote: true
-          delete_source_branch: false
-  - tool_ref: packages.purge
-  - tool_ref: reports.audit
-    with:
-      output: ./reports/audit-latest.csv
+workflow:
+  tools:
+    - name: conversion.default
+      operation: convert-protocol
+      with:
+        from: https
+        to: git
+    - name: rename.clean
+      operation: rename-directories
+      with:
+        require_clean: true
+    - name: migration.legacy
+      operation: migrate-branch
+      with:
+        targets:
+          - remote_name: origin
+            source_branch: main
+            target_branch: master
+            push_to_remote: true
+            delete_source_branch: false
+    - name: audit.weekly
+      operation: audit-report
+      with:
+        output: ./reports/audit.csv
+  steps:
+    - with:
+        tool_ref: conversion.default
+    - operation: update-canonical-remote
+    - with:
+        tool_ref: rename.clean
+    - with:
+        tool_ref: migration.legacy
+    - with:
+        tool_ref: audit.weekly
+        output: ./reports/audit-latest.csv

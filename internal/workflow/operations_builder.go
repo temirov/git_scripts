@@ -14,16 +14,25 @@ const (
 	protocolConversionSameProtocolMessageConstant  = "convert-protocol step requires distinct source and target protocols"
 	branchMigrationTargetsRequiredMessageConstant  = "migrate-branch step requires at least one target"
 	toolReferenceEmptyNameMessageConstant          = "workflow step tool_ref value must not be empty"
-	toolReferenceOperationMismatchTemplateConstant = "workflow step references tool %s with mismatched operation %s"
+	toolReferenceOperationMismatchTemplateConstant = "workflow step references tool %s expecting operation %s but step configured %s"
 	toolReferenceNotFoundTemplateConstant          = "workflow step references undefined tool: %s"
 )
 
 // BuildOperations converts the declarative configuration into executable operations.
 func BuildOperations(configuration Configuration) ([]Operation, error) {
+	toolLookup := configuration.toolLookup
+	if toolLookup == nil && len(configuration.Tools) > 0 {
+		var toolLookupError error
+		toolLookup, toolLookupError = buildToolLookup(configuration.Tools)
+		if toolLookupError != nil {
+			return nil, toolLookupError
+		}
+	}
+
 	operations := make([]Operation, 0, len(configuration.Steps))
 	for stepIndex := range configuration.Steps {
 		step := configuration.Steps[stepIndex]
-		operation, buildError := buildOperationFromStep(step, configuration.Tools)
+		operation, buildError := buildOperationFromStep(step, toolLookup)
 		if buildError != nil {
 			return nil, buildError
 		}
@@ -33,12 +42,12 @@ func BuildOperations(configuration Configuration) ([]Operation, error) {
 }
 
 func buildOperationFromStep(step StepConfiguration, tools map[string]ToolConfiguration) (Operation, error) {
-	resolvedOptions, resolveError := resolveStepOptions(step, tools)
+	resolvedOperation, resolvedOptions, resolveError := resolveStepOptions(step, tools)
 	if resolveError != nil {
 		return nil, resolveError
 	}
 
-	switch step.Operation {
+	switch resolvedOperation {
 	case OperationTypeProtocolConversion:
 		return buildProtocolConversionOperation(resolvedOptions)
 	case OperationTypeCanonicalRemote:
@@ -50,7 +59,7 @@ func buildOperationFromStep(step StepConfiguration, tools map[string]ToolConfigu
 	case OperationTypeAuditReport:
 		return buildAuditReportOperation(resolvedOptions)
 	default:
-		return nil, fmt.Errorf("unsupported workflow operation: %s", step.Operation)
+		return nil, fmt.Errorf("unsupported workflow operation: %s", resolvedOperation)
 	}
 }
 
@@ -64,7 +73,7 @@ func (errorInstance ToolReferenceNotFoundError) Error() string {
 	return fmt.Sprintf(toolReferenceNotFoundTemplateConstant, errorInstance.ToolName)
 }
 
-func resolveStepOptions(step StepConfiguration, tools map[string]ToolConfiguration) (map[string]any, error) {
+func resolveStepOptions(step StepConfiguration, tools map[string]ToolConfiguration) (OperationType, map[string]any, error) {
 	inlineOptions := step.Options
 	if inlineOptions == nil {
 		inlineOptions = map[string]any{}
@@ -73,30 +82,42 @@ func resolveStepOptions(step StepConfiguration, tools map[string]ToolConfigurati
 	reader := newOptionReader(inlineOptions)
 	toolReferenceValue, toolReferenceExists, toolReferenceError := reader.stringValue(optionToolReferenceKeyConstant)
 	if toolReferenceError != nil {
-		return nil, toolReferenceError
+		return "", nil, toolReferenceError
 	}
 
 	mergedOptions := copyOptions(inlineOptions)
+	resolvedOperation := OperationType(strings.TrimSpace(string(step.Operation)))
+
 	if !toolReferenceExists {
-		return removeToolReferenceKey(mergedOptions), nil
+		if len(resolvedOperation) == 0 {
+			return "", nil, errors.New(configurationOperationMissingMessageConstant)
+		}
+		return resolvedOperation, removeToolReferenceKey(mergedOptions), nil
 	}
 
 	trimmedReference := strings.TrimSpace(toolReferenceValue)
 	if len(trimmedReference) == 0 {
-		return nil, errors.New(toolReferenceEmptyNameMessageConstant)
+		return "", nil, errors.New(toolReferenceEmptyNameMessageConstant)
 	}
 
 	if len(tools) == 0 {
-		return nil, ToolReferenceNotFoundError{ToolName: trimmedReference}
+		return "", nil, ToolReferenceNotFoundError{ToolName: trimmedReference}
 	}
 
 	toolConfiguration, toolExists := tools[trimmedReference]
 	if !toolExists {
-		return nil, ToolReferenceNotFoundError{ToolName: trimmedReference}
+		return "", nil, ToolReferenceNotFoundError{ToolName: trimmedReference}
 	}
 
-	if step.Operation != toolConfiguration.Operation {
-		return nil, fmt.Errorf(toolReferenceOperationMismatchTemplateConstant, trimmedReference, step.Operation)
+	resolvedToolOperation := OperationType(strings.TrimSpace(string(toolConfiguration.Operation)))
+	if len(resolvedToolOperation) == 0 {
+		return "", nil, fmt.Errorf(configurationToolOperationMissingTemplateConstant, trimmedReference)
+	}
+
+	if len(resolvedOperation) == 0 {
+		resolvedOperation = resolvedToolOperation
+	} else if resolvedOperation != resolvedToolOperation {
+		return "", nil, fmt.Errorf(toolReferenceOperationMismatchTemplateConstant, trimmedReference, resolvedToolOperation, resolvedOperation)
 	}
 
 	resolved := copyOptions(toolConfiguration.Options)
@@ -108,7 +129,7 @@ func resolveStepOptions(step StepConfiguration, tools map[string]ToolConfigurati
 		resolved[key] = value
 	}
 
-	return resolved, nil
+	return resolvedOperation, resolved, nil
 }
 
 func removeCaseInsensitiveKey(options map[string]any, target string) {
