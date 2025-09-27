@@ -16,7 +16,7 @@ import (
 
 const (
 	workflowConfigFileNameConstant = "config.yaml"
-	workflowConfigContentConstant  = "operations:\n  - operation: audit-report\nworkflow:\n  - step:\n      operation: audit-report\n"
+	workflowConfigContentConstant  = "operations:\n  - operation: workflow\n    with:\n      roots:\n        - .\nworkflow:\n  - step:\n      operation: audit-report\n"
 	workflowConfiguredRootConstant = "/tmp/workflow-config-root"
 	workflowCliRootConstant        = "/tmp/workflow-cli-root"
 	workflowPlanMessageSnippet     = "WORKFLOW-PLAN: audit report"
