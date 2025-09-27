@@ -15,23 +15,27 @@ import (
 )
 
 const (
-	workflowConfigFileNameConstant = "config.yaml"
-	workflowConfigContentConstant  = "operations:\n  - operation: workflow\n    with:\n      roots:\n        - .\nworkflow:\n  - step:\n      operation: audit-report\n"
-	workflowConfiguredRootConstant = "/tmp/workflow-config-root"
-	workflowCliRootConstant        = "/tmp/workflow-cli-root"
-	workflowPlanMessageSnippet     = "WORKFLOW-PLAN: audit report"
-	workflowCSVHeaderSnippet       = "final_github_repo,folder_name"
-	workflowRootsFlagConstant      = "--roots"
-	workflowDryRunFlagConstant     = "--dry-run"
+	workflowConfigFileNameConstant           = "config.yaml"
+	workflowConfigContentConstant            = "operations:\n  - operation: workflow\n    with:\n      roots:\n        - .\nworkflow:\n  - step:\n      operation: audit-report\n"
+	workflowConfiguredRootConstant           = "/tmp/workflow-config-root"
+	workflowCliRootConstant                  = "/tmp/workflow-cli-root"
+	workflowPlanMessageSnippet               = "WORKFLOW-PLAN: audit report"
+	workflowCSVHeaderSnippet                 = "final_github_repo,folder_name"
+	workflowRootsFlagConstant                = "--roots"
+	workflowDryRunFlagConstant               = "--dry-run"
+	workflowUsageSnippet                     = "Usage:"
+	workflowMissingRootsErrorMessageConstant = "workflow roots required; specify --roots flag or configuration"
 )
 
 func TestWorkflowCommandConfigurationPrecedence(testInstance *testing.T) {
 	testCases := []struct {
-		name              string
-		configuration     workflowcmd.CommandConfiguration
-		additionalArgs    []string
-		expectedRoots     []string
-		expectPlanMessage bool
+		name                 string
+		configuration        workflowcmd.CommandConfiguration
+		additionalArgs       []string
+		expectedRoots        []string
+		expectPlanMessage    bool
+		expectExecutionError bool
+		expectedErrorMessage string
 	}{
 		{
 			name: "configuration_applies_without_flags",
@@ -39,9 +43,10 @@ func TestWorkflowCommandConfigurationPrecedence(testInstance *testing.T) {
 				Roots:  []string{workflowConfiguredRootConstant},
 				DryRun: true,
 			},
-			additionalArgs:    []string{},
-			expectedRoots:     []string{workflowConfiguredRootConstant},
-			expectPlanMessage: true,
+			additionalArgs:       []string{},
+			expectedRoots:        []string{workflowConfiguredRootConstant},
+			expectPlanMessage:    true,
+			expectExecutionError: false,
 		},
 		{
 			name: "flags_override_configuration",
@@ -54,15 +59,18 @@ func TestWorkflowCommandConfigurationPrecedence(testInstance *testing.T) {
 				workflowCliRootConstant,
 				workflowDryRunFlagConstant,
 			},
-			expectedRoots:     []string{workflowCliRootConstant},
-			expectPlanMessage: true,
+			expectedRoots:        []string{workflowCliRootConstant},
+			expectPlanMessage:    true,
+			expectExecutionError: false,
 		},
 		{
-			name:              "defaults_fill_when_configuration_empty",
-			configuration:     workflowcmd.CommandConfiguration{},
-			additionalArgs:    []string{},
-			expectedRoots:     []string{"."},
-			expectPlanMessage: false,
+			name:                 "error_when_roots_missing",
+			configuration:        workflowcmd.CommandConfiguration{},
+			additionalArgs:       []string{},
+			expectedRoots:        nil,
+			expectPlanMessage:    false,
+			expectExecutionError: true,
+			expectedErrorMessage: workflowMissingRootsErrorMessageConstant,
 		},
 	}
 
@@ -99,6 +107,17 @@ func TestWorkflowCommandConfigurationPrecedence(testInstance *testing.T) {
 			command.SetArgs(arguments)
 
 			executionError := command.Execute()
+
+			if testCase.expectExecutionError {
+				require.Error(subtest, executionError)
+				require.EqualError(subtest, executionError, testCase.expectedErrorMessage)
+				require.Nil(subtest, discoverer.receivedRoots)
+
+				outputText := outputBuffer.String()
+				require.Contains(subtest, outputText, workflowUsageSnippet)
+				return
+			}
+
 			require.NoError(subtest, executionError)
 
 			require.Equal(subtest, testCase.expectedRoots, discoverer.receivedRoots)
