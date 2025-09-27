@@ -302,6 +302,13 @@ func buildWorkflowConfiguration(auditPath string) string {
 	return fmt.Sprintf(`common:
   log_level: error
 operations:
+  - &workflow_defaults
+    operation: workflow
+    with:
+      roots:
+        - .
+      dry_run: false
+      assume_yes: false
   - &conversion_default
     operation: convert-protocol
     with:
