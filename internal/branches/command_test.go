@@ -295,15 +295,15 @@ func TestCommandConfigurationPrecedence(testInstance *testing.T) {
 			expectDryRun:   true,
 		},
 		{
-                        name:                 "defaults_fill_missing_configuration",
-                        configuration:        branches.CommandConfiguration{},
-                        arguments:            []string{},
-                        expectedRemote:       branches.DefaultCommandConfiguration().RemoteName,
-                        expectedLimit:        defaultLimitValue,
-                        expectDryRun:         false,
-                        expectError:          true,
-                        expectedErrorMessage: missingRootsErrorMessageConstant,
-                },
+			name:                 "defaults_fill_missing_configuration",
+			configuration:        branches.CommandConfiguration{},
+			arguments:            []string{},
+			expectedRemote:       branches.DefaultCommandConfiguration().RemoteName,
+			expectedLimit:        defaultLimitValue,
+			expectDryRun:         false,
+			expectError:          true,
+			expectedErrorMessage: missingRootsErrorMessageConstant,
+		},
 	}
 
 	for testCaseIndex := range testCases {
