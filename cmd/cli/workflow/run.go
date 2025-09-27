@@ -31,6 +31,7 @@ const (
 	buildOperationsErrorTemplateConstant      = "unable to build workflow operations: %w"
 	gitRepositoryManagerErrorTemplateConstant = "unable to construct repository manager: %w"
 	gitHubClientErrorTemplateConstant         = "unable to construct GitHub client: %w"
+	missingRootsErrorMessageConstant          = "workflow roots required; specify --roots flag or configuration"
 )
 
 // CommandBuilder assembles the workflow command.
@@ -134,6 +135,12 @@ func (builder *CommandBuilder) run(command *cobra.Command, arguments []string) e
 	rootValues, _ := command.Flags().GetStringSlice(rootsFlagNameConstant)
 	preferFlagRoots := command != nil && command.Flags().Changed(rootsFlagNameConstant)
 	roots := determineRoots(rootValues, commandConfiguration.Roots, preferFlagRoots)
+	if len(roots) == 0 {
+		if helpError := displayCommandHelp(command); helpError != nil {
+			return helpError
+		}
+		return errors.New(missingRootsErrorMessageConstant)
+	}
 
 	dryRun := commandConfiguration.DryRun
 	if command != nil && command.Flags().Changed(dryRunFlagNameConstant) {

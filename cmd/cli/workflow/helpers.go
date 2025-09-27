@@ -8,10 +8,6 @@ import (
 	"github.com/temirov/git_scripts/internal/repos/shared"
 )
 
-const (
-	defaultWorkflowRootConstant = "."
-)
-
 // LoggerProvider yields a zap logger for command execution.
 type LoggerProvider func() *zap.Logger
 
@@ -36,7 +32,7 @@ func determineRoots(flagValues []string, configured []string, preferFlag bool) [
 		return trimmed
 	}
 
-	return []string{defaultWorkflowRootConstant}
+	return nil
 }
 
 func resolveLogger(provider LoggerProvider) *zap.Logger {

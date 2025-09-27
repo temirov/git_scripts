@@ -12,7 +12,6 @@ type CommandConfiguration struct {
 // DefaultCommandConfiguration provides default workflow command settings for workflow.
 func DefaultCommandConfiguration() CommandConfiguration {
 	return CommandConfiguration{
-		Roots:     []string{defaultWorkflowRootConstant},
 		DryRun:    false,
 		AssumeYes: false,
 	}
@@ -22,9 +21,6 @@ func DefaultCommandConfiguration() CommandConfiguration {
 func (configuration CommandConfiguration) sanitize() CommandConfiguration {
 	sanitized := configuration
 	sanitized.Roots = sanitizeRoots(configuration.Roots)
-	if len(sanitized.Roots) == 0 {
-		sanitized.Roots = append([]string{}, defaultWorkflowRootConstant)
-	}
 	return sanitized
 }
 
