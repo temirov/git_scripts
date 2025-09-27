@@ -2,53 +2,63 @@
 common:
   log_level: info
   log_format: structured
-tools:
+cli:
   packages:
     purge:
-      operation: repo-packages-purge
-      with:
-        owner: my-org
-        package: my-image
-        owner_type: org
-        token_source: env:GITHUB_PACKAGES_TOKEN
-        page_size: 50
-  reports:
-    audit:
-      operation: audit-report
-      with:
-        output: ./audit.csv
+      owner: my-org
+      package: my-image
+      owner_type: org
+      token_source: env:GITHUB_PACKAGES_TOKEN
+      dry_run: false
+      service_base_url: ""
+      page_size: 50
+  audit:
+    roots:
+      - .
+    debug: false
+tools:
+  - &tool_conversion_default
+    name: conversion.default
+    operation: convert-protocol
+    with: &options_conversion_default
+      from: https
+      to: git
+  - &tool_rename_clean
+    name: rename.clean
+    operation: rename-directories
+    with: &options_rename_clean
+      require_clean: true
+  - &tool_migration_legacy
+    name: migration.legacy
+    operation: migrate-branch
+    with: &options_migration_legacy
+      targets:
+        - remote_name: origin
+          source_branch: main
+          target_branch: master
+          push_to_remote: true
+          delete_source_branch: false
+  - &tool_audit_weekly
+    name: audit.weekly
+    operation: audit-report
+    with: &options_audit_weekly
+      output: ./reports/audit.csv
 workflow:
-  tools:
-    - name: conversion.default
-      operation: convert-protocol
-      with:
-        from: https
-        to: git
-    - name: rename.clean
-      operation: rename-directories
-      with:
-        require_clean: true
-    - name: migration.legacy
-      operation: migrate-branch
-      with:
-        targets:
-          - remote_name: origin
-            source_branch: main
-            target_branch: master
-            push_to_remote: true
-            delete_source_branch: false
-    - name: audit.weekly
-      operation: audit-report
-      with:
-        output: ./reports/audit.csv
-  steps:
-    - with:
-        tool_ref: conversion.default
-    - operation: update-canonical-remote
-    - with:
-        tool_ref: rename.clean
-    - with:
-        tool_ref: migration.legacy
-    - with:
-        tool_ref: audit.weekly
-        output: ./reports/audit-latest.csv
+  - <<: *tool_conversion_default
+    with:
+      <<: *options_conversion_default
+      tool_ref: conversion.default
+  - operation: update-canonical-remote
+  - <<: *tool_rename_clean
+    with:
+      <<: *options_rename_clean
+      tool_ref: rename.clean
+  - <<: *tool_migration_legacy
+    with:
+      <<: *options_migration_legacy
+      tool_ref: migration.legacy
+  - <<: *tool_audit_weekly
+    with:
+      <<: *options_audit_weekly
+      tool_ref: audit.weekly
+      output: ./reports/audit-latest.csv

@@ -24,14 +24,17 @@ const (
 	testSequenceWithToolReferenceCaseName        = "sequence with reusable tool reference"
 	testSequenceWithInlineOperationCaseName      = "sequence with inline operation"
 	emptyOperationTypeConstant                   = workflow.OperationType("")
-	testWorkflowSequenceWithToolReferenceYAML    = `workflow_tools:
-  - name: shared-protocol
+	testWorkflowSequenceWithToolReferenceYAML    = `tools:
+  - &tool_shared_protocol
+    name: shared-protocol
     operation: convert-protocol
-    with:
+    with: &options_shared_protocol
       from: https
       to: ssh
 workflow:
-  - with:
+  - <<: *tool_shared_protocol
+    with:
+      <<: *options_shared_protocol
       tool_ref: shared-protocol
 `
 	testWorkflowSequenceWithoutToolReferenceYAML = `workflow:
@@ -199,11 +202,13 @@ func TestLoadConfigurationWorkflowSequence(testInstance *testing.T) {
 			name:             testSequenceWithToolReferenceCaseName,
 			workflowContents: testWorkflowSequenceWithToolReferenceYAML,
 			expectedOperations: []workflow.OperationType{
-				emptyOperationTypeConstant,
+				workflow.OperationTypeProtocolConversion,
 			},
 			expectedOptionsSlice: []map[string]any{
 				{
 					testToolReferenceKeyConstant: testToolNameConstant,
+					testOptionFromKeyConstant:    string(shared.RemoteProtocolHTTPS),
+					testOptionToKeyConstant:      string(shared.RemoteProtocolSSH),
 				},
 			},
 			expectedToolCount: 1,
