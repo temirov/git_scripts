@@ -1,6 +1,7 @@
 package repos
 
 import (
+	"errors"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -11,7 +12,7 @@ import (
 )
 
 const (
-	defaultRepositoryRootConstant = "."
+	missingRepositoryRootsErrorMessageConstant = "no repository roots provided; specify --root or configure defaults"
 )
 
 // LoggerProvider yields a zap logger for command execution.
@@ -31,7 +32,20 @@ func determineRepositoryRoots(arguments []string, configuredRoots []string) []st
 		return configured
 	}
 
-	return []string{defaultRepositoryRootConstant}
+	return nil
+}
+
+func requireRepositoryRoots(command *cobra.Command, arguments []string, configuredRoots []string) ([]string, error) {
+	resolvedRoots := determineRepositoryRoots(arguments, configuredRoots)
+	if len(resolvedRoots) > 0 {
+		return resolvedRoots, nil
+	}
+
+	if command != nil {
+		_ = command.Help()
+	}
+
+	return nil, errors.New(missingRepositoryRootsErrorMessageConstant)
 }
 
 func trimRoots(raw []string) []string {

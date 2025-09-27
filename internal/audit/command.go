@@ -1,6 +1,8 @@
 package audit
 
 import (
+	"errors"
+
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 
@@ -74,15 +76,17 @@ func (builder *CommandBuilder) parseOptions(command *cobra.Command) (CommandOpti
 		debugMode = debugFlagValue
 	}
 
-	roots := configuration.Roots
+	roots := append([]string{}, configuration.Roots...)
 	if command != nil && command.Flags().Changed(flagRootNameConstant) {
 		flagRoots, _ := command.Flags().GetStringSlice(flagRootNameConstant)
-		sanitizedRoots := sanitizeRoots(flagRoots)
-		if len(sanitizedRoots) == 0 {
-			roots = append([]string{}, defaultRootPathConstant)
-		} else {
-			roots = sanitizedRoots
+		roots = sanitizeRoots(flagRoots)
+	}
+
+	if len(roots) == 0 {
+		if command != nil {
+			_ = command.Help()
 		}
+		return CommandOptions{}, errors.New(missingRootsErrorMessageConstant)
 	}
 
 	options := CommandOptions{

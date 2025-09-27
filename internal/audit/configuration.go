@@ -11,7 +11,7 @@ type CommandConfiguration struct {
 // DefaultCommandConfiguration returns baseline configuration values for the audit command.
 func DefaultCommandConfiguration() CommandConfiguration {
 	return CommandConfiguration{
-		Roots: []string{defaultRootPathConstant},
+		Roots: nil,
 		Debug: false,
 	}
 }
@@ -21,9 +21,6 @@ func (configuration CommandConfiguration) sanitize() CommandConfiguration {
 	sanitized := configuration
 
 	sanitized.Roots = sanitizeRoots(configuration.Roots)
-	if len(sanitized.Roots) == 0 {
-		sanitized.Roots = append([]string{}, defaultRootPathConstant)
-	}
 
 	return sanitized
 }

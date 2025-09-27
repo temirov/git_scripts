@@ -2,10 +2,6 @@ package branches
 
 import "strings"
 
-const (
-	defaultRepositoryRootConstant = "."
-)
-
 // CommandConfiguration captures configuration values for the branch cleanup command.
 type CommandConfiguration struct {
 	RemoteName       string   `mapstructure:"remote"`
@@ -20,7 +16,7 @@ func DefaultCommandConfiguration() CommandConfiguration {
 		RemoteName:       defaultRemoteNameConstant,
 		PullRequestLimit: defaultPullRequestLimitConstant,
 		DryRun:           false,
-		RepositoryRoots:  []string{defaultRepositoryRootConstant},
+		RepositoryRoots:  nil,
 	}
 }
 
@@ -37,9 +33,6 @@ func (configuration CommandConfiguration) sanitize() CommandConfiguration {
 	}
 
 	sanitized.RepositoryRoots = sanitizeRoots(configuration.RepositoryRoots)
-	if len(sanitized.RepositoryRoots) == 0 {
-		sanitized.RepositoryRoots = append([]string{}, defaultRepositoryRootConstant)
-	}
 
 	return sanitized
 }

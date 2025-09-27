@@ -62,7 +62,10 @@ func (builder *RemotesCommandBuilder) run(command *cobra.Command, arguments []st
 		assumeYes, _ = command.Flags().GetBool(remotesAssumeYesFlagName)
 	}
 
-	roots := determineRepositoryRoots(arguments, configuration.RepositoryRoots)
+	roots, rootsError := requireRepositoryRoots(command, arguments, configuration.RepositoryRoots)
+	if rootsError != nil {
+		return rootsError
+	}
 
 	logger := resolveLogger(builder.LoggerProvider)
 	humanReadableLogging := false

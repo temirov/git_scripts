@@ -43,6 +43,7 @@ const (
 	logMessageRepositoryMigrationFailedConstant  = "Repository migration failed"
 	logFieldRepositoryRootsConstant              = "roots"
 	logFieldRepositoryPathConstant               = "repository"
+	missingRepositoryRootsErrorMessageConstant   = "no repository roots provided; specify --root or configure defaults"
 )
 
 // RepositoryDiscoverer locates Git repositories beneath provided roots.
@@ -199,6 +200,12 @@ func (builder *CommandBuilder) parseOptions(command *cobra.Command, arguments []
 	}
 
 	repositoryRoots := builder.determineRepositoryRoots(arguments, configuration.RepositoryRoots)
+	if len(repositoryRoots) == 0 {
+		if command != nil {
+			_ = command.Help()
+		}
+		return commandOptions{}, errors.New(missingRepositoryRootsErrorMessageConstant)
+	}
 
 	return commandOptions{debugLoggingEnabled: debugEnabled, repositoryRoots: repositoryRoots}, nil
 }
@@ -219,7 +226,7 @@ func (builder *CommandBuilder) determineRepositoryRoots(arguments []string, conf
 		return []string{trimmedWorkingDirectory}
 	}
 
-	return []string{defaultRepositoryRootConstant}
+	return nil
 }
 
 func (builder *CommandBuilder) resolveLogger(enableDebug bool) *zap.Logger {

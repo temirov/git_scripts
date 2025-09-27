@@ -470,49 +470,49 @@ func (application *Application) humanReadableLoggingEnabled() bool {
 }
 
 func (application *Application) auditCommandConfiguration() audit.CommandConfiguration {
-	configuration := audit.DefaultCommandConfiguration()
+	var configuration audit.CommandConfiguration
 	application.decodeOperationConfiguration(auditOperationNameConstant, &configuration)
 	return configuration
 }
 
 func (application *Application) packagesConfiguration() packages.Configuration {
-	configuration := packages.DefaultConfiguration()
+	var configuration packages.Configuration
 	application.decodeOperationConfiguration(packagesPurgeOperationNameConstant, &configuration.Purge)
 	return configuration
 }
 
 func (application *Application) branchCleanupConfiguration() branches.CommandConfiguration {
-	configuration := branches.DefaultCommandConfiguration()
+	var configuration branches.CommandConfiguration
 	application.decodeOperationConfiguration(branchCleanupOperationNameConstant, &configuration)
 	return configuration
 }
 
 func (application *Application) reposRenameConfiguration() repos.RenameConfiguration {
-	configuration := repos.DefaultToolsConfiguration()
-	application.decodeOperationConfiguration(reposRenameOperationNameConstant, &configuration.Rename)
-	return configuration.Rename
+	var configuration repos.RenameConfiguration
+	application.decodeOperationConfiguration(reposRenameOperationNameConstant, &configuration)
+	return configuration
 }
 
 func (application *Application) reposRemotesConfiguration() repos.RemotesConfiguration {
-	configuration := repos.DefaultToolsConfiguration()
-	application.decodeOperationConfiguration(reposRemotesOperationNameConstant, &configuration.Remotes)
-	return configuration.Remotes
+	var configuration repos.RemotesConfiguration
+	application.decodeOperationConfiguration(reposRemotesOperationNameConstant, &configuration)
+	return configuration
 }
 
 func (application *Application) reposProtocolConfiguration() repos.ProtocolConfiguration {
-	configuration := repos.DefaultToolsConfiguration()
-	application.decodeOperationConfiguration(reposProtocolOperationNameConstant, &configuration.Protocol)
-	return configuration.Protocol
+	var configuration repos.ProtocolConfiguration
+	application.decodeOperationConfiguration(reposProtocolOperationNameConstant, &configuration)
+	return configuration
 }
 
 func (application *Application) workflowCommandConfiguration() workflowcmd.CommandConfiguration {
-	configuration := workflowcmd.DefaultCommandConfiguration()
+	var configuration workflowcmd.CommandConfiguration
 	application.decodeOperationConfiguration(workflowCommandOperationNameConstant, &configuration)
 	return configuration
 }
 
 func (application *Application) branchMigrateConfiguration() migrate.CommandConfiguration {
-	configuration := migrate.DefaultCommandConfiguration()
+	var configuration migrate.CommandConfiguration
 	application.decodeOperationConfiguration(branchMigrateOperationNameConstant, &configuration)
 	return configuration
 }
