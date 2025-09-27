@@ -21,7 +21,7 @@ const (
 	configurationToolNameRequiredMessageConstant      = "workflow tool names must be non-empty"
 	configurationDuplicateToolNameMessageConstant     = "workflow configuration defines duplicate tool names"
 	configurationToolOperationMissingTemplateConstant = "workflow tool %s missing operation name"
-	configurationWorkflowTypeErrorMessageConstant     = "workflow block must be either a mapping or a sequence"
+	configurationWorkflowSequenceMessageConstant      = "workflow block must be defined as a sequence of steps"
 )
 
 // OperationType identifies supported workflow operations.
@@ -149,12 +149,6 @@ func decodeWorkflowBlock(contentBytes []byte) (Configuration, bool, error) {
 	}
 
 	switch workflowWrapper.Workflow.Kind {
-	case yaml.MappingNode:
-		var nestedConfiguration Configuration
-		if decodeError := workflowWrapper.Workflow.Decode(&nestedConfiguration); decodeError != nil {
-			return Configuration{}, true, decodeError
-		}
-		return nestedConfiguration, true, nil
 	case yaml.SequenceNode:
 		var stepConfigurations []StepConfiguration
 		if decodeError := workflowWrapper.Workflow.Decode(&stepConfigurations); decodeError != nil {
@@ -162,7 +156,7 @@ func decodeWorkflowBlock(contentBytes []byte) (Configuration, bool, error) {
 		}
 		return Configuration{Steps: stepConfigurations}, true, nil
 	default:
-		return Configuration{}, true, errors.New(configurationWorkflowTypeErrorMessageConstant)
+		return Configuration{}, true, errors.New(configurationWorkflowSequenceMessageConstant)
 	}
 }
 

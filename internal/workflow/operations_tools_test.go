@@ -37,6 +37,14 @@ workflow:
 	testWorkflowSequenceWithoutToolReferenceYAML = `workflow:
   - operation: update-canonical-remote
 `
+	testWorkflowMappingWithToolsYAML = `workflow:
+  tools:
+    - name: shared-protocol
+      operation: convert-protocol
+  steps:
+    - with:
+        tool_ref: shared-protocol
+`
 )
 
 func TestBuildOperationsToolReferenceResolution(testInstance *testing.T) {
@@ -250,4 +258,14 @@ func TestLoadConfigurationWorkflowSequence(testInstance *testing.T) {
 			}
 		})
 	}
+}
+
+func TestLoadConfigurationWorkflowMappingRejected(testInstance *testing.T) {
+	tempDirectory := testInstance.TempDir()
+	configurationPath := filepath.Join(tempDirectory, testWorkflowConfigFileNameConstant)
+	require.NoError(testInstance, os.WriteFile(configurationPath, []byte(testWorkflowMappingWithToolsYAML), 0o644))
+
+	_, loadError := workflow.LoadConfiguration(configurationPath)
+	require.Error(testInstance, loadError)
+	require.ErrorContains(testInstance, loadError, "workflow block must be defined as a sequence of steps")
 }
