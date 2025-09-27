@@ -47,7 +47,8 @@ const (
 	reposIntegrationProtocolMissingFlagsMessage = "specify both --from and --to"
 	reposIntegrationConfigFlagName              = "--config"
 	reposIntegrationConfigFileName              = "config.yaml"
-	reposIntegrationConfigTemplate              = "commands:\n  repos:\n    remotes:\n      roots:\n        - %s\n      assume_yes: true\n    protocol:\n      roots:\n        - %s\n      assume_yes: true\n      from: https\n      to: ssh\n"
+	reposIntegrationConfigTemplate              = "tools:\n  repos:\n    remotes:\n      roots:\n        - %s\n      assume_yes: true\n    protocol:\n      roots:\n        - %s\n      assume_yes: true\n      from: https\n      to: ssh\n"
+	reposIntegrationConfigSearchEnvName         = "GITSCRIPTS_CONFIG_SEARCH_PATH"
 )
 
 func TestReposCommandIntegration(testInstance *testing.T) {
@@ -255,7 +256,12 @@ func TestReposProtocolCommandDisplaysHelpWhenProtocolsMissing(testInstance *test
 	for testCaseIndex, testCase := range testCases {
 		subtestName := fmt.Sprintf(reposIntegrationSubtestNameTemplate, testCaseIndex, testCase.name)
 		testInstance.Run(subtestName, func(subtest *testing.T) {
-			commandOptions := integrationCommandOptions{}
+			overrideDirectory := subtest.TempDir()
+			commandOptions := integrationCommandOptions{
+				EnvironmentOverrides: map[string]string{
+					reposIntegrationConfigSearchEnvName: overrideDirectory,
+				},
+			}
 			outputText, _ := runFailingIntegrationCommand(subtest, repositoryRoot, commandOptions, reposIntegrationTimeout, testCase.arguments)
 			filteredOutput := filterStructuredOutput(outputText)
 			for _, expectedSnippet := range testCase.expectedSnippets {

@@ -2,7 +2,24 @@
 common:
   log_level: info
   log_format: structured
-commands:
+
+tools:
+  audit:
+    roots:
+      - ~/Development
+    debug: false
+
+  branch_cleanup:
+    remote: origin
+    limit: 100
+    dry_run: false
+    roots:
+      - ~/Development
+
+  migrate:
+    dry_run: false
+    debug: false
+
   packages:
     purge:
       owner: my-org
@@ -10,35 +27,64 @@ commands:
       owner_type: org
       token_source: env:GITHUB_PACKAGES_TOKEN
       page_size: 50
-operations:
-  - &conversion_default
-    operation: convert-protocol
-    with: &conversion_default_options
+
+  repos:
+    rename:
+      dry_run: false
+      assume_yes: true
+      require_clean: true
+      roots:
+        - ~/Development
+    remotes:
+      dry_run: false
+      assume_yes: true
+      roots:
+        - ~/Development
+    protocol: &workflow_convert_protocol_options
+      dry_run: false
+      assume_yes: true
+      roots:
+        - ~/Development
       from: https
       to: git
-  - &rename_clean
-    operation: rename-directories
-    with:
-      require_clean: true
-  - &migration_legacy
-    operation: migrate-branch
-    with:
-      targets:
-        - remote_name: origin
-          source_branch: main
-          target_branch: master
-          push_to_remote: true
-          delete_source_branch: false
-  - &audit_weekly
-    operation: audit-report
-    with: &audit_weekly_options
-      output: ./reports/audit.csv
+
+  workflow:
+    roots:
+      - ~/Development
+    dry_run: false
+    assume_yes: false
+    steps:
+      convert_protocol: &workflow_convert_protocol_step
+        operation: convert-protocol
+        with:
+          from: https
+          to: git
+      update_canonical_remote: &workflow_update_canonical_remote_step
+        operation: update-canonical-remote
+      rename_directories: &workflow_rename_directories_step
+        operation: rename-directories
+        with:
+          require_clean: true
+      migrate_branch: &workflow_migrate_branch_step
+        operation: migrate-branch
+        with:
+          targets:
+            - remote_name: origin
+              source_branch: main
+              target_branch: master
+              push_to_remote: true
+              delete_source_branch: false
+      audit_report: &workflow_audit_report_step
+        operation: audit-report
+        with: &workflow_audit_report_options
+          output: ./reports/audit.csv
+
 workflow:
-  - <<: *conversion_default
-  - operation: update-canonical-remote
-  - <<: *rename_clean
-  - <<: *migration_legacy
-  - <<: *audit_weekly
+  - *workflow_convert_protocol_step
+  - *workflow_update_canonical_remote_step
+  - *workflow_rename_directories_step
+  - *workflow_migrate_branch_step
+  - <<: *workflow_audit_report_step
     with:
-      <<: *audit_weekly_options
+      <<: *workflow_audit_report_options
       output: ./reports/audit-latest.csv
