@@ -40,7 +40,7 @@ func NewService(discoverer RepositoryDiscoverer, gitManager GitRepositoryManager
 func (service *Service) Run(executionContext context.Context, options CommandOptions) error {
 	roots := options.Roots
 	if len(roots) == 0 {
-		roots = []string{defaultRootPathConstant}
+		return errors.New(missingRootsErrorMessageConstant)
 	}
 
 	inspections, inspectionError := service.DiscoverInspections(executionContext, roots, options.DebugOutput)

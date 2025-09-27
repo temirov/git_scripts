@@ -30,6 +30,7 @@ const (
 	renameCanonicalRepositoryConstant   = "example/" + renameDesiredFolderNameConstant
 	renameMetadataDefaultBranchConstant = "main"
 	renameLocalBranchConstant           = "feature/example"
+	renameMissingRootsMessageConstant   = "no repository roots provided; specify --root or configure defaults"
 )
 
 var (
@@ -38,22 +39,22 @@ var (
 
 func TestRenameCommandConfigurationPrecedence(testInstance *testing.T) {
 	testCases := []struct {
-		name                string
-		configuration       *repos.RenameConfiguration
-		arguments           []string
-		expectedRoots       []string
-		expectedPromptCalls int
-		expectedRenameCalls int
-		expectedCleanChecks int
+		name                 string
+		configuration        *repos.RenameConfiguration
+		arguments            []string
+		expectedRoots        []string
+		expectedPromptCalls  int
+		expectedRenameCalls  int
+		expectedCleanChecks  int
+		expectError          bool
+		expectedErrorMessage string
 	}{
 		{
-			name:                "defaults_apply_without_configuration",
-			configuration:       nil,
-			arguments:           []string{},
-			expectedRoots:       []string{"."},
-			expectedPromptCalls: 1,
-			expectedRenameCalls: 1,
-			expectedCleanChecks: 0,
+			name:                 "error_when_roots_missing",
+			configuration:        nil,
+			arguments:            []string{},
+			expectError:          true,
+			expectedErrorMessage: renameMissingRootsMessageConstant,
 		},
 		{
 			name: "configuration_enables_dry_run",
@@ -98,8 +99,9 @@ func TestRenameCommandConfigurationPrecedence(testInstance *testing.T) {
 			},
 			arguments: []string{
 				renameAssumeYesFlagConstant,
+				renameCLIRepositoryRootConstant,
 			},
-			expectedRoots:       []string{renameConfiguredRootConstant},
+			expectedRoots:       []string{renameCLIRepositoryRootConstant},
 			expectedPromptCalls: 0,
 			expectedRenameCalls: 1,
 			expectedCleanChecks: 0,
@@ -147,11 +149,25 @@ func TestRenameCommandConfigurationPrecedence(testInstance *testing.T) {
 			require.NoError(subtest, buildError)
 
 			command.SetContext(context.Background())
-			command.SetOut(&bytes.Buffer{})
-			command.SetErr(&bytes.Buffer{})
+			stdoutBuffer := &bytes.Buffer{}
+			stderrBuffer := &bytes.Buffer{}
+			command.SetOut(stdoutBuffer)
+			command.SetErr(stderrBuffer)
 			command.SetArgs(testCase.arguments)
 
 			executionError := command.Execute()
+			if testCase.expectError {
+				require.Error(subtest, executionError)
+				require.Equal(subtest, testCase.expectedErrorMessage, executionError.Error())
+				combinedOutput := stdoutBuffer.String() + stderrBuffer.String()
+				require.Contains(subtest, combinedOutput, command.UseLine())
+				require.Empty(subtest, discoverer.receivedRoots)
+				require.Zero(subtest, prompter.calls)
+				require.Empty(subtest, fileSystem.renameOperations)
+				require.Zero(subtest, manager.checkCleanCalls)
+				return
+			}
+
 			require.NoError(subtest, executionError)
 
 			require.Equal(subtest, testCase.expectedRoots, discoverer.receivedRoots)

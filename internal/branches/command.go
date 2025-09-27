@@ -23,6 +23,7 @@ const (
 	flagLimitDescriptionConstant                = "Maximum number of closed pull requests to examine"
 	flagDryRunNameConstant                      = "dry-run"
 	flagDryRunDescriptionConstant               = "Preview deletions without making changes"
+	missingRepositoryRootsErrorMessageConstant  = "no repository roots provided; specify --root or configure defaults"
 	repositoryDiscoveryErrorTemplateConstant    = "repository discovery failed: %w"
 	logMessageRepositoryDiscoveryFailedConstant = "Repository discovery failed"
 	logMessageRepositoryCleanupFailedConstant   = "Repository cleanup failed"
@@ -150,6 +151,12 @@ func (builder *CommandBuilder) parseOptions(command *cobra.Command, arguments []
 	}
 
 	repositoryRoots := builder.determineRepositoryRoots(arguments, configuration.RepositoryRoots)
+	if len(repositoryRoots) == 0 {
+		if command != nil {
+			_ = command.Help()
+		}
+		return commandOptions{}, errors.New(missingRepositoryRootsErrorMessageConstant)
+	}
 
 	return commandOptions{CleanupOptions: cleanupOptions, RepositoryRoots: repositoryRoots}, nil
 }
@@ -217,7 +224,7 @@ func (builder *CommandBuilder) determineRepositoryRoots(arguments []string, conf
 		return []string{trimmedWorkingDirectory}
 	}
 
-	return []string{defaultRepositoryRootConstant}
+	return nil
 }
 
 func (builder *CommandBuilder) resolveConfiguration() CommandConfiguration {

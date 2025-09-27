@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -39,6 +40,7 @@ const (
 	defaultRootIdentifierConstant          = "example/default"
 	configurationRootValueConstant         = "/tmp/configured-root"
 	cliRootOverrideConstant                = "/tmp/cli-root"
+	missingRootsErrorMessageConstant       = "no repository roots provided; specify --root or configure defaults"
 )
 
 func TestMigrateCommandRunScenarios(testInstance *testing.T) {
@@ -248,6 +250,23 @@ func TestMigrateCommandRunScenarios(testInstance *testing.T) {
 			}
 		})
 	}
+}
+
+func TestMigrateCommandDisplaysHelpWhenRootsMissing(testInstance *testing.T) {
+	builder := migrate.CommandBuilder{}
+
+	command, buildError := builder.Build()
+	require.NoError(testInstance, buildError)
+
+	outputBuffer := &strings.Builder{}
+	command.SetOut(outputBuffer)
+	command.SetErr(outputBuffer)
+	command.SetArgs([]string{})
+
+	executionError := command.Execute()
+	require.Error(testInstance, executionError)
+	require.Equal(testInstance, missingRootsErrorMessageConstant, executionError.Error())
+	require.Contains(testInstance, outputBuffer.String(), command.UseLine())
 }
 
 func TestMigrateCommandConfigurationPrecedence(testInstance *testing.T) {
