@@ -1,34 +1,47 @@
 package packages
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 
 	"github.com/temirov/git_scripts/internal/ghcr"
+	"github.com/temirov/git_scripts/internal/repos/dependencies"
+	"github.com/temirov/git_scripts/internal/repos/shared"
 )
 
 const (
-	packagesPurgeCommandUseConstant              = "repo-packages-purge"
-	packagesPurgeCommandShortDescriptionConstant = "Delete untagged GHCR versions"
-	packagesPurgeCommandLongDescriptionConstant  = "repo-packages-purge removes untagged container versions from GitHub Container Registry."
-	unexpectedArgumentsErrorMessageConstant      = "repo-packages-purge does not accept positional arguments"
-	commandExecutionErrorTemplateConstant        = "repo-packages-purge failed: %w"
-	ownerFlagNameConstant                        = "owner"
-	ownerFlagDescriptionConstant                 = "GitHub user or organization that owns the package"
-	packageFlagNameConstant                      = "package"
-	packageFlagDescriptionConstant               = "Container package name in GHCR"
-	ownerTypeFlagNameConstant                    = "owner-type"
-	ownerTypeFlagDescriptionConstant             = "Owner type: user or org"
-	tokenSourceFlagNameConstant                  = "token-source"
-	tokenSourceFlagDescriptionConstant           = "Token source (env:NAME or file:/path)"
-	dryRunFlagNameConstant                       = "dry-run"
-	dryRunFlagDescriptionConstant                = "Preview deletions without modifying GHCR"
-	ownerTypeParseErrorTemplateConstant          = "invalid owner type: %w"
-	tokenSourceParseErrorTemplateConstant        = "invalid token source: %w"
+	packagesPurgeCommandUseConstant                           = "repo-packages-purge"
+	packagesPurgeCommandShortDescriptionConstant              = "Delete untagged GHCR versions"
+	packagesPurgeCommandLongDescriptionConstant               = "repo-packages-purge removes untagged container versions from GitHub Container Registry."
+	unexpectedArgumentsErrorMessageConstant                   = "repo-packages-purge does not accept positional arguments"
+	commandExecutionErrorTemplateConstant                     = "repo-packages-purge failed: %w"
+	packageFlagNameConstant                                   = "package"
+	packageFlagDescriptionConstant                            = "Container package name in GHCR"
+	dryRunFlagNameConstant                                    = "dry-run"
+	dryRunFlagDescriptionConstant                             = "Preview deletions without modifying GHCR"
+	repositoryRootsFlagNameConstant                           = "roots"
+	repositoryRootsFlagDescriptionConstant                    = "Directories that contain repositories for package purging"
+	tokenSourceParseErrorTemplateConstant                     = "invalid token source: %w"
+	workingDirectoryResolutionErrorTemplateConstant           = "unable to determine working directory: %w"
+	workingDirectoryEmptyErrorMessageConstant                 = "working directory not provided"
+	gitExecutorResolutionErrorTemplateConstant                = "unable to resolve git executor: %w"
+	gitRepositoryManagerResolutionErrorTemplateConstant       = "unable to resolve repository manager: %w"
+	gitHubResolverResolutionErrorTemplateConstant             = "unable to resolve github metadata resolver: %w"
+	repositoryMetadataResolverResolutionErrorTemplateConstant = "unable to resolve repository metadata resolver: %w"
+	repositoryDiscoveryErrorTemplateConstant                  = "unable to discover repositories: %w"
+	repositoryDiscoveryFailedMessageConstant                  = "Failed to discover repositories"
+	repositoryRootsLogFieldNameConstant                       = "repository_roots"
+	repositoryPathLogFieldNameConstant                        = "repository_path"
+	repositoryMetadataFailedMessageConstant                   = "Failed to resolve repository metadata"
+	repositoryPurgeFailedMessageConstant                      = "repo-packages-purge failed for repository"
+	ownerRepoSeparatorConstant                                = "/"
 )
 
 // LoggerProvider supplies a zap logger instance.
@@ -44,15 +57,29 @@ type PurgeServiceResolver interface {
 
 // CommandBuilder assembles the repo-packages-purge command.
 type CommandBuilder struct {
-	LoggerProvider        LoggerProvider
-	ConfigurationProvider ConfigurationProvider
-	ServiceResolver       PurgeServiceResolver
-	HTTPClient            ghcr.HTTPClient
-	ServiceBaseURL        string
-	PageSize              int
-	EnvironmentLookup     EnvironmentLookup
-	FileReader            FileReader
-	TokenResolver         TokenResolver
+	LoggerProvider             LoggerProvider
+	ConfigurationProvider      ConfigurationProvider
+	ServiceResolver            PurgeServiceResolver
+	HTTPClient                 ghcr.HTTPClient
+	EnvironmentLookup          EnvironmentLookup
+	FileReader                 FileReader
+	TokenResolver              TokenResolver
+	GitExecutor                shared.GitExecutor
+	RepositoryManager          shared.GitRepositoryManager
+	GitHubResolver             shared.GitHubMetadataResolver
+	RepositoryMetadataResolver RepositoryMetadataResolver
+	WorkingDirectoryResolver   WorkingDirectoryResolver
+	RepositoryDiscoverer       shared.RepositoryDiscoverer
+}
+
+// WorkingDirectoryResolver resolves the directory containing the active repository.
+type WorkingDirectoryResolver func() (string, error)
+
+type commandExecutionOptions struct {
+	PackageNameOverride string
+	DryRun              bool
+	TokenSource         TokenSourceConfiguration
+	RepositoryRoots     []string
 }
 
 // Build constructs the repo-packages-purge command with purge functionality.
@@ -64,11 +91,9 @@ func (builder *CommandBuilder) Build() (*cobra.Command, error) {
 		RunE:  builder.runPurge,
 	}
 
-	purgeCommand.Flags().String(ownerFlagNameConstant, "", ownerFlagDescriptionConstant)
 	purgeCommand.Flags().String(packageFlagNameConstant, "", packageFlagDescriptionConstant)
-	purgeCommand.Flags().String(ownerTypeFlagNameConstant, "", ownerTypeFlagDescriptionConstant)
-	purgeCommand.Flags().String(tokenSourceFlagNameConstant, "", tokenSourceFlagDescriptionConstant)
 	purgeCommand.Flags().Bool(dryRunFlagNameConstant, false, dryRunFlagDescriptionConstant)
+	purgeCommand.Flags().StringSlice(repositoryRootsFlagNameConstant, nil, repositoryRootsFlagDescriptionConstant)
 
 	return purgeCommand, nil
 }
@@ -78,81 +103,130 @@ func (builder *CommandBuilder) runPurge(command *cobra.Command, arguments []stri
 		return errors.New(unexpectedArgumentsErrorMessageConstant)
 	}
 
-	purgeOptions, optionsError := builder.parsePurgeOptions(command)
+	logger := builder.resolveLogger()
+
+	executionOptions, optionsError := builder.parseCommandOptions(command)
 	if optionsError != nil {
 		return optionsError
 	}
 
-	logger := builder.resolveLogger()
 	purgeService, serviceError := builder.resolvePurgeService(logger)
 	if serviceError != nil {
 		return serviceError
 	}
 
-	_, executionError := purgeService.Execute(command.Context(), purgeOptions)
-	if executionError != nil {
-		return fmt.Errorf(commandExecutionErrorTemplateConstant, executionError)
+	repositoryMetadataResolver, metadataResolverError := builder.resolveRepositoryMetadataResolver(logger)
+	if metadataResolverError != nil {
+		return metadataResolverError
+	}
+
+	repositoryDiscoverer := dependencies.ResolveRepositoryDiscoverer(builder.RepositoryDiscoverer)
+	repositoryPaths, discoveryError := repositoryDiscoverer.DiscoverRepositories(executionOptions.RepositoryRoots)
+	if discoveryError != nil {
+		logger.Error(
+			repositoryDiscoveryFailedMessageConstant,
+			zap.Strings(repositoryRootsLogFieldNameConstant, executionOptions.RepositoryRoots),
+			zap.Error(discoveryError),
+		)
+		return fmt.Errorf(repositoryDiscoveryErrorTemplateConstant, discoveryError)
+	}
+
+	var executionErrors []error
+
+	for _, repositoryPath := range repositoryPaths {
+		normalizedRepositoryPath := filepath.Clean(repositoryPath)
+
+		repositoryMetadata, metadataError := repositoryMetadataResolver.ResolveMetadata(command.Context(), normalizedRepositoryPath)
+		if metadataError != nil {
+			if errors.Is(metadataError, context.Canceled) || errors.Is(metadataError, context.DeadlineExceeded) {
+				return metadataError
+			}
+
+			logger.Error(
+				repositoryMetadataFailedMessageConstant,
+				zap.String(repositoryPathLogFieldNameConstant, normalizedRepositoryPath),
+				zap.Error(metadataError),
+			)
+
+			wrappedMetadataError := fmt.Errorf(repositoryMetadataResolutionErrorTemplateConstant, metadataError)
+			executionErrors = append(executionErrors, wrappedMetadataError)
+			continue
+		}
+
+		packageName := strings.TrimSpace(executionOptions.PackageNameOverride)
+		if len(packageName) == 0 {
+			packageName = repositoryMetadata.DefaultPackageName
+		}
+
+		purgeOptions := PurgeOptions{
+			Owner:       repositoryMetadata.Owner,
+			PackageName: packageName,
+			OwnerType:   repositoryMetadata.OwnerType,
+			TokenSource: executionOptions.TokenSource,
+			DryRun:      executionOptions.DryRun,
+		}
+
+		_, executionError := purgeService.Execute(command.Context(), purgeOptions)
+		if executionError != nil {
+			if errors.Is(executionError, context.Canceled) || errors.Is(executionError, context.DeadlineExceeded) {
+				return executionError
+			}
+
+			logger.Error(
+				repositoryPurgeFailedMessageConstant,
+				zap.String(repositoryPathLogFieldNameConstant, normalizedRepositoryPath),
+				zap.Error(executionError),
+			)
+
+			wrappedExecutionError := fmt.Errorf(commandExecutionErrorTemplateConstant, executionError)
+			executionErrors = append(executionErrors, wrappedExecutionError)
+			continue
+		}
+	}
+
+	if len(executionErrors) > 0 {
+		return errors.Join(executionErrors...)
 	}
 
 	return nil
 }
 
-func (builder *CommandBuilder) parsePurgeOptions(command *cobra.Command) (PurgeOptions, error) {
+func (builder *CommandBuilder) parseCommandOptions(command *cobra.Command) (commandExecutionOptions, error) {
 	configuration := builder.resolveConfiguration()
-
-	ownerFlagValue, ownerFlagError := command.Flags().GetString(ownerFlagNameConstant)
-	if ownerFlagError != nil {
-		return PurgeOptions{}, ownerFlagError
-	}
-	ownerValue := selectStringValue(ownerFlagValue, configuration.Purge.Owner)
 
 	packageFlagValue, packageFlagError := command.Flags().GetString(packageFlagNameConstant)
 	if packageFlagError != nil {
-		return PurgeOptions{}, packageFlagError
+		return commandExecutionOptions{}, packageFlagError
 	}
-	packageValue := selectStringValue(packageFlagValue, configuration.Purge.PackageName)
+	packageValue := selectOptionalStringValue(packageFlagValue, configuration.Purge.PackageName)
 
-	ownerTypeFlagValue, ownerTypeFlagError := command.Flags().GetString(ownerTypeFlagNameConstant)
-	if ownerTypeFlagError != nil {
-		return PurgeOptions{}, ownerTypeFlagError
-	}
-	ownerTypeValue := selectStringValue(ownerTypeFlagValue, configuration.Purge.OwnerType)
-	parsedOwnerType, ownerTypeParseError := ghcr.ParseOwnerType(ownerTypeValue)
-	if ownerTypeParseError != nil {
-		return PurgeOptions{}, fmt.Errorf(ownerTypeParseErrorTemplateConstant, ownerTypeParseError)
-	}
-
-	tokenSourceFlagValue, tokenSourceFlagError := command.Flags().GetString(tokenSourceFlagNameConstant)
-	if tokenSourceFlagError != nil {
-		return PurgeOptions{}, tokenSourceFlagError
-	}
-	tokenSourceValue := selectStringValue(tokenSourceFlagValue, configuration.Purge.TokenSource)
-	if len(strings.TrimSpace(tokenSourceValue)) == 0 {
-		tokenSourceValue = defaultTokenSourceValueConstant
-	}
-	parsedTokenSource, tokenParseError := ParseTokenSource(tokenSourceValue)
+	parsedTokenSource, tokenParseError := ParseTokenSource(defaultTokenSourceValueConstant)
 	if tokenParseError != nil {
-		return PurgeOptions{}, fmt.Errorf(tokenSourceParseErrorTemplateConstant, tokenParseError)
+		return commandExecutionOptions{}, fmt.Errorf(tokenSourceParseErrorTemplateConstant, tokenParseError)
 	}
 
 	dryRunValue := configuration.Purge.DryRun
 	if command.Flags().Changed(dryRunFlagNameConstant) {
 		flagDryRunValue, dryRunFlagError := command.Flags().GetBool(dryRunFlagNameConstant)
 		if dryRunFlagError != nil {
-			return PurgeOptions{}, dryRunFlagError
+			return commandExecutionOptions{}, dryRunFlagError
 		}
 		dryRunValue = flagDryRunValue
 	}
 
-	purgeOptions := PurgeOptions{
-		Owner:       ownerValue,
-		PackageName: packageValue,
-		OwnerType:   parsedOwnerType,
-		TokenSource: parsedTokenSource,
-		DryRun:      dryRunValue,
+	repositoryRoots, rootsError := builder.determineRepositoryRoots(command, configuration)
+	if rootsError != nil {
+		return commandExecutionOptions{}, rootsError
 	}
 
-	return purgeOptions, nil
+	executionOptions := commandExecutionOptions{
+		PackageNameOverride: packageValue,
+		DryRun:              dryRunValue,
+		TokenSource:         parsedTokenSource,
+		RepositoryRoots:     repositoryRoots,
+	}
+
+	return executionOptions, nil
 }
 
 func (builder *CommandBuilder) resolveLogger() *zap.Logger {
@@ -174,26 +248,7 @@ func (builder *CommandBuilder) resolveConfiguration() Configuration {
 		configuration = builder.ConfigurationProvider()
 	}
 
-	if len(strings.TrimSpace(configuration.Purge.TokenSource)) == 0 {
-		configuration.Purge.TokenSource = defaultTokenSourceValueConstant
-	}
-
-	configuration.Purge.ServiceBaseURL = strings.TrimSpace(configuration.Purge.ServiceBaseURL)
-	if configuration.Purge.PageSize < 0 {
-		configuration.Purge.PageSize = 0
-	}
-
-	trimmedServiceBaseURL := strings.TrimSpace(builder.ServiceBaseURL)
-	if len(trimmedServiceBaseURL) == 0 {
-		trimmedServiceBaseURL = configuration.Purge.ServiceBaseURL
-	}
-	builder.ServiceBaseURL = trimmedServiceBaseURL
-
-	if builder.PageSize <= 0 && configuration.Purge.PageSize > 0 {
-		builder.PageSize = configuration.Purge.PageSize
-	}
-
-	return configuration
+	return configuration.sanitize()
 }
 
 func (builder *CommandBuilder) resolvePurgeService(logger *zap.Logger) (PurgeExecutor, error) {
@@ -203,8 +258,6 @@ func (builder *CommandBuilder) resolvePurgeService(logger *zap.Logger) (PurgeExe
 
 	defaultResolver := &DefaultPurgeServiceResolver{
 		HTTPClient:        builder.HTTPClient,
-		ServiceBaseURL:    builder.ServiceBaseURL,
-		PageSize:          builder.PageSize,
 		EnvironmentLookup: builder.EnvironmentLookup,
 		FileReader:        builder.FileReader,
 		TokenResolver:     builder.TokenResolver,
@@ -213,11 +266,104 @@ func (builder *CommandBuilder) resolvePurgeService(logger *zap.Logger) (PurgeExe
 	return defaultResolver.Resolve(logger)
 }
 
-func selectStringValue(flagValue string, configurationValue string) string {
+func selectOptionalStringValue(flagValue string, configurationValue string) string {
 	trimmedFlagValue := strings.TrimSpace(flagValue)
 	if len(trimmedFlagValue) > 0 {
 		return trimmedFlagValue
 	}
 
 	return strings.TrimSpace(configurationValue)
+}
+
+func (builder *CommandBuilder) determineRepositoryRoots(command *cobra.Command, configuration Configuration) ([]string, error) {
+	if command != nil && command.Flags().Changed(repositoryRootsFlagNameConstant) {
+		flagRoots, flagError := command.Flags().GetStringSlice(repositoryRootsFlagNameConstant)
+		if flagError != nil {
+			return nil, flagError
+		}
+
+		sanitizedFlagRoots := sanitizeRoots(flagRoots)
+		if len(sanitizedFlagRoots) > 0 {
+			return sanitizedFlagRoots, nil
+		}
+
+		workingDirectory, workingDirectoryError := builder.resolveWorkingDirectory()
+		if workingDirectoryError != nil {
+			return nil, workingDirectoryError
+		}
+
+		return []string{workingDirectory}, nil
+	}
+
+	if len(configuration.Purge.RepositoryRoots) > 0 {
+		rootsCopy := make([]string, len(configuration.Purge.RepositoryRoots))
+		copy(rootsCopy, configuration.Purge.RepositoryRoots)
+		return rootsCopy, nil
+	}
+
+	workingDirectory, workingDirectoryError := builder.resolveWorkingDirectory()
+	if workingDirectoryError != nil {
+		return nil, workingDirectoryError
+	}
+
+	return []string{workingDirectory}, nil
+}
+
+func (builder *CommandBuilder) resolveRepositoryMetadataResolver(logger *zap.Logger) (RepositoryMetadataResolver, error) {
+	if builder.RepositoryMetadataResolver != nil {
+		return builder.RepositoryMetadataResolver, nil
+	}
+
+	repositoryManager, githubResolver, dependenciesError := builder.resolveRepositoryDependencies(logger)
+	if dependenciesError != nil {
+		return nil, fmt.Errorf(repositoryMetadataResolverResolutionErrorTemplateConstant, dependenciesError)
+	}
+
+	return &DefaultRepositoryMetadataResolver{
+		RepositoryManager: repositoryManager,
+		GitHubResolver:    githubResolver,
+	}, nil
+}
+
+func (builder *CommandBuilder) resolveWorkingDirectory() (string, error) {
+	if builder.WorkingDirectoryResolver != nil {
+		directory, resolutionError := builder.WorkingDirectoryResolver()
+		if resolutionError != nil {
+			return "", fmt.Errorf(workingDirectoryResolutionErrorTemplateConstant, resolutionError)
+		}
+		trimmedDirectory := strings.TrimSpace(directory)
+		if len(trimmedDirectory) == 0 {
+			return "", errors.New(workingDirectoryEmptyErrorMessageConstant)
+		}
+		return trimmedDirectory, nil
+	}
+
+	directory, resolutionError := os.Getwd()
+	if resolutionError != nil {
+		return "", fmt.Errorf(workingDirectoryResolutionErrorTemplateConstant, resolutionError)
+	}
+	trimmedDirectory := strings.TrimSpace(directory)
+	if len(trimmedDirectory) == 0 {
+		return "", errors.New(workingDirectoryEmptyErrorMessageConstant)
+	}
+	return trimmedDirectory, nil
+}
+
+func (builder *CommandBuilder) resolveRepositoryDependencies(logger *zap.Logger) (shared.GitRepositoryManager, shared.GitHubMetadataResolver, error) {
+	gitExecutor, executorError := dependencies.ResolveGitExecutor(builder.GitExecutor, logger, false)
+	if executorError != nil {
+		return nil, nil, fmt.Errorf(gitExecutorResolutionErrorTemplateConstant, executorError)
+	}
+
+	repositoryManager, managerError := dependencies.ResolveGitRepositoryManager(builder.RepositoryManager, gitExecutor)
+	if managerError != nil {
+		return nil, nil, fmt.Errorf(gitRepositoryManagerResolutionErrorTemplateConstant, managerError)
+	}
+
+	githubResolver, resolverError := dependencies.ResolveGitHubResolver(builder.GitHubResolver, gitExecutor)
+	if resolverError != nil {
+		return nil, nil, fmt.Errorf(gitHubResolverResolutionErrorTemplateConstant, resolverError)
+	}
+
+	return repositoryManager, githubResolver, nil
 }

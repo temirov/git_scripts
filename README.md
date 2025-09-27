@@ -8,7 +8,7 @@ You can run the CLI in two complementary ways depending on how much orchestratio
 
 - **Direct commands with persisted defaults** – invoke commands such as `repo-folders-rename`, `repo-protocol-convert`,
   `repo-packages-purge`, and `audit` from the shell,
-  optionally loading shared flags (for example, log level or default owners) via [
+  optionally loading shared flags (for example, log level or default package names) via [
   `--config` files](#configuration-and-logging).
   This mode mirrors the quick-start rows in the [command catalog](#command-catalog) and is ideal when you want
   immediate,
@@ -87,10 +87,17 @@ with the registered command names and flags.
 | `repo-protocol-convert` | Convert repository origin remotes between protocols           | Flags: `--from`, `--to`, `--dry-run`, `--yes`. Example: `go run . repo-protocol-convert --from https --to ssh --yes ~/Development`                                                                                          |
 | `repo-prs-purge`        | Remove remote and local branches for closed pull requests     | Flags: `--remote`, `--limit`, `--dry-run`. Example: `go run . repo-prs-purge --remote origin --limit 100 ~/Development`                                                                                                     |
 | `branch-migrate`        | Migrate repository defaults from main to master               | Flag: `--debug` for verbose diagnostics. Example: `go run . branch-migrate --debug ~/Development/project-repo`                                                                                                              |
-| `repo-packages-purge`   | Delete untagged GHCR versions                                 | Flags: `--owner`, `--package`, `--owner-type`, `--token-source`, `--dry-run`. Example: `go run . repo-packages-purge --owner my-org --package my-image --owner-type org --token-source env:GITHUB_PACKAGES_TOKEN --dry-run` |
+| `repo-packages-purge`   | Delete untagged GHCR versions                                 | Flags: `--package` (override), `--dry-run`, `--roots`. Example: `go run . repo-packages-purge --dry-run --roots ~/Development` |
 | `workflow`              | Run a workflow configuration file                             | Flags: `--roots`, `--dry-run`, `--yes`. Example: `go run . workflow config.yaml --roots ~/Development --dry-run`                                                                                                            |
 
 Persist defaults and workflow plans in a single configuration file to avoid long flag lists and keep the runner in sync:
+
+The purge command derives the GHCR owner, owner type, and default package name from each repository's `origin` remote
+and the canonical metadata returned by the GitHub CLI. Ensure the remotes point at the desired GitHub repositories
+before running the command. Provide one or more roots with `--roots` or in configuration to run the purge across
+multiple repositories; the command discovers Git repositories beneath every root and executes the purge workflow for
+each repository, continuing after non-fatal errors. Specify `--package` only when the container name in GHCR differs
+from the repository name.
 
 ```yaml
 # config.yaml
@@ -109,11 +116,9 @@ operations:
   - &packages_purge_defaults
     operation: repo-packages-purge
     with:
-      owner: my-org
-      package: my-image
-      owner_type: org
-      token_source: env:GITHUB_PACKAGES_TOKEN
-      page_size: 50
+      # package: my-image  # Optional override; defaults to the repository name
+      roots:
+        - ~/Development
 
   - &branch_cleanup_defaults
     operation: repo-prs-purge
@@ -219,6 +224,10 @@ workflow:
         output: ./reports/audit-latest.csv
 ```
 
+The purge command automatically targets the public GitHub API. Set the
+`GITSCRIPTS_REPO_PACKAGES_PURGE_BASE_URL` environment variable when you need to
+point at a GitHub Enterprise instance during local testing.
+
 ```shell
 go run . repo-packages-purge --dry-run=false
 ```
@@ -267,7 +276,9 @@ make release        # Cross-compile binaries into ./dist
 
 The `repo-packages-purge` command additionally requires network access and a GitHub Personal Access Token with
 `read:packages`,
-`write:packages`, and `delete:packages` scopes. Export the token before invoking the command:
+`write:packages`, and `delete:packages` scopes. Export the token before invoking the command; if the token is missing
+any of these scopes the GHCR API responds with HTTP 403 and the command surfaces an error similar to `unable to purge
+package versions: unexpected status code 403 for DELETE ... (requires delete:packages)`.
 
 ```shell
 export GITHUB_PACKAGES_TOKEN=ghp_XXXXXXXXXXXXXXXXXXXXXXXXXXXX

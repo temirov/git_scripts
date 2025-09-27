@@ -14,11 +14,9 @@ operations:
   - &packages_purge_defaults
     operation: repo-packages-purge
     with:
-      owner: my-org
-      package: my-image
-      owner_type: org
-      token_source: env:GITHUB_PACKAGES_TOKEN
-      page_size: 50
+      # package: my-image  # Optional override; defaults to the repository name
+      roots:
+        - ~/Development
 
   - &branch_cleanup_defaults
     operation: repo-prs-purge

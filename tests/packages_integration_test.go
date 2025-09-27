@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -18,19 +19,19 @@ import (
 const (
 	packagesIntegrationOwnerConstant                    = "integration-org"
 	packagesIntegrationPackageConstant                  = "tooling"
-	packagesIntegrationOwnerTypeConstant                = "org"
-	packagesIntegrationTokenEnvNameConstant             = "PACKAGES_TOKEN"
-	packagesIntegrationTokenReferenceConstant           = "env:PACKAGES_TOKEN"
+	packagesIntegrationTokenEnvNameConstant             = "GITHUB_PACKAGES_TOKEN"
 	packagesIntegrationTokenValueConstant               = "packages-token-value"
+	packagesIntegrationBaseURLEnvironmentNameConstant   = "GITSCRIPTS_REPO_PACKAGES_PURGE_BASE_URL"
 	packagesIntegrationConfigFileNameConstant           = "config.yaml"
-	packagesIntegrationConfigTemplateConstant           = "common:\n  log_level: error\noperations:\n  - operation: repo-packages-purge\n    with:\n      owner: %s\n      package: %s\n      owner_type: %s\n      token_source: %s\n      dry_run: %t\n      service_base_url: %s\n      page_size: %d\nworkflow: []\n"
+	packagesIntegrationConfigTemplateConstant           = "common:\n  log_level: error\noperations:\n  - operation: repo-packages-purge\n    with:\n%s      dry_run: %t\n      roots:\n        - %s\nworkflow: []\n"
+	packagesIntegrationPackageLineTemplateConstant      = "      package: %s\n"
 	packagesIntegrationSubtestNameTemplateConstant      = "%d_%s"
 	packagesIntegrationRunSubcommandConstant            = "run"
 	packagesIntegrationModulePathConstant               = "."
 	packagesIntegrationConfigFlagTemplateConstant       = "--config=%s"
 	packagesIntegrationPackagesPurgeCommandNameConstant = "repo-packages-purge"
 	packagesIntegrationCommandTimeout                   = 10 * time.Second
-	packagesIntegrationPageSizeConstant                 = 3
+	packagesIntegrationExpectedPageSizeConstant         = 100
 	packagesIntegrationTaggedVersionIDConstant          = 101
 	packagesIntegrationFirstUntaggedVersionIDConstant   = 202
 	packagesIntegrationSecondUntaggedVersionIDConstant  = 303
@@ -39,9 +40,15 @@ const (
 {"id":%d,"metadata":{"container":{"tags":[]}}},
 {"id":%d,"metadata":{"container":{"tags":[]}}}
 ]`
-	packagesIntegrationVersionsPathTemplateConstant  = "/orgs/%s/packages/container/%s/versions"
-	packagesIntegrationDeletePathTemplateConstant    = "/orgs/%s/packages/container/%s/versions/%d"
-	packagesIntegrationAuthorizationTemplateConstant = "Bearer %s"
+	packagesIntegrationVersionsPathTemplateConstant     = "/orgs/%s/packages/container/%s/versions"
+	packagesIntegrationDeletePathTemplateConstant       = "/orgs/%s/packages/container/%s/versions/%d"
+	packagesIntegrationAuthorizationTemplateConstant    = "Bearer %s"
+	packagesIntegrationGitExecutableConstant            = "git"
+	packagesIntegrationGitNoPromptEnvAssignmentConstant = "GIT_TERMINAL_PROMPT=0"
+	packagesIntegrationOriginRemoteNameConstant         = "origin"
+	packagesIntegrationOriginURLTemplateConstant        = "https://github.com/%s/%s.git"
+	packagesIntegrationStubExecutableNameConstant       = "gh"
+	packagesIntegrationStubScriptTemplateConstant       = "#!/bin/sh\nif [ \"$1\" = \"repo\" ] && [ \"$2\" = \"view\" ]; then\n  cat <<'EOF'\n{\"nameWithOwner\":\"%s/%s\",\"defaultBranchRef\":{\"name\":\"main\"},\"description\":\"\",\"isInOrganization\":true}\nEOF\n  exit 0\nfi\nexit 0\n"
 )
 
 type packagesIntegrationListRequest struct {
@@ -177,16 +184,19 @@ func TestPackagesCommandIntegration(testInstance *testing.T) {
 	testCases := []struct {
 		name              string
 		dryRun            bool
+		packageOverride   string
 		expectedDeleteIDs []int64
 	}{
 		{
 			name:              "purge_deletes_untagged_versions",
 			dryRun:            false,
+			packageOverride:   packagesIntegrationPackageConstant,
 			expectedDeleteIDs: []int64{packagesIntegrationFirstUntaggedVersionIDConstant, packagesIntegrationSecondUntaggedVersionIDConstant},
 		},
 		{
-			name:              "dry_run_skips_deletion",
+			name:              "dry_run_skips_deletion_with_derived_package",
 			dryRun:            true,
+			packageOverride:   "",
 			expectedDeleteIDs: nil,
 		},
 	}
@@ -198,23 +208,34 @@ func TestPackagesCommandIntegration(testInstance *testing.T) {
 			server := httptest.NewServer(serverState)
 			defer server.Close()
 
+			repositoryName := filepath.Base(repositoryRoot)
+			cleanupRemote := configurePackagesIntegrationRemote(subtest, repositoryRoot, packagesIntegrationOwnerConstant, repositoryName)
+			defer cleanupRemote()
+
+			stubDirectory := createPackagesIntegrationStub(subtest, packagesIntegrationOwnerConstant, repositoryName)
+
 			configDirectory := subtest.TempDir()
 			configPath := filepath.Join(configDirectory, packagesIntegrationConfigFileNameConstant)
+			packageBlock := ""
+			expectedPackageName := repositoryName
+			trimmedOverride := strings.TrimSpace(testCase.packageOverride)
+			if len(trimmedOverride) > 0 {
+				packageBlock = fmt.Sprintf(packagesIntegrationPackageLineTemplateConstant, trimmedOverride)
+				expectedPackageName = trimmedOverride
+			}
+
 			configContent := fmt.Sprintf(
 				packagesIntegrationConfigTemplateConstant,
-				packagesIntegrationOwnerConstant,
-				packagesIntegrationPackageConstant,
-				packagesIntegrationOwnerTypeConstant,
-				packagesIntegrationTokenReferenceConstant,
+				packageBlock,
 				testCase.dryRun,
-				server.URL,
-				packagesIntegrationPageSizeConstant,
+				repositoryRoot,
 			)
 
 			writeError := os.WriteFile(configPath, []byte(configContent), 0o600)
 			require.NoError(subtest, writeError)
 
 			subtest.Setenv(packagesIntegrationTokenEnvNameConstant, packagesIntegrationTokenValueConstant)
+			subtest.Setenv(packagesIntegrationBaseURLEnvironmentNameConstant, server.URL)
 
 			arguments := []string{
 				packagesIntegrationRunSubcommandConstant,
@@ -224,7 +245,8 @@ func TestPackagesCommandIntegration(testInstance *testing.T) {
 			}
 
 			pathVariable := os.Getenv("PATH")
-			commandOptions := integrationCommandOptions{PathVariable: pathVariable}
+			extendedPath := fmt.Sprintf("%s%c%s", stubDirectory, os.PathListSeparator, pathVariable)
+			commandOptions := integrationCommandOptions{PathVariable: extendedPath}
 			_ = runIntegrationCommand(subtest, repositoryRoot, commandOptions, packagesIntegrationCommandTimeout, arguments)
 
 			listRequests := serverState.snapshotListRequests()
@@ -233,16 +255,16 @@ func TestPackagesCommandIntegration(testInstance *testing.T) {
 			expectedVersionsPath := fmt.Sprintf(
 				packagesIntegrationVersionsPathTemplateConstant,
 				packagesIntegrationOwnerConstant,
-				packagesIntegrationPackageConstant,
+				expectedPackageName,
 			)
 
 			require.Equal(subtest, expectedVersionsPath, listRequests[0].path)
 			require.Equal(subtest, 1, listRequests[0].page)
-			require.Equal(subtest, packagesIntegrationPageSizeConstant, listRequests[0].perPage)
+			require.Equal(subtest, packagesIntegrationExpectedPageSizeConstant, listRequests[0].perPage)
 
 			require.Equal(subtest, expectedVersionsPath, listRequests[1].path)
 			require.Equal(subtest, 2, listRequests[1].page)
-			require.Equal(subtest, packagesIntegrationPageSizeConstant, listRequests[1].perPage)
+			require.Equal(subtest, packagesIntegrationExpectedPageSizeConstant, listRequests[1].perPage)
 
 			deleteRequests := serverState.snapshotDeleteRequests()
 			if len(testCase.expectedDeleteIDs) == 0 {
@@ -255,7 +277,7 @@ func TestPackagesCommandIntegration(testInstance *testing.T) {
 					expectedDeletePath := fmt.Sprintf(
 						packagesIntegrationDeletePathTemplateConstant,
 						packagesIntegrationOwnerConstant,
-						packagesIntegrationPackageConstant,
+						expectedPackageName,
 						expectedIdentifier,
 					)
 					require.Equal(subtest, expectedDeletePath, deleteRequest.path)
@@ -271,4 +293,46 @@ func TestPackagesCommandIntegration(testInstance *testing.T) {
 			}
 		})
 	}
+}
+
+func configurePackagesIntegrationRemote(testInstance *testing.T, repositoryRoot string, owner string, repositoryName string) func() {
+	testInstance.Helper()
+
+	remoteURL := fmt.Sprintf(packagesIntegrationOriginURLTemplateConstant, owner, repositoryName)
+
+	getURLCommand := exec.Command(packagesIntegrationGitExecutableConstant, "-C", repositoryRoot, "remote", "get-url", packagesIntegrationOriginRemoteNameConstant)
+	getURLCommand.Env = append(os.Environ(), packagesIntegrationGitNoPromptEnvAssignmentConstant)
+	outputBytes, getURLError := getURLCommand.CombinedOutput()
+	remoteExists := getURLError == nil
+	originalURL := strings.TrimSpace(string(outputBytes))
+
+	var configureCommand *exec.Cmd
+	if remoteExists {
+		configureCommand = exec.Command(packagesIntegrationGitExecutableConstant, "-C", repositoryRoot, "remote", "set-url", packagesIntegrationOriginRemoteNameConstant, remoteURL)
+	} else {
+		configureCommand = exec.Command(packagesIntegrationGitExecutableConstant, "-C", repositoryRoot, "remote", "add", packagesIntegrationOriginRemoteNameConstant, remoteURL)
+	}
+	configureCommand.Env = append(os.Environ(), packagesIntegrationGitNoPromptEnvAssignmentConstant)
+	require.NoError(testInstance, configureCommand.Run())
+
+	return func() {
+		var cleanupCommand *exec.Cmd
+		if remoteExists {
+			cleanupCommand = exec.Command(packagesIntegrationGitExecutableConstant, "-C", repositoryRoot, "remote", "set-url", packagesIntegrationOriginRemoteNameConstant, originalURL)
+		} else {
+			cleanupCommand = exec.Command(packagesIntegrationGitExecutableConstant, "-C", repositoryRoot, "remote", "remove", packagesIntegrationOriginRemoteNameConstant)
+		}
+		cleanupCommand.Env = append(os.Environ(), packagesIntegrationGitNoPromptEnvAssignmentConstant)
+		require.NoError(testInstance, cleanupCommand.Run())
+	}
+}
+
+func createPackagesIntegrationStub(testInstance *testing.T, owner string, repositoryName string) string {
+	testInstance.Helper()
+
+	stubDirectory := testInstance.TempDir()
+	stubPath := filepath.Join(stubDirectory, packagesIntegrationStubExecutableNameConstant)
+	scriptContent := fmt.Sprintf(packagesIntegrationStubScriptTemplateConstant, owner, repositoryName)
+	require.NoError(testInstance, os.WriteFile(stubPath, []byte(scriptContent), 0o755))
+	return stubDirectory
 }
