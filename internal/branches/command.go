@@ -24,6 +24,8 @@ const (
 	flagDryRunNameConstant                      = "dry-run"
 	flagDryRunDescriptionConstant               = "Preview deletions without making changes"
 	missingRepositoryRootsErrorMessageConstant  = "no repository roots provided; specify --root or configure defaults"
+	invalidRemoteNameErrorMessageConstant       = "remote name must not be empty or whitespace"
+	invalidPullRequestLimitErrorMessageConstant = "limit must be greater than zero"
 	repositoryDiscoveryErrorTemplateConstant    = "repository discovery failed: %w"
 	logMessageRepositoryDiscoveryFailedConstant = "Repository discovery failed"
 	logMessageRepositoryCleanupFailedConstant   = "Repository cleanup failed"
@@ -121,22 +123,36 @@ type commandOptions struct {
 func (builder *CommandBuilder) parseOptions(command *cobra.Command, arguments []string) (commandOptions, error) {
 	configuration := builder.resolveConfiguration()
 
-	remoteNameValue := configuration.RemoteName
-	if command != nil && command.Flags().Changed(flagRemoteNameConstant) {
-		configuredRemote, _ := command.Flags().GetString(flagRemoteNameConstant)
-		remoteNameValue = configuredRemote
+	trimmedRemoteName := strings.TrimSpace(configuration.RemoteName)
+	if command != nil {
+		flagRemoteValue, _ := command.Flags().GetString(flagRemoteNameConstant)
+		if command.Flags().Changed(flagRemoteNameConstant) {
+			trimmedRemoteName = strings.TrimSpace(flagRemoteValue)
+		} else if len(trimmedRemoteName) == 0 && builder.ConfigurationProvider == nil {
+			trimmedRemoteName = strings.TrimSpace(flagRemoteValue)
+		}
 	}
-	trimmedRemoteName := strings.TrimSpace(remoteNameValue)
 	if len(trimmedRemoteName) == 0 {
-		trimmedRemoteName = defaultRemoteNameConstant
+		if command != nil {
+			_ = command.Help()
+		}
+		return commandOptions{}, errors.New(invalidRemoteNameErrorMessageConstant)
 	}
 
 	limitValue := configuration.PullRequestLimit
-	if command != nil && command.Flags().Changed(flagLimitNameConstant) {
-		limitValue, _ = command.Flags().GetInt(flagLimitNameConstant)
+	if command != nil {
+		flagLimitValue, _ := command.Flags().GetInt(flagLimitNameConstant)
+		if command.Flags().Changed(flagLimitNameConstant) {
+			limitValue = flagLimitValue
+		} else if limitValue == 0 && builder.ConfigurationProvider == nil {
+			limitValue = flagLimitValue
+		}
 	}
 	if limitValue <= 0 {
-		limitValue = defaultPullRequestLimitConstant
+		if command != nil {
+			_ = command.Help()
+		}
+		return commandOptions{}, errors.New(invalidPullRequestLimitErrorMessageConstant)
 	}
 
 	dryRunValue := configuration.DryRun

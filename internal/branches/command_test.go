@@ -17,22 +17,27 @@ import (
 )
 
 const (
-	commandRemoteFlagConstant        = "--remote"
-	commandLimitFlagConstant         = "--limit"
-	commandDryRunFlagConstant        = "--dry-run"
-	commandLimitValueConstant        = "5"
-	multiRootFirstArgumentConstant   = "root-one"
-	multiRootSecondArgumentConstant  = "root-two"
-	defaultRootArgumentConstant      = "."
-	repositoryOnePathConstant        = "/tmp/repository-one"
-	repositoryTwoPathConstant        = "/tmp/repository-two"
-	cleanupBranchNameConstant        = "feature/shared"
-	repositoryLogFieldNameConstant   = "repository"
-	configurationRemoteNameConstant  = "configured-remote"
-	configurationRootConstant        = "/tmp/config-root"
-	flagOverrideRemoteConstant       = "override-remote"
-	flagOverrideLimitValueConstant   = 7
-	missingRootsErrorMessageConstant = "no repository roots provided; specify --root or configure defaults"
+	commandRemoteFlagConstant            = "--remote"
+	commandLimitFlagConstant             = "--limit"
+	commandDryRunFlagConstant            = "--dry-run"
+	commandLimitValueConstant            = "5"
+	multiRootFirstArgumentConstant       = "root-one"
+	multiRootSecondArgumentConstant      = "root-two"
+	defaultRootArgumentConstant          = "."
+	repositoryOnePathConstant            = "/tmp/repository-one"
+	repositoryTwoPathConstant            = "/tmp/repository-two"
+	cleanupBranchNameConstant            = "feature/shared"
+	repositoryLogFieldNameConstant       = "repository"
+	configurationRemoteNameConstant      = "configured-remote"
+	configurationRootConstant            = "/tmp/config-root"
+	flagOverrideRemoteConstant           = "override-remote"
+	flagOverrideLimitValueConstant       = 7
+	missingRootsErrorMessageConstant     = "no repository roots provided; specify --root or configure defaults"
+	invalidRemoteErrorMessageConstant    = "remote name must not be empty or whitespace"
+	invalidLimitErrorMessageConstant     = "limit must be greater than zero"
+	defaultPullRequestLimitValueConstant = 100
+	invalidLimitArgumentValueConstant    = "0"
+	whitespaceRemoteArgumentConstant     = "   "
 )
 
 type fakeRepositoryDiscoverer struct {
@@ -246,11 +251,10 @@ func TestCommandConfigurationPrecedence(testInstance *testing.T) {
 	pullRequestJSON, jsonError := buildPullRequestJSON(remoteBranches)
 	require.NoError(testInstance, jsonError)
 
-	defaultLimitValue := branches.DefaultCommandConfiguration().PullRequestLimit
-
 	testCases := []struct {
 		name                 string
 		configuration        branches.CommandConfiguration
+		useConfiguration     bool
 		arguments            []string
 		expectedRoots        []string
 		expectedRemote       string
@@ -267,11 +271,11 @@ func TestCommandConfigurationPrecedence(testInstance *testing.T) {
 				DryRun:           false,
 				RepositoryRoots:  []string{configurationRootConstant},
 			},
-			arguments:      []string{},
-			expectedRoots:  []string{configurationRootConstant},
-			expectedRemote: configurationRemoteNameConstant,
-			expectedLimit:  12,
-			expectDryRun:   false,
+			useConfiguration: true,
+			arguments:        []string{},
+			expectedRoots:    []string{configurationRootConstant},
+			expectedRemote:   configurationRemoteNameConstant,
+			expectedLimit:    12,
 		},
 		{
 			name: "flags_override_configuration",
@@ -281,6 +285,7 @@ func TestCommandConfigurationPrecedence(testInstance *testing.T) {
 				DryRun:           false,
 				RepositoryRoots:  []string{configurationRootConstant},
 			},
+			useConfiguration: true,
 			arguments: []string{
 				commandRemoteFlagConstant,
 				flagOverrideRemoteConstant,
@@ -295,14 +300,64 @@ func TestCommandConfigurationPrecedence(testInstance *testing.T) {
 			expectDryRun:   true,
 		},
 		{
-			name:                 "defaults_fill_missing_configuration",
-			configuration:        branches.CommandConfiguration{},
+			name:             "cli_defaults_apply_without_configuration",
+			useConfiguration: false,
+			arguments: []string{
+				repositoryOnePathConstant,
+			},
+			expectedRoots:  []string{repositoryOnePathConstant},
+			expectedRemote: testRemoteNameConstant,
+			expectedLimit:  defaultPullRequestLimitValueConstant,
+		},
+		{
+			name: "configuration_missing_remote_returns_error",
+			configuration: branches.CommandConfiguration{
+				RemoteName:       whitespaceRemoteArgumentConstant,
+				PullRequestLimit: 12,
+				RepositoryRoots:  []string{configurationRootConstant},
+			},
+			useConfiguration:     true,
 			arguments:            []string{},
-			expectedRemote:       branches.DefaultCommandConfiguration().RemoteName,
-			expectedLimit:        defaultLimitValue,
-			expectDryRun:         false,
 			expectError:          true,
-			expectedErrorMessage: missingRootsErrorMessageConstant,
+			expectedErrorMessage: invalidRemoteErrorMessageConstant,
+		},
+		{
+			name: "configuration_invalid_limit_returns_error",
+			configuration: branches.CommandConfiguration{
+				RemoteName:       configurationRemoteNameConstant,
+				PullRequestLimit: 0,
+				RepositoryRoots:  []string{configurationRootConstant},
+			},
+			useConfiguration:     true,
+			arguments:            []string{},
+			expectError:          true,
+			expectedErrorMessage: invalidLimitErrorMessageConstant,
+		},
+		{
+			name:             "flag_invalid_remote_returns_error",
+			useConfiguration: false,
+			arguments: []string{
+				commandRemoteFlagConstant,
+				whitespaceRemoteArgumentConstant,
+				commandLimitFlagConstant,
+				commandLimitValueConstant,
+				multiRootFirstArgumentConstant,
+			},
+			expectError:          true,
+			expectedErrorMessage: invalidRemoteErrorMessageConstant,
+		},
+		{
+			name:             "flag_invalid_limit_returns_error",
+			useConfiguration: false,
+			arguments: []string{
+				commandRemoteFlagConstant,
+				testRemoteNameConstant,
+				commandLimitFlagConstant,
+				invalidLimitArgumentValueConstant,
+				multiRootFirstArgumentConstant,
+			},
+			expectError:          true,
+			expectedErrorMessage: invalidLimitErrorMessageConstant,
 		},
 	}
 
@@ -311,56 +366,61 @@ func TestCommandConfigurationPrecedence(testInstance *testing.T) {
 		testInstance.Run(fmt.Sprintf(subtestNameTemplateConstant, testCaseIndex, testCase.name), func(subtest *testing.T) {
 			fakeExecutorInstance := &fakeCommandExecutor{}
 
-			gitListArguments := []string{gitListRemoteSubcommandConstant, gitHeadsFlagConstant, testCase.expectedRemote}
-			registerResponse(fakeExecutorInstance, gitCommandLabelConstant, gitListArguments, execshell.ExecutionResult{StandardOutput: remoteOutput, ExitCode: 0}, nil)
+			if !testCase.expectError {
+				gitListArguments := []string{gitListRemoteSubcommandConstant, gitHeadsFlagConstant, testCase.expectedRemote}
+				registerResponse(fakeExecutorInstance, gitCommandLabelConstant, gitListArguments, execshell.ExecutionResult{StandardOutput: remoteOutput, ExitCode: 0}, nil)
 
-			githubListArguments := []string{
-				githubPullRequestSubcommandConstant,
-				githubListSubcommandConstant,
-				githubStateFlagConstant,
-				githubClosedStateConstant,
-				githubJSONFlagConstant,
-				pullRequestJSONFieldNameConstant,
-				githubLimitFlagConstant,
-				strconv.Itoa(testCase.expectedLimit),
+				githubListArguments := []string{
+					githubPullRequestSubcommandConstant,
+					githubListSubcommandConstant,
+					githubStateFlagConstant,
+					githubClosedStateConstant,
+					githubJSONFlagConstant,
+					pullRequestJSONFieldNameConstant,
+					githubLimitFlagConstant,
+					strconv.Itoa(testCase.expectedLimit),
+				}
+				registerResponse(fakeExecutorInstance, githubCommandLabelConstant, githubListArguments, execshell.ExecutionResult{StandardOutput: pullRequestJSON, ExitCode: 0}, nil)
+
+				if !testCase.expectDryRun {
+					registerResponse(fakeExecutorInstance, gitCommandLabelConstant, []string{gitPushSubcommandConstant, testCase.expectedRemote, gitDeleteFlagConstant, cleanupBranchNameConstant}, execshell.ExecutionResult{ExitCode: 0}, nil)
+					registerResponse(fakeExecutorInstance, gitCommandLabelConstant, []string{gitBranchSubcommandConstant, gitForceDeleteFlagConstant, cleanupBranchNameConstant}, execshell.ExecutionResult{ExitCode: 0}, nil)
+				}
 			}
-			registerResponse(fakeExecutorInstance, githubCommandLabelConstant, githubListArguments, execshell.ExecutionResult{StandardOutput: pullRequestJSON, ExitCode: 0}, nil)
 
-			if !testCase.expectDryRun {
-				registerResponse(fakeExecutorInstance, gitCommandLabelConstant, []string{gitPushSubcommandConstant, testCase.expectedRemote, gitDeleteFlagConstant, cleanupBranchNameConstant}, execshell.ExecutionResult{ExitCode: 0}, nil)
-				registerResponse(fakeExecutorInstance, gitCommandLabelConstant, []string{gitBranchSubcommandConstant, gitForceDeleteFlagConstant, cleanupBranchNameConstant}, execshell.ExecutionResult{ExitCode: 0}, nil)
-			}
-
-			fakeDiscoverer := &fakeRepositoryDiscoverer{repositories: []string{repositoryOnePathConstant}}
+			fakeDiscoverer := &fakeRepositoryDiscoverer{repositories: append([]string{}, testCase.expectedRoots...)}
 
 			builder := branches.CommandBuilder{
 				LoggerProvider:       func() *zap.Logger { return zap.NewNop() },
 				Executor:             fakeExecutorInstance,
 				RepositoryDiscoverer: fakeDiscoverer,
-				ConfigurationProvider: func() branches.CommandConfiguration {
+			}
+
+			if testCase.useConfiguration {
+				builder.ConfigurationProvider = func() branches.CommandConfiguration {
 					return testCase.configuration
-				},
+				}
 			}
 
 			command, buildError := builder.Build()
 			require.NoError(subtest, buildError)
 
-			command.SetContext(context.Background())
 			outputBuffer := &strings.Builder{}
 			command.SetOut(outputBuffer)
 			command.SetErr(outputBuffer)
+			command.SetContext(context.Background())
 			command.SetArgs(testCase.arguments)
 
 			executionError := command.Execute()
 			if testCase.expectError {
 				require.Error(subtest, executionError)
 				require.Equal(subtest, testCase.expectedErrorMessage, executionError.Error())
+				require.Contains(subtest, outputBuffer.String(), command.UseLine())
 				require.Empty(subtest, fakeDiscoverer.receivedRoots)
 				return
 			}
 
 			require.NoError(subtest, executionError)
-
 			require.Equal(subtest, testCase.expectedRoots, fakeDiscoverer.receivedRoots)
 
 			if testCase.expectDryRun {

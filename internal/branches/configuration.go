@@ -13,25 +13,18 @@ type CommandConfiguration struct {
 // DefaultCommandConfiguration provides baseline configuration values for branch cleanup.
 func DefaultCommandConfiguration() CommandConfiguration {
 	return CommandConfiguration{
-		RemoteName:       defaultRemoteNameConstant,
-		PullRequestLimit: defaultPullRequestLimitConstant,
+		RemoteName:       "",
+		PullRequestLimit: 0,
 		DryRun:           false,
 		RepositoryRoots:  nil,
 	}
 }
 
-// sanitize populates zero values with defaults and trims whitespace.
+// sanitize trims configuration values without applying implicit defaults.
 func (configuration CommandConfiguration) sanitize() CommandConfiguration {
 	sanitized := configuration
 
-	if len(strings.TrimSpace(configuration.RemoteName)) == 0 {
-		sanitized.RemoteName = defaultRemoteNameConstant
-	}
-
-	if configuration.PullRequestLimit <= 0 {
-		sanitized.PullRequestLimit = defaultPullRequestLimitConstant
-	}
-
+	sanitized.RemoteName = strings.TrimSpace(configuration.RemoteName)
 	sanitized.RepositoryRoots = sanitizeRoots(configuration.RepositoryRoots)
 
 	return sanitized
