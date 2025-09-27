@@ -3,7 +3,11 @@ name: Go CI
 on:
   push:
     branches: [ main, master ]
+    paths:
+      - '**/*.go'
   pull_request:
+    paths:
+      - '**/*.go'
 
 jobs:
   build:
