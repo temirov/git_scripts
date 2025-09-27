@@ -52,18 +52,18 @@ const (
 	loggerNotInitializedMessageConstant                = "logger not initialized"
 	defaultConfigurationSearchPathConstant             = "."
 	configurationSearchPathEnvironmentVariableConstant = "GITSCRIPTS_CONFIG_SEARCH_PATH"
-	toolsConfigurationKeyConstant                      = "tools"
-	branchCleanupConfigurationKeyConstant              = toolsConfigurationKeyConstant + ".branch_cleanup"
-	reposConfigurationKeyConstant                      = toolsConfigurationKeyConstant + ".repos"
-	workflowConfigurationKeyConstant                   = toolsConfigurationKeyConstant + ".workflow"
-	migrateConfigurationKeyConstant                    = toolsConfigurationKeyConstant + ".migrate"
-	auditConfigurationKeyConstant                      = toolsConfigurationKeyConstant + ".audit"
+	cliConfigurationKeyConstant                        = "cli"
+	branchCleanupConfigurationKeyConstant              = cliConfigurationKeyConstant + ".branch_cleanup"
+	reposConfigurationKeyConstant                      = cliConfigurationKeyConstant + ".repos"
+	workflowConfigurationKeyConstant                   = cliConfigurationKeyConstant + ".workflow"
+	migrateConfigurationKeyConstant                    = cliConfigurationKeyConstant + ".migrate"
+	auditConfigurationKeyConstant                      = cliConfigurationKeyConstant + ".audit"
 )
 
 // ApplicationConfiguration describes the persisted configuration for the CLI entrypoint.
 type ApplicationConfiguration struct {
 	Common ApplicationCommonConfiguration `mapstructure:"common"`
-	Tools  ApplicationToolsConfiguration  `mapstructure:"tools"`
+	Tools  ApplicationToolsConfiguration  `mapstructure:"cli"`
 }
 
 // ApplicationCommonConfiguration stores logging configuration shared across commands.

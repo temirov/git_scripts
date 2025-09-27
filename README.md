@@ -97,61 +97,74 @@ Persist defaults and workflow plans in a single configuration file to avoid long
 common:
   log_level: info
   log_format: structured
-tools:
+cli:
   packages:
     purge:
-      operation: repo-packages-purge
-      with:
-        owner: my-org
-        package: my-image
-        owner_type: org
-        token_source: env:GITHUB_PACKAGES_TOKEN
-        page_size: 50
-  reports:
-    audit:
-      operation: audit-report
-      with:
-        output: ./audit.csv
+      owner: my-org
+      package: my-image
+      owner_type: org
+      token_source: env:GITHUB_PACKAGES_TOKEN
+      dry_run: false
+      service_base_url: ""
+      page_size: 50
+  audit:
+    roots:
+      - .
+    debug: false
+tools:
+  - &tool_conversion_default
+    name: conversion.default
+    operation: convert-protocol
+    with: &options_conversion_default
+      from: https
+      to: git
+  - &tool_rename_clean
+    name: rename.clean
+    operation: rename-directories
+    with: &options_rename_clean
+      require_clean: true
+  - &tool_migration_legacy
+    name: migration.legacy
+    operation: migrate-branch
+    with: &options_migration_legacy
+      targets:
+        - remote_name: origin
+          source_branch: main
+          target_branch: master
+          push_to_remote: true
+          delete_source_branch: false
+  - &tool_audit_weekly
+    name: audit.weekly
+    operation: audit-report
+    with: &options_audit_weekly
+      output: ./reports/audit.csv
 workflow:
-  tools:
-    - name: conversion.default
-      operation: convert-protocol
-      with:
-        from: https
-        to: git
-    - name: rename.clean
-      operation: rename-directories
-      with:
-        require_clean: true
-    - name: migration.legacy
-      operation: migrate-branch
-      with:
-        targets:
-          - remote_name: origin
-            source_branch: main
-            target_branch: master
-            push_to_remote: true
-            delete_source_branch: false
-    - name: audit.weekly
-      operation: audit-report
-      with:
-        output: ./reports/audit.csv
-  steps:
-    - with:
-        tool_ref: conversion.default
-    - operation: update-canonical-remote
-    - with:
-        tool_ref: rename.clean
-    - with:
-        tool_ref: migration.legacy
-    - with:
-        tool_ref: audit.weekly
-        output: ./reports/audit-latest.csv
+  - <<: *tool_conversion_default
+    with:
+      <<: *options_conversion_default
+      tool_ref: conversion.default
+  - operation: update-canonical-remote
+  - <<: *tool_rename_clean
+    with:
+      <<: *options_rename_clean
+      tool_ref: rename.clean
+  - <<: *tool_migration_legacy
+    with:
+      <<: *options_migration_legacy
+      tool_ref: migration.legacy
+  - <<: *tool_audit_weekly
+    with:
+      <<: *options_audit_weekly
+      tool_ref: audit.weekly
+      output: ./reports/audit-latest.csv
 ```
 
 ```shell
 go run . repo-packages-purge --dry-run=false
 ```
+
+The `cli` section configures defaults for the packaged commands—for example the `repo-packages-purge` owner and audit roots—while
+the `tools` sequence declares reusable workflow anchors that the automation can merge into individual steps.
 
 Specify `--config path/to/override.yaml` when you need to load an alternate configuration.
 
@@ -165,16 +178,18 @@ go run . workflow --roots ~/Development --dry-run
 go run . workflow --roots ~/Development --yes
 ```
 
-`workflow` reads the `workflow.steps` array from `config.yaml`, reusing the same repository discovery, prompting, and logging
+`workflow` reads the top-level `workflow` sequence from `config.yaml`, reusing the same repository discovery, prompting, and logging
 infrastructure as the standalone commands. Pass additional roots on the command line to override the configuration file
 and
 combine `--dry-run`/`--yes` for non-interactive execution.
 
-Each entry in `workflow.steps` can either specify an explicit `operation` with its `with` map or reference a reusable
-tool definition by placing `tool_ref` inside the step's `with` block. When you supply `tool_ref`, the runner copies the
-shared defaults defined under `workflow.tools` and applies any inline overrides you add alongside the reference. Reach
-for inline `with` maps when a step is unique; prefer `tool_ref` when several steps share the same configuration and you
-want a single place to update future adjustments.
+Each entry in the `workflow` sequence can either specify an explicit `operation` with its `with` map or merge one of the anchored
+tool definitions declared in the top-level `tools` list. Reusable tool definitions assign anchors (for example,
+`&tool_conversion_default` and, where helpful, anchors for their `with` maps). Workflow steps reuse those anchors with YAML merge
+keys (`<<: *tool_conversion_default`) so the configuration stays DRY while still allowing inline overrides such as the final audit
+step's `output` path. Pair the merge with a `tool_ref` inside the step's `with` map so the runner resolves the shared defaults before
+applying overrides. Reach for inline `with` maps when a step is unique; prefer `tool_ref` with anchored merges when several steps
+share the same configuration and you want a single place to update future adjustments.
 
 ## Development and testing
 
