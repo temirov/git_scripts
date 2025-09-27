@@ -2,31 +2,25 @@
 common:
   log_level: info
   log_format: structured
-tools:
+commands:
   packages:
     purge:
-      operation: repo-packages-purge
-      with:
-        owner: my-org
-        package: my-image
-        owner_type: org
-        token_source: env:GITHUB_PACKAGES_TOKEN
-        page_size: 50
-  reports:
-    audit:
-      operation: audit-report
-      with:
-        output: ./audit.csv
-  conversion_default: &conversion_default
+      owner: my-org
+      package: my-image
+      owner_type: org
+      token_source: env:GITHUB_PACKAGES_TOKEN
+      page_size: 50
+operations:
+  - &conversion_default
     operation: convert-protocol
     with: &conversion_default_options
       from: https
       to: git
-  rename_clean: &rename_clean
+  - &rename_clean
     operation: rename-directories
     with:
       require_clean: true
-  migration_legacy: &migration_legacy
+  - &migration_legacy
     operation: migrate-branch
     with:
       targets:
@@ -35,7 +29,7 @@ tools:
           target_branch: master
           push_to_remote: true
           delete_source_branch: false
-  audit_weekly: &audit_weekly
+  - &audit_weekly
     operation: audit-report
     with: &audit_weekly_options
       output: ./reports/audit.csv

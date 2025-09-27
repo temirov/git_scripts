@@ -1,8 +1,8 @@
 package packages
 
 const (
-	toolsConfigurationRootKeyConstant    = "tools"
-	packagesConfigurationRootKeyConstant = toolsConfigurationRootKeyConstant + ".packages"
+	commandsConfigurationRootKeyConstant = "commands"
+	packagesConfigurationRootKeyConstant = commandsConfigurationRootKeyConstant + ".packages"
 	purgeConfigurationKeyConstant        = packagesConfigurationRootKeyConstant + ".purge"
 	purgeOwnerKeyConstant                = purgeConfigurationKeyConstant + ".owner"
 	purgePackageNameKeyConstant          = purgeConfigurationKeyConstant + ".package"

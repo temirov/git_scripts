@@ -52,18 +52,18 @@ const (
 	loggerNotInitializedMessageConstant                = "logger not initialized"
 	defaultConfigurationSearchPathConstant             = "."
 	configurationSearchPathEnvironmentVariableConstant = "GITSCRIPTS_CONFIG_SEARCH_PATH"
-	toolsConfigurationKeyConstant                      = "tools"
-	branchCleanupConfigurationKeyConstant              = toolsConfigurationKeyConstant + ".branch_cleanup"
-	reposConfigurationKeyConstant                      = toolsConfigurationKeyConstant + ".repos"
-	workflowConfigurationKeyConstant                   = toolsConfigurationKeyConstant + ".workflow"
-	migrateConfigurationKeyConstant                    = toolsConfigurationKeyConstant + ".migrate"
-	auditConfigurationKeyConstant                      = toolsConfigurationKeyConstant + ".audit"
+	commandsConfigurationKeyConstant                   = "commands"
+	branchCleanupConfigurationKeyConstant              = commandsConfigurationKeyConstant + ".branch_cleanup"
+	reposConfigurationKeyConstant                      = commandsConfigurationKeyConstant + ".repos"
+	workflowConfigurationKeyConstant                   = commandsConfigurationKeyConstant + ".workflow"
+	migrateConfigurationKeyConstant                    = commandsConfigurationKeyConstant + ".migrate"
+	auditConfigurationKeyConstant                      = commandsConfigurationKeyConstant + ".audit"
 )
 
 // ApplicationConfiguration describes the persisted configuration for the CLI entrypoint.
 type ApplicationConfiguration struct {
-	Common ApplicationCommonConfiguration `mapstructure:"common"`
-	Tools  ApplicationToolsConfiguration  `mapstructure:"tools"`
+	Common   ApplicationCommonConfiguration   `mapstructure:"common"`
+	Commands ApplicationCommandsConfiguration `mapstructure:"commands"`
 }
 
 // ApplicationCommonConfiguration stores logging configuration shared across commands.
@@ -72,8 +72,8 @@ type ApplicationCommonConfiguration struct {
 	LogFormat string `mapstructure:"log_format"`
 }
 
-// ApplicationToolsConfiguration holds configuration for CLI subcommands grouped by tool family.
-type ApplicationToolsConfiguration struct {
+// ApplicationCommandsConfiguration holds configuration for CLI subcommands grouped by command family.
+type ApplicationCommandsConfiguration struct {
 	Audit         audit.CommandConfiguration       `mapstructure:"audit"`
 	Packages      packages.Configuration           `mapstructure:"packages"`
 	BranchCleanup branches.CommandConfiguration    `mapstructure:"branch_cleanup"`
@@ -136,7 +136,7 @@ func NewApplication() *Application {
 		},
 		HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
 		ConfigurationProvider: func() audit.CommandConfiguration {
-			return application.configuration.Tools.Audit
+			return application.configuration.Commands.Audit
 		},
 	}
 	auditCommand, auditBuildError := auditBuilder.Build()
@@ -150,7 +150,7 @@ func NewApplication() *Application {
 		},
 		HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
 		ConfigurationProvider: func() branches.CommandConfiguration {
-			return application.configuration.Tools.BranchCleanup
+			return application.configuration.Commands.BranchCleanup
 		},
 	}
 	branchCleanupCommand, branchCleanupBuildError := branchCleanupBuilder.Build()
@@ -164,7 +164,7 @@ func NewApplication() *Application {
 		},
 		HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
 		ConfigurationProvider: func() migrate.CommandConfiguration {
-			return application.configuration.Tools.Migrate
+			return application.configuration.Commands.Migrate
 		},
 	}
 	if workingDirectory, workingDirectoryError := os.Getwd(); workingDirectoryError == nil {
@@ -180,7 +180,7 @@ func NewApplication() *Application {
 			return application.logger
 		},
 		ConfigurationProvider: func() packages.Configuration {
-			return application.configuration.Tools.Packages
+			return application.configuration.Commands.Packages
 		},
 	}
 	repoPackagesPurgeCommand, packagesBuildError := packagesBuilder.Build()
@@ -194,7 +194,7 @@ func NewApplication() *Application {
 		},
 		HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
 		ConfigurationProvider: func() repos.RenameConfiguration {
-			return application.configuration.Tools.Repos.Rename
+			return application.configuration.Commands.Repos.Rename
 		},
 	}
 	renameCommand, renameBuildError := renameBuilder.Build()
@@ -208,7 +208,7 @@ func NewApplication() *Application {
 		},
 		HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
 		ConfigurationProvider: func() repos.RemotesConfiguration {
-			return application.configuration.Tools.Repos.Remotes
+			return application.configuration.Commands.Repos.Remotes
 		},
 	}
 	remotesCommand, remotesBuildError := remotesBuilder.Build()
@@ -222,7 +222,7 @@ func NewApplication() *Application {
 		},
 		HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
 		ConfigurationProvider: func() repos.ProtocolConfiguration {
-			return application.configuration.Tools.Repos.Protocol
+			return application.configuration.Commands.Repos.Protocol
 		},
 	}
 	protocolCommand, protocolBuildError := protocolBuilder.Build()
@@ -236,7 +236,7 @@ func NewApplication() *Application {
 		},
 		HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
 		ConfigurationProvider: func() workflowcmd.CommandConfiguration {
-			return application.configuration.Tools.Workflow
+			return application.configuration.Commands.Workflow
 		},
 	}
 	workflowCommand, workflowBuildError := workflowBuilder.Build()
