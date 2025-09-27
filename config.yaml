@@ -14,10 +14,7 @@ operations:
   - &packages_purge_defaults
     operation: repo-packages-purge
     with:
-      owner: my-org
       package: my-image
-      owner_type: org
-      token_source: env:GITHUB_PACKAGES_TOKEN
 
   - &branch_cleanup_defaults
     operation: repo-prs-purge
