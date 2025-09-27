@@ -112,17 +112,17 @@ tools:
       operation: audit-report
       with:
         output: ./audit.csv
-workflow_tools:
-  - name: conversion.default
+operations:
+  - &conversion_default
     operation: convert-protocol
-    with:
+    with: &conversion_default_options
       from: https
       to: git
-  - name: rename.clean
+  - &rename_clean
     operation: rename-directories
     with:
       require_clean: true
-  - name: migration.legacy
+  - &migration_legacy
     operation: migrate-branch
     with:
       targets:
@@ -131,20 +131,18 @@ workflow_tools:
           target_branch: master
           push_to_remote: true
           delete_source_branch: false
-  - name: audit.weekly
+  - &audit_weekly
     operation: audit-report
-    with:
+    with: &audit_weekly_options
       output: ./reports/audit.csv
 workflow:
-  - with:
-      tool_ref: conversion.default
+  - <<: *conversion_default
   - operation: update-canonical-remote
-  - with:
-      tool_ref: rename.clean
-  - with:
-      tool_ref: migration.legacy
-  - with:
-      tool_ref: audit.weekly
+  - <<: *rename_clean
+  - <<: *migration_legacy
+  - <<: *audit_weekly
+    with:
+      <<: *audit_weekly_options
       output: ./reports/audit-latest.csv
 ```
 
@@ -169,11 +167,9 @@ infrastructure as the standalone commands. Pass additional roots on the command 
 and
 combine `--dry-run`/`--yes` for non-interactive execution.
 
-Each entry in the `workflow` array can either specify an explicit `operation` with its `with` map or reference a reusable
-tool definition by placing `tool_ref` inside the step's `with` block. When you supply `tool_ref`, the runner copies the
-shared defaults defined under `workflow_tools` and applies any inline overrides you add alongside the reference. Reach
-for inline `with` maps when a step is unique; prefer `tool_ref` when several steps share the same configuration and you
-want a single place to update future adjustments.
+Each entry in the `workflow` array is a full step definition. Use YAML anchors under `operations` to capture reusable
+defaults and merge them into individual steps with the merge key (`<<`). Inline overrides remain possible: apply another
+merge inside the `with` map or specify the final values directly alongside the alias.
 
 ## Development and testing
 

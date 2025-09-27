@@ -302,13 +302,13 @@ func buildWorkflowConfiguration(auditPath string) string {
 	return fmt.Sprintf(`common:
   log_level: error
 tools: {}
-workflow_tools:
-  - name: conversion.default
+operations:
+  - &conversion_default
     operation: convert-protocol
     with:
       from: https
       to: ssh
-  - name: migration.default
+  - &migration_default
     operation: migrate-branch
     with:
       targets:
@@ -317,18 +317,17 @@ workflow_tools:
           target_branch: master
           push_to_remote: false
           delete_source_branch: false
-  - name: audit.weekly
+  - &audit_weekly
     operation: audit-report
-    with:
+    with: &audit_weekly_options
       output: ./reports/audit.csv
 workflow:
-  - with:
-      tool_ref: conversion.default
+  - <<: *conversion_default
   - operation: update-canonical-remote
-  - with:
-      tool_ref: migration.default
-  - with:
-      tool_ref: audit.weekly
+  - <<: *migration_default
+  - <<: *audit_weekly
+    with:
+      <<: *audit_weekly_options
       output: %s
 `, auditPath)
 }

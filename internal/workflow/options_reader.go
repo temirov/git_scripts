@@ -16,7 +16,6 @@ const (
 	optionPushToRemoteKeyConstant       = "push_to_remote"
 	optionDeleteSourceBranchKeyConstant = "delete_source_branch"
 	optionOutputPathKeyConstant         = "output"
-	optionToolReferenceKeyConstant      = "tool_ref"
 )
 
 type optionReader struct {
