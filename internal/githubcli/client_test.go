@@ -91,13 +91,14 @@ func TestResolveRepoMetadata(testInstance *testing.T) {
 			repository: testRepositoryIdentifierConstant,
 			executor: &stubGitHubExecutor{
 				executeFunc: func(executionContext context.Context, details execshell.CommandDetails) (execshell.ExecutionResult, error) {
-					return execshell.ExecutionResult{StandardOutput: `{"nameWithOwner":"owner/example","description":"Example repo","defaultBranchRef":{"name":"main"}}`}, nil
+					return execshell.ExecutionResult{StandardOutput: `{"nameWithOwner":"owner/example","description":"Example repo","defaultBranchRef":{"name":"main"},"isInOrganization":true}`}, nil
 				},
 			},
 			verify: func(testInstance *testing.T, metadata githubcli.RepositoryMetadata, executor *stubGitHubExecutor) {
 				require.Equal(testInstance, "owner/example", metadata.NameWithOwner)
 				require.Equal(testInstance, "Example repo", metadata.Description)
 				require.Equal(testInstance, "main", metadata.DefaultBranch)
+				require.True(testInstance, metadata.IsInOrganization)
 				require.Len(testInstance, executor.recordedDetails, 1)
 				require.Contains(testInstance, executor.recordedDetails[0].Arguments, testRepositoryIdentifierConstant)
 			},

@@ -9,29 +9,27 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/temirov/git_scripts/internal/ghcr"
+	"github.com/temirov/git_scripts/internal/githubcli"
 	packages "github.com/temirov/git_scripts/internal/packages"
 )
 
 func TestCommandBuilderParsesConfigurationDefaults(testingInstance *testing.T) {
 	testingInstance.Parallel()
 
-	configuration := packages.Configuration{
-		Purge: packages.PurgeConfiguration{
-			Owner:       "config-owner",
-			PackageName: "config-package",
-			OwnerType:   "org",
-			TokenSource: "env:CONFIG_TOKEN",
-			DryRun:      true,
-		},
-	}
+	configuration := packages.Configuration{Purge: packages.PurgeConfiguration{PackageName: "config-package", DryRun: true}}
 
 	executor := &stubPurgeExecutor{result: ghcr.PurgeResult{TotalVersions: 1}}
 	resolver := &stubServiceResolver{executor: executor}
+	repositoryManager := &stubRepositoryManager{remoteURL: "https://github.com/source/example.git"}
+	githubResolver := &stubGitHubResolver{metadata: githubcli.RepositoryMetadata{NameWithOwner: "canonical/example", IsInOrganization: true}}
 
 	builder := packages.CommandBuilder{
-		LoggerProvider:        func() *zap.Logger { return zap.NewNop() },
-		ConfigurationProvider: func() packages.Configuration { return configuration },
-		ServiceResolver:       resolver,
+		LoggerProvider:           func() *zap.Logger { return zap.NewNop() },
+		ConfigurationProvider:    func() packages.Configuration { return configuration },
+		ServiceResolver:          resolver,
+		RepositoryManager:        repositoryManager,
+		GitHubResolver:           githubResolver,
+		WorkingDirectoryResolver: func() (string, error) { return "/tmp/repo", nil },
 	}
 
 	command, buildError := builder.Build()
@@ -43,24 +41,30 @@ func TestCommandBuilderParsesConfigurationDefaults(testingInstance *testing.T) {
 	require.NoError(testingInstance, executionError)
 
 	require.True(testingInstance, executor.called)
-	require.Equal(testingInstance, "config-owner", executor.options.Owner)
+	require.Equal(testingInstance, "canonical", executor.options.Owner)
 	require.Equal(testingInstance, "config-package", executor.options.PackageName)
 	require.Equal(testingInstance, ghcr.OrganizationOwnerType, executor.options.OwnerType)
 	require.True(testingInstance, executor.options.DryRun)
-	require.Equal(testingInstance, "CONFIG_TOKEN", executor.options.TokenSource.Reference)
+	require.Equal(testingInstance, "GITHUB_PACKAGES_TOKEN", executor.options.TokenSource.Reference)
 }
 
 func TestCommandBuilderFlagOverrides(testingInstance *testing.T) {
 	testingInstance.Parallel()
 
-	configuration := packages.Configuration{Purge: packages.PurgeConfiguration{OwnerType: "user"}}
+	configuration := packages.Configuration{Purge: packages.PurgeConfiguration{PackageName: "config-package"}}
 	executor := &stubPurgeExecutor{result: ghcr.PurgeResult{TotalVersions: 2}}
 	resolver := &stubServiceResolver{executor: executor}
 
+	repositoryManager := &stubRepositoryManager{remoteURL: "https://github.com/source/example.git"}
+	githubResolver := &stubGitHubResolver{metadata: githubcli.RepositoryMetadata{NameWithOwner: "canonical/example", IsInOrganization: true}}
+
 	builder := packages.CommandBuilder{
-		LoggerProvider:        func() *zap.Logger { return zap.NewNop() },
-		ConfigurationProvider: func() packages.Configuration { return configuration },
-		ServiceResolver:       resolver,
+		LoggerProvider:           func() *zap.Logger { return zap.NewNop() },
+		ConfigurationProvider:    func() packages.Configuration { return configuration },
+		ServiceResolver:          resolver,
+		RepositoryManager:        repositoryManager,
+		GitHubResolver:           githubResolver,
+		WorkingDirectoryResolver: func() (string, error) { return "/tmp/repo", nil },
 	}
 
 	command, buildError := builder.Build()
@@ -68,22 +72,20 @@ func TestCommandBuilderFlagOverrides(testingInstance *testing.T) {
 
 	command.SetContext(context.Background())
 	args := []string{
-		"--owner", "flag-owner",
 		"--package", "flag-package",
-		"--owner-type", "org",
-		"--token-source", "file:/tmp/token",
+		"--dry-run",
 	}
 	command.SetArgs(args)
 	executionError := command.Execute()
 	require.NoError(testingInstance, executionError)
 
 	require.True(testingInstance, executor.called)
-	require.Equal(testingInstance, "flag-owner", executor.options.Owner)
+	require.Equal(testingInstance, "canonical", executor.options.Owner)
 	require.Equal(testingInstance, "flag-package", executor.options.PackageName)
 	require.Equal(testingInstance, ghcr.OrganizationOwnerType, executor.options.OwnerType)
-	require.Equal(testingInstance, packages.TokenSourceTypeFile, executor.options.TokenSource.Type)
-	require.Equal(testingInstance, "/tmp/token", executor.options.TokenSource.Reference)
-	require.Equal(testingInstance, configuration.Purge.DryRun, executor.options.DryRun)
+	require.Equal(testingInstance, packages.TokenSourceTypeEnvironment, executor.options.TokenSource.Type)
+	require.Equal(testingInstance, "GITHUB_PACKAGES_TOKEN", executor.options.TokenSource.Reference)
+	require.True(testingInstance, executor.options.DryRun)
 }
 
 func TestCommandBuilderHandlesExecutionError(testingInstance *testing.T) {
@@ -95,16 +97,19 @@ func TestCommandBuilderHandlesExecutionError(testingInstance *testing.T) {
 	builder := packages.CommandBuilder{
 		LoggerProvider: func() *zap.Logger { return zap.NewNop() },
 		ConfigurationProvider: func() packages.Configuration {
-			return packages.Configuration{Purge: packages.PurgeConfiguration{OwnerType: "user"}}
+			return packages.Configuration{Purge: packages.PurgeConfiguration{PackageName: "config-package"}}
 		},
-		ServiceResolver: resolver,
+		ServiceResolver:          resolver,
+		RepositoryManager:        &stubRepositoryManager{remoteURL: "https://github.com/source/example.git"},
+		GitHubResolver:           &stubGitHubResolver{metadata: githubcli.RepositoryMetadata{NameWithOwner: "canonical/example"}},
+		WorkingDirectoryResolver: func() (string, error) { return "/tmp/repo", nil },
 	}
 
 	command, buildError := builder.Build()
 	require.NoError(testingInstance, buildError)
 
 	command.SetContext(context.Background())
-	command.SetArgs([]string{"--owner", "o", "--package", "p", "--token-source", "env:VAR"})
+	command.SetArgs([]string{"--package", "p"})
 	executionError := command.Execute()
 	require.Error(testingInstance, executionError)
 	require.ErrorContains(testingInstance, executionError, "repo-packages-purge failed")
@@ -116,9 +121,12 @@ func TestCommandBuilderValidatesArguments(testingInstance *testing.T) {
 	builder := packages.CommandBuilder{
 		LoggerProvider: func() *zap.Logger { return zap.NewNop() },
 		ConfigurationProvider: func() packages.Configuration {
-			return packages.Configuration{Purge: packages.PurgeConfiguration{OwnerType: "user"}}
+			return packages.Configuration{Purge: packages.PurgeConfiguration{PackageName: "config-package"}}
 		},
-		ServiceResolver: &stubServiceResolver{executor: &stubPurgeExecutor{}},
+		ServiceResolver:          &stubServiceResolver{executor: &stubPurgeExecutor{}},
+		RepositoryManager:        &stubRepositoryManager{remoteURL: "https://github.com/source/example.git"},
+		GitHubResolver:           &stubGitHubResolver{metadata: githubcli.RepositoryMetadata{NameWithOwner: "canonical/example"}},
+		WorkingDirectoryResolver: func() (string, error) { return "/tmp/repo", nil },
 	}
 
 	command, buildError := builder.Build()
@@ -157,4 +165,38 @@ func (executor *stubPurgeExecutor) Execute(executionContext context.Context, opt
 		return ghcr.PurgeResult{}, executor.err
 	}
 	return executor.result, nil
+}
+
+type stubRepositoryManager struct {
+	remoteURL string
+}
+
+func (manager *stubRepositoryManager) CheckCleanWorktree(ctx context.Context, repositoryPath string) (bool, error) {
+	return true, nil
+}
+
+func (manager *stubRepositoryManager) GetCurrentBranch(ctx context.Context, repositoryPath string) (string, error) {
+	return "main", nil
+}
+
+func (manager *stubRepositoryManager) GetRemoteURL(ctx context.Context, repositoryPath string, remoteName string) (string, error) {
+	return manager.remoteURL, nil
+}
+
+func (manager *stubRepositoryManager) SetRemoteURL(ctx context.Context, repositoryPath string, remoteName string, remoteURL string) error {
+	return nil
+}
+
+type stubGitHubResolver struct {
+	metadata           githubcli.RepositoryMetadata
+	err                error
+	recordedRepository string
+}
+
+func (resolver *stubGitHubResolver) ResolveRepoMetadata(ctx context.Context, repository string) (githubcli.RepositoryMetadata, error) {
+	resolver.recordedRepository = repository
+	if resolver.err != nil {
+		return githubcli.RepositoryMetadata{}, resolver.err
+	}
+	return resolver.metadata, nil
 }

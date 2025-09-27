@@ -1,6 +1,9 @@
 package packages
 
 import (
+	"os"
+	"strings"
+
 	"github.com/temirov/git_scripts/internal/ghcr"
 	"go.uber.org/zap"
 )
@@ -8,20 +11,18 @@ import (
 // DefaultPurgeServiceResolver builds purge services using GHCR APIs and token resolution.
 type DefaultPurgeServiceResolver struct {
 	HTTPClient        ghcr.HTTPClient
-	ServiceBaseURL    string
-	PageSize          int
 	EnvironmentLookup EnvironmentLookup
 	FileReader        FileReader
 	TokenResolver     TokenResolver
 }
 
+const (
+	serviceBaseURLEnvironmentVariableNameConstant = "GITSCRIPTS_REPO_PACKAGES_PURGE_BASE_URL"
+)
+
 // Resolve creates a purge executor using configured collaborators or sensible defaults.
 func (resolver *DefaultPurgeServiceResolver) Resolve(logger *zap.Logger) (PurgeExecutor, error) {
-	serviceConfiguration := ghcr.ServiceConfiguration{
-		BaseURL:  resolver.ServiceBaseURL,
-		PageSize: resolver.PageSize,
-	}
-
+	serviceConfiguration := resolver.resolveServiceConfiguration()
 	packageService, serviceCreationError := ghcr.NewPackageVersionService(logger, resolver.HTTPClient, serviceConfiguration)
 	if serviceCreationError != nil {
 		return nil, serviceCreationError
@@ -38,4 +39,23 @@ func (resolver *DefaultPurgeServiceResolver) Resolve(logger *zap.Logger) (PurgeE
 	}
 
 	return purgeService, nil
+}
+
+func (resolver *DefaultPurgeServiceResolver) resolveServiceConfiguration() ghcr.ServiceConfiguration {
+	environmentLookup := resolver.EnvironmentLookup
+	if environmentLookup == nil {
+		environmentLookup = os.LookupEnv
+	}
+
+	baseURLValue, exists := environmentLookup(serviceBaseURLEnvironmentVariableNameConstant)
+	if !exists {
+		return ghcr.ServiceConfiguration{}
+	}
+
+	trimmedBaseURL := strings.TrimSpace(baseURLValue)
+	if len(trimmedBaseURL) == 0 {
+		return ghcr.ServiceConfiguration{}
+	}
+
+	return ghcr.ServiceConfiguration{BaseURL: trimmedBaseURL}
 }

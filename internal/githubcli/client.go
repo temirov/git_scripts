@@ -39,7 +39,7 @@ const (
 	executorNotConfiguredMessageConstant       = "github cli executor not configured"
 	pullRequestLimitDefaultValueConstant       = 100
 	pullRequestJSONFieldsConstant              = "number,title,headRefName"
-	repoViewJSONFieldsConstant                 = "defaultBranchRef,nameWithOwner,description"
+	repoViewJSONFieldsConstant                 = "defaultBranchRef,nameWithOwner,description,isInOrganization"
 	operationErrorMessageTemplateConstant      = "%s operation failed"
 	operationErrorWithCauseTemplateConstant    = "%s operation failed: %s"
 	responseDecodingErrorTemplateConstant      = "%s response decoding failed: %s"
@@ -78,9 +78,10 @@ const (
 
 // RepositoryMetadata contains key details resolved from GitHub.
 type RepositoryMetadata struct {
-	NameWithOwner string
-	Description   string
-	DefaultBranch string
+	NameWithOwner    string
+	Description      string
+	DefaultBranch    string
+	IsInOrganization bool
 }
 
 // PullRequest represents minimal PR details returned by GitHub CLI.
@@ -233,6 +234,7 @@ func (client *Client) ResolveRepoMetadata(executionContext context.Context, repo
 		DefaultBranchRef struct {
 			Name string `json:"name"`
 		} `json:"defaultBranchRef"`
+		IsInOrganization bool `json:"isInOrganization"`
 	}
 
 	decodingError := json.Unmarshal([]byte(executionResult.StandardOutput), &response)
@@ -241,9 +243,10 @@ func (client *Client) ResolveRepoMetadata(executionContext context.Context, repo
 	}
 
 	return RepositoryMetadata{
-		NameWithOwner: response.NameWithOwner,
-		Description:   response.Description,
-		DefaultBranch: response.DefaultBranchRef.Name,
+		NameWithOwner:    response.NameWithOwner,
+		Description:      response.Description,
+		DefaultBranch:    response.DefaultBranchRef.Name,
+		IsInOrganization: response.IsInOrganization,
 	}, nil
 }
 
