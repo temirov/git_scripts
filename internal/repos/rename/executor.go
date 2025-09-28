@@ -18,11 +18,11 @@ const (
 	planCaseOnlyMessage          = "PLAN-CASE-ONLY: %s → %s (two-step move required)\n"
 	planReadyMessage             = "PLAN-OK: %s → %s\n"
 	errorAlreadyNamedMessage     = "ERROR: already named: %s\n"
-	errorDirtyMessage            = "ERROR: dirty worktree: %s\n"
 	errorParentMissingMessage    = "ERROR: target parent missing: %s\n"
 	errorTargetExistsMessage     = "ERROR: target exists: %s\n"
 	promptTemplate               = "Rename '%s' → '%s'? [y/N] "
 	skipMessage                  = "SKIP: %s\n"
+	skipDirtyMessage             = "SKIP (dirty worktree): %s\n"
 	successMessage               = "Renamed %s → %s\n"
 	failureMessage               = "ERROR: rename failed for %s → %s\n"
 	intermediateRenameTemplate   = "%s.rename.%d"
@@ -150,7 +150,7 @@ func (executor *Executor) validatePrerequisites(executionContext context.Context
 	}
 
 	if requireClean && !executor.isClean(executionContext, oldAbsolutePath) {
-		executor.printfError(errorDirtyMessage, oldAbsolutePath)
+		executor.printfOutput(skipDirtyMessage, oldAbsolutePath)
 		return false
 	}
 
