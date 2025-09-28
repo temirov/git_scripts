@@ -17,9 +17,9 @@ import (
 )
 
 const (
-	integrationInfoMessageConstant                     = "\"msg\":\"git_scripts CLI executed\""
-	integrationDebugMessageConstant                    = "\"msg\":\"git_scripts CLI diagnostics\""
-	integrationLogLevelEnvKeyConstant                  = "GITSCRIPTS_COMMON_LOG_LEVEL"
+	integrationInfoMessageConstant                     = "\"msg\":\"gix CLI executed\""
+	integrationDebugMessageConstant                    = "\"msg\":\"gix CLI diagnostics\""
+	integrationLogLevelEnvKeyConstant                  = "GIX_COMMON_LOG_LEVEL"
 	integrationConfigFileNameConstant                  = "config.yaml"
 	integrationConfigTemplateConstant                  = "common:\n  log_level: %s\n  log_format: %s\n"
 	integrationDefaultCaseNameConstant                 = "default_info"
@@ -33,7 +33,7 @@ const (
 	integrationEnvironmentAssignmentTemplateConstant   = "%s=%s"
 	integrationSubtestNameTemplateConstant             = "%d_%s"
 	integrationHelpUsagePrefixConstant                 = "Usage:"
-	integrationHelpDescriptionSnippetConstant          = "git_scripts ships reusable helpers that integrate Git, GitHub CLI, and related tooling."
+	integrationHelpDescriptionSnippetConstant          = "gix ships reusable helpers that integrate Git, GitHub CLI, and related tooling."
 	integrationHelpCaseNameConstant                    = "help_output"
 	integrationStructuredLogCaseNameConstant           = "structured_default"
 	integrationConsoleLogCaseNameConstant              = "console_format"

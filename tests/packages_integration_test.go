@@ -21,7 +21,7 @@ const (
 	packagesIntegrationPackageConstant                  = "tooling"
 	packagesIntegrationTokenEnvNameConstant             = "GITHUB_PACKAGES_TOKEN"
 	packagesIntegrationTokenValueConstant               = "packages-token-value"
-	packagesIntegrationBaseURLEnvironmentNameConstant   = "GITSCRIPTS_REPO_PACKAGES_PURGE_BASE_URL"
+	packagesIntegrationBaseURLEnvironmentNameConstant   = "GIX_REPO_PACKAGES_PURGE_BASE_URL"
 	packagesIntegrationConfigFileNameConstant           = "config.yaml"
 	packagesIntegrationConfigTemplateConstant           = "common:\n  log_level: error\noperations:\n  - operation: repo-packages-purge\n    with:\n%s      dry_run: %t\n      roots:\n        - %s\nworkflow: []\n"
 	packagesIntegrationPackageLineTemplateConstant      = "      package: %s\n"

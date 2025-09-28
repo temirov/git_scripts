@@ -1,4 +1,4 @@
-// Package cli constructs the git_scripts command-line interface.
+// Package cli constructs the gix command-line interface.
 //
 // It wires the Cobra root command with configuration loading, structured
 // logging, and command registration for the audit, branch cleanup, migration,

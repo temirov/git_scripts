@@ -46,7 +46,7 @@ const (
 	workflowIntegrationStubExecutable          = "gh"
 	workflowIntegrationStateFileName           = "default_branch.txt"
 	workflowIntegrationConfigFileName          = "config.yaml"
-	workflowIntegrationConfigSearchPathEnvVar  = "GITSCRIPTS_CONFIG_SEARCH_PATH"
+	workflowIntegrationConfigSearchPathEnvVar  = "GIX_CONFIG_SEARCH_PATH"
 	workflowIntegrationAuditFileName           = "audit.csv"
 	workflowIntegrationBranchCommitMessage     = "CI: switch workflow branch filters to master"
 	workflowIntegrationRepoViewJSONTemplate    = "{\"nameWithOwner\":\"canonical/example\",\"defaultBranchRef\":{\"name\":\"%s\"},\"description\":\"\"}\n"

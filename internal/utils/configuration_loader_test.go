@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	testEnvironmentPrefixConstant                  = "TESTGITSCRIPTS"
+	testEnvironmentPrefixConstant                  = "TESTGIX"
 	testCommonSectionKeyConstant                   = "common"
 	testLogLevelKeyConstant                        = testCommonSectionKeyConstant + ".log_level"
 	testDefaultLogLevelConstant                    = "info"
