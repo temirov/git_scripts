@@ -112,6 +112,7 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 		gitManager      shared.GitRepositoryManager
 		prompter        shared.ConfirmationPrompter
 		expectedOutput  string
+		expectedErrors  string
 		expectedRenames int
 	}{
 		{
@@ -130,6 +131,7 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 			},
 			gitManager:      stubGitManager{clean: true},
 			expectedOutput:  fmt.Sprintf("PLAN-OK: %s → %s\n", renameTestLegacyFolderPath, renameTestTargetFolderPath),
+			expectedErrors:  "",
 			expectedRenames: 0,
 		},
 		{
@@ -147,6 +149,7 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 			gitManager:      stubGitManager{clean: true},
 			prompter:        stubPrompter{response: false},
 			expectedOutput:  fmt.Sprintf("SKIP: %s\n", renameTestProjectFolderPath),
+			expectedErrors:  "",
 			expectedRenames: 0,
 		},
 		{
@@ -164,23 +167,46 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 			},
 			gitManager:      stubGitManager{clean: true},
 			expectedOutput:  fmt.Sprintf("Renamed %s → %s\n", renameTestProjectFolderPath, renameTestTargetFolderPath),
+			expectedErrors:  "",
 			expectedRenames: 1,
+		},
+		{
+			name: "skip_dirty_worktree",
+			options: rename.Options{
+				RepositoryPath:       renameTestProjectFolderPath,
+				DesiredFolderName:    renameTestDesiredFolderName,
+				RequireCleanWorktree: true,
+				AssumeYes:            true,
+			},
+			fileSystem: &stubFileSystem{
+				existingPaths: map[string]bool{
+					renameTestRootDirectory:     true,
+					renameTestProjectFolderPath: true,
+				},
+			},
+			gitManager:      stubGitManager{clean: false},
+			expectedOutput:  fmt.Sprintf("SKIP (dirty worktree): %s\n", renameTestProjectFolderPath),
+			expectedErrors:  "",
+			expectedRenames: 0,
 		},
 	}
 
 	for _, testCase := range testCases {
 		testInstance.Run(testCase.name, func(testInstance *testing.T) {
 			outputBuffer := &bytes.Buffer{}
+			errorBuffer := &bytes.Buffer{}
 			executor := rename.NewExecutor(rename.Dependencies{
 				FileSystem: testCase.fileSystem,
 				GitManager: testCase.gitManager,
 				Prompter:   testCase.prompter,
 				Clock:      stubClock{},
 				Output:     outputBuffer,
+				Errors:     errorBuffer,
 			})
 
 			executor.Execute(context.Background(), testCase.options)
 			require.Equal(testInstance, testCase.expectedOutput, outputBuffer.String())
+			require.Equal(testInstance, testCase.expectedErrors, errorBuffer.String())
 			require.Len(testInstance, testCase.fileSystem.renamedPairs, testCase.expectedRenames)
 		})
 	}
