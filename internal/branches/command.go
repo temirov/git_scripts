@@ -217,20 +217,12 @@ func (builder *CommandBuilder) resolveRepositoryDiscoverer() RepositoryDiscovere
 }
 
 func (builder *CommandBuilder) determineRepositoryRoots(arguments []string, configuredRoots []string) []string {
-	repositoryRoots := make([]string, 0, len(arguments))
-	for argumentIndex := range arguments {
-		trimmedRoot := strings.TrimSpace(arguments[argumentIndex])
-		if len(trimmedRoot) == 0 {
-			continue
-		}
-		repositoryRoots = append(repositoryRoots, trimmedRoot)
+	sanitizedArgumentRoots := branchConfigurationRepositoryPathSanitizer.Sanitize(arguments)
+	if len(sanitizedArgumentRoots) > 0 {
+		return sanitizedArgumentRoots
 	}
 
-	if len(repositoryRoots) > 0 {
-		return repositoryRoots
-	}
-
-	sanitizedConfiguredRoots := sanitizeRoots(configuredRoots)
+	sanitizedConfiguredRoots := branchConfigurationRepositoryPathSanitizer.Sanitize(configuredRoots)
 	if len(sanitizedConfiguredRoots) > 0 {
 		return sanitizedConfiguredRoots
 	}

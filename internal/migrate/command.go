@@ -211,12 +211,12 @@ func (builder *CommandBuilder) parseOptions(command *cobra.Command, arguments []
 }
 
 func (builder *CommandBuilder) determineRepositoryRoots(arguments []string, configuredRoots []string) []string {
-	argumentRoots := sanitizeRoots(arguments)
+	argumentRoots := migrateConfigurationRepositoryPathSanitizer.Sanitize(arguments)
 	if len(argumentRoots) > 0 {
 		return argumentRoots
 	}
 
-	sanitizedConfiguredRoots := sanitizeRoots(configuredRoots)
+	sanitizedConfiguredRoots := migrateConfigurationRepositoryPathSanitizer.Sanitize(configuredRoots)
 	if len(sanitizedConfiguredRoots) > 0 {
 		return sanitizedConfiguredRoots
 	}

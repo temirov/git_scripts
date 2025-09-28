@@ -2,7 +2,6 @@ package repos
 
 import (
 	"errors"
-	"strings"
 
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
@@ -16,7 +15,7 @@ const (
 	missingRepositoryRootsErrorMessageConstant = "no repository roots provided; specify --root or configure defaults"
 )
 
-var repositoryHomeDirectoryExpander = pathutils.NewHomeExpander()
+var repositoryPathSanitizer = pathutils.NewRepositoryPathSanitizerWithConfiguration(nil, pathutils.RepositoryPathSanitizerConfiguration{ExcludeBooleanLiteralCandidates: true})
 
 // LoggerProvider yields a zap logger for command execution.
 type LoggerProvider func() *zap.Logger
@@ -25,12 +24,12 @@ type LoggerProvider func() *zap.Logger
 type PrompterFactory func(*cobra.Command) shared.ConfirmationPrompter
 
 func determineRepositoryRoots(arguments []string, configuredRoots []string) []string {
-	roots := trimRoots(arguments)
+	roots := repositoryPathSanitizer.Sanitize(arguments)
 	if len(roots) > 0 {
 		return roots
 	}
 
-	configured := trimRoots(configuredRoots)
+	configured := repositoryPathSanitizer.Sanitize(configuredRoots)
 	if len(configured) > 0 {
 		return configured
 	}
@@ -49,31 +48,6 @@ func requireRepositoryRoots(command *cobra.Command, arguments []string, configur
 	}
 
 	return nil, errors.New(missingRepositoryRootsErrorMessageConstant)
-}
-
-func trimRoots(raw []string) []string {
-	trimmed := make([]string, 0, len(raw))
-	for _, argument := range raw {
-		candidate := strings.TrimSpace(argument)
-		if len(candidate) == 0 {
-			continue
-		}
-		if isBooleanLiteral(candidate) {
-			continue
-		}
-		expanded := repositoryHomeDirectoryExpander.Expand(candidate)
-		trimmed = append(trimmed, expanded)
-	}
-	return trimmed
-}
-
-func isBooleanLiteral(value string) bool {
-	switch strings.ToLower(value) {
-	case "true", "false":
-		return true
-	default:
-		return false
-	}
 }
 
 func resolveLogger(provider LoggerProvider) *zap.Logger {

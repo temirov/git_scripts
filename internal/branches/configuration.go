@@ -6,7 +6,7 @@ import (
 	pathutils "github.com/temirov/git_scripts/internal/utils/path"
 )
 
-var branchConfigurationHomeDirectoryExpander = pathutils.NewHomeExpander()
+var branchConfigurationRepositoryPathSanitizer = pathutils.NewRepositoryPathSanitizer()
 
 // CommandConfiguration captures configuration values for the branch cleanup command.
 type CommandConfiguration struct {
@@ -31,20 +31,7 @@ func (configuration CommandConfiguration) Sanitize() CommandConfiguration {
 	sanitized := configuration
 
 	sanitized.RemoteName = strings.TrimSpace(configuration.RemoteName)
-	sanitized.RepositoryRoots = sanitizeRoots(configuration.RepositoryRoots)
+	sanitized.RepositoryRoots = branchConfigurationRepositoryPathSanitizer.Sanitize(configuration.RepositoryRoots)
 
-	return sanitized
-}
-
-func sanitizeRoots(raw []string) []string {
-	sanitized := make([]string, 0, len(raw))
-	for _, rootCandidate := range raw {
-		trimmed := strings.TrimSpace(rootCandidate)
-		if len(trimmed) == 0 {
-			continue
-		}
-		expandedRoot := branchConfigurationHomeDirectoryExpander.Expand(trimmed)
-		sanitized = append(sanitized, expandedRoot)
-	}
 	return sanitized
 }

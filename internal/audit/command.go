@@ -79,7 +79,7 @@ func (builder *CommandBuilder) parseOptions(command *cobra.Command) (CommandOpti
 	roots := append([]string{}, configuration.Roots...)
 	if command != nil && command.Flags().Changed(flagRootNameConstant) {
 		flagRoots, _ := command.Flags().GetStringSlice(flagRootNameConstant)
-		roots = sanitizeRoots(flagRoots)
+		roots = auditConfigurationRepositoryPathSanitizer.Sanitize(flagRoots)
 	}
 
 	if len(roots) == 0 {

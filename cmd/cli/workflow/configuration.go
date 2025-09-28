@@ -1,12 +1,10 @@
 package workflow
 
 import (
-	"strings"
-
 	pathutils "github.com/temirov/git_scripts/internal/utils/path"
 )
 
-var workflowConfigurationHomeDirectoryExpander = pathutils.NewHomeExpander()
+var workflowConfigurationRepositoryPathSanitizer = pathutils.NewRepositoryPathSanitizer()
 
 // CommandConfiguration captures configuration values for workflow.
 type CommandConfiguration struct {
@@ -26,19 +24,6 @@ func DefaultCommandConfiguration() CommandConfiguration {
 // Sanitize normalizes configuration values.
 func (configuration CommandConfiguration) Sanitize() CommandConfiguration {
 	sanitized := configuration
-	sanitized.Roots = sanitizeRoots(configuration.Roots)
+	sanitized.Roots = workflowConfigurationRepositoryPathSanitizer.Sanitize(configuration.Roots)
 	return sanitized
-}
-
-func sanitizeRoots(raw []string) []string {
-	trimmed := make([]string, 0, len(raw))
-	for _, rawRoot := range raw {
-		trimmedRoot := strings.TrimSpace(rawRoot)
-		if len(trimmedRoot) == 0 {
-			continue
-		}
-		expandedRoot := workflowConfigurationHomeDirectoryExpander.Expand(trimmedRoot)
-		trimmed = append(trimmed, expandedRoot)
-	}
-	return trimmed
 }
