@@ -21,12 +21,13 @@ const (
 	integrationDebugMessageConstant                    = "\"msg\":\"git_scripts CLI diagnostics\""
 	integrationLogLevelEnvKeyConstant                  = "GITSCRIPTS_COMMON_LOG_LEVEL"
 	integrationConfigFileNameConstant                  = "config.yaml"
-	integrationConfigTemplateConstant                  = "common:\n  log_level: %s\n"
+	integrationConfigTemplateConstant                  = "common:\n  log_level: %s\n  log_format: %s\n"
 	integrationDefaultCaseNameConstant                 = "default_info"
 	integrationConfigCaseNameConstant                  = "config_debug"
 	integrationEnvironmentCaseNameConstant             = "environment_error"
 	integrationDebugLevelConstant                      = "debug"
 	integrationErrorLevelConstant                      = "error"
+	integrationInfoLevelConstant                       = "info"
 	integrationCommandTimeout                          = 5 * time.Second
 	integrationConfigFlagTemplateConstant              = "--config=%s"
 	integrationEnvironmentAssignmentTemplateConstant   = "%s=%s"
@@ -37,12 +38,35 @@ const (
 	integrationStructuredLogCaseNameConstant           = "structured_default"
 	integrationConsoleLogCaseNameConstant              = "console_format"
 	integrationConsoleLogFlagConstant                  = "--log-format=console"
+	integrationStructuredLogFormatConstant             = "structured"
 	integrationConfigurationInitializedSnippetConstant = "configuration initialized"
 	integrationGoBinaryNameConstant                    = "go"
 	integrationGoRunSubcommandConstant                 = "run"
 	integrationCurrentDirectoryArgumentConstant        = "."
 	integrationStderrPipeCaseNameConstant              = "stderr_pipe"
 )
+
+func writeIntegrationConfiguration(
+	testInstance *testing.T,
+	directory string,
+	logLevel string,
+) string {
+	if len(logLevel) == 0 {
+		logLevel = integrationInfoLevelConstant
+	}
+
+	configurationPath := filepath.Join(directory, integrationConfigFileNameConstant)
+	configurationContent := fmt.Sprintf(
+		integrationConfigTemplateConstant,
+		logLevel,
+		integrationStructuredLogFormatConstant,
+	)
+
+	writeError := os.WriteFile(configurationPath, []byte(configurationContent), 0o600)
+	require.NoError(testInstance, writeError)
+
+	return configurationPath
+}
 
 func TestCLIIntegrationLogLevels(testInstance *testing.T) {
 	testCases := []struct {
@@ -81,17 +105,12 @@ func TestCLIIntegrationLogLevels(testInstance *testing.T) {
 
 	for testCaseIndex, testCase := range testCases {
 		testInstance.Run(fmt.Sprintf(integrationSubtestNameTemplateConstant, testCaseIndex, testCase.name), func(testInstance *testing.T) {
-			arguments := []string{"run", "."}
+			arguments := []string{integrationGoRunSubcommandConstant, integrationCurrentDirectoryArgumentConstant}
 			environment := os.Environ()
 			tempDirectory := testInstance.TempDir()
 
-			if len(testCase.configurationLevel) > 0 {
-				configurationPath := filepath.Join(tempDirectory, integrationConfigFileNameConstant)
-				configurationContent := fmt.Sprintf(integrationConfigTemplateConstant, testCase.configurationLevel)
-				writeError := os.WriteFile(configurationPath, []byte(configurationContent), 0o600)
-				require.NoError(testInstance, writeError)
-				arguments = append(arguments, fmt.Sprintf(integrationConfigFlagTemplateConstant, configurationPath))
-			}
+			configurationPath := writeIntegrationConfiguration(testInstance, tempDirectory, testCase.configurationLevel)
+			arguments = append(arguments, fmt.Sprintf(integrationConfigFlagTemplateConstant, configurationPath))
 
 			if len(testCase.environmentLevel) > 0 {
 				environment = append(environment, fmt.Sprintf(integrationEnvironmentAssignmentTemplateConstant, integrationLogLevelEnvKeyConstant, testCase.environmentLevel))
@@ -100,7 +119,7 @@ func TestCLIIntegrationLogLevels(testInstance *testing.T) {
 			executionContext, cancelFunction := context.WithTimeout(context.Background(), integrationCommandTimeout)
 			defer cancelFunction()
 
-			command := exec.CommandContext(executionContext, "go", arguments...)
+			command := exec.CommandContext(executionContext, integrationGoBinaryNameConstant, arguments...)
 			command.Dir = repositoryRootDirectory
 			command.Env = environment
 
@@ -143,11 +162,14 @@ func TestCLIIntegrationDisplaysHelpWhenNoArgumentsProvided(testInstance *testing
 
 	for testCaseIndex, testCase := range testCases {
 		testInstance.Run(fmt.Sprintf(integrationSubtestNameTemplateConstant, testCaseIndex, testCase.name), func(testInstance *testing.T) {
-			commandArguments := []string{"run", "."}
+			commandArguments := []string{integrationGoRunSubcommandConstant, integrationCurrentDirectoryArgumentConstant}
+			tempDirectory := testInstance.TempDir()
+			configurationPath := writeIntegrationConfiguration(testInstance, tempDirectory, "")
+			commandArguments = append(commandArguments, fmt.Sprintf(integrationConfigFlagTemplateConstant, configurationPath))
 			executionContext, cancelFunction := context.WithTimeout(context.Background(), integrationCommandTimeout)
 			defer cancelFunction()
 
-			command := exec.CommandContext(executionContext, "go", commandArguments...)
+			command := exec.CommandContext(executionContext, integrationGoBinaryNameConstant, commandArguments...)
 			command.Dir = repositoryRootDirectory
 			command.Env = os.Environ()
 
@@ -186,13 +208,16 @@ func TestCLIIntegrationRespectsLogFormatFlag(testInstance *testing.T) {
 
 	for testCaseIndex, testCase := range testCases {
 		testInstance.Run(fmt.Sprintf(integrationSubtestNameTemplateConstant, testCaseIndex, testCase.name), func(testInstance *testing.T) {
-			commandArguments := []string{"run", "."}
+			commandArguments := []string{integrationGoRunSubcommandConstant, integrationCurrentDirectoryArgumentConstant}
+			tempDirectory := testInstance.TempDir()
+			configurationPath := writeIntegrationConfiguration(testInstance, tempDirectory, "")
+			commandArguments = append(commandArguments, fmt.Sprintf(integrationConfigFlagTemplateConstant, configurationPath))
 			commandArguments = append(commandArguments, testCase.additionalArguments...)
 
 			executionContext, cancelFunction := context.WithTimeout(context.Background(), integrationCommandTimeout)
 			defer cancelFunction()
 
-			command := exec.CommandContext(executionContext, "go", commandArguments...)
+			command := exec.CommandContext(executionContext, integrationGoBinaryNameConstant, commandArguments...)
 			command.Dir = repositoryRootDirectory
 			command.Env = os.Environ()
 
