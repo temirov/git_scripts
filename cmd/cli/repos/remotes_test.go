@@ -3,6 +3,8 @@ package repos_test
 import (
 	"bytes"
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -24,6 +26,8 @@ const (
 	remotesCanonicalRepository       = "canonical/example"
 	remotesMetadataDefaultBranch     = "main"
 	remotesMissingRootsMessage       = "no repository roots provided; specify --root or configure defaults"
+	remotesRelativeRootConstant      = "relative/remotes-root"
+	remotesHomeRootSuffixConstant    = "remotes-home-root"
 )
 
 func TestRemotesCommandConfigurationPrecedence(testInstance *testing.T) {
@@ -32,6 +36,7 @@ func TestRemotesCommandConfigurationPrecedence(testInstance *testing.T) {
 		configuration           repos.RemotesConfiguration
 		arguments               []string
 		expectedRoots           []string
+		expectedRootsBuilder    func(testing.TB) []string
 		expectRemoteUpdates     int
 		expectPromptInvocations int
 		expectError             bool
@@ -71,6 +76,56 @@ func TestRemotesCommandConfigurationPrecedence(testInstance *testing.T) {
 			arguments:            []string{},
 			expectError:          true,
 			expectedErrorMessage: remotesMissingRootsMessage,
+		},
+		{
+			name: "configuration_expands_home_relative_root",
+			configuration: repos.RemotesConfiguration{
+				DryRun:          true,
+				AssumeYes:       true,
+				RepositoryRoots: []string{"~/" + remotesHomeRootSuffixConstant},
+			},
+			arguments: []string{},
+			expectedRootsBuilder: func(testingInstance testing.TB) []string {
+				homeDirectory, homeError := os.UserHomeDir()
+				require.NoError(testingInstance, homeError)
+				expandedRoot := filepath.Join(homeDirectory, remotesHomeRootSuffixConstant)
+				return []string{expandedRoot}
+			},
+			expectRemoteUpdates:     0,
+			expectPromptInvocations: 0,
+		},
+		{
+			name: "arguments_preserve_relative_roots",
+			configuration: repos.RemotesConfiguration{
+				DryRun:          false,
+				AssumeYes:       false,
+				RepositoryRoots: nil,
+			},
+			arguments: []string{
+				remotesAssumeYesFlagConstant,
+				remotesDryRunFlagConstant,
+				remotesRelativeRootConstant,
+			},
+			expectedRoots:           []string{remotesRelativeRootConstant},
+			expectRemoteUpdates:     0,
+			expectPromptInvocations: 0,
+		},
+		{
+			name:          "arguments_expand_home_relative_root",
+			configuration: repos.RemotesConfiguration{},
+			arguments: []string{
+				remotesAssumeYesFlagConstant,
+				remotesDryRunFlagConstant,
+				"~/" + remotesHomeRootSuffixConstant,
+			},
+			expectedRootsBuilder: func(testingInstance testing.TB) []string {
+				homeDirectory, homeError := os.UserHomeDir()
+				require.NoError(testingInstance, homeError)
+				expandedRoot := filepath.Join(homeDirectory, remotesHomeRootSuffixConstant)
+				return []string{expandedRoot}
+			},
+			expectRemoteUpdates:     0,
+			expectPromptInvocations: 0,
 		},
 	}
 
@@ -121,7 +176,11 @@ func TestRemotesCommandConfigurationPrecedence(testInstance *testing.T) {
 
 			require.NoError(subtest, executionError)
 
-			require.Equal(subtest, testCase.expectedRoots, discoverer.receivedRoots)
+			expectedRoots := testCase.expectedRoots
+			if testCase.expectedRootsBuilder != nil {
+				expectedRoots = testCase.expectedRootsBuilder(subtest)
+			}
+			require.Equal(subtest, expectedRoots, discoverer.receivedRoots)
 			require.Equal(subtest, testCase.expectPromptInvocations, prompter.calls)
 			require.Equal(subtest, testCase.expectRemoteUpdates, len(manager.setCalls))
 		})

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -31,6 +32,8 @@ const (
 	renameMetadataDefaultBranchConstant = "main"
 	renameLocalBranchConstant           = "feature/example"
 	renameMissingRootsMessageConstant   = "no repository roots provided; specify --root or configure defaults"
+	renameRelativeRootConstant          = "relative/rename-root"
+	renameHomeRootSuffixConstant        = "rename-home-root"
 )
 
 var (
@@ -43,6 +46,7 @@ func TestRenameCommandConfigurationPrecedence(testInstance *testing.T) {
 		configuration        *repos.RenameConfiguration
 		arguments            []string
 		expectedRoots        []string
+		expectedRootsBuilder func(testing.TB) []string
 		expectedPromptCalls  int
 		expectedRenameCalls  int
 		expectedCleanChecks  int
@@ -105,6 +109,66 @@ func TestRenameCommandConfigurationPrecedence(testInstance *testing.T) {
 			expectedPromptCalls: 0,
 			expectedRenameCalls: 1,
 			expectedCleanChecks: 0,
+		},
+		{
+			name: "configuration_expands_home_relative_root",
+			configuration: &repos.RenameConfiguration{
+				DryRun:               true,
+				AssumeYes:            true,
+				RequireCleanWorktree: true,
+				RepositoryRoots:      []string{"~/" + renameHomeRootSuffixConstant},
+			},
+			arguments: []string{},
+			expectedRootsBuilder: func(testingInstance testing.TB) []string {
+				homeDirectory, homeError := os.UserHomeDir()
+				require.NoError(testingInstance, homeError)
+				expandedRoot := filepath.Join(homeDirectory, renameHomeRootSuffixConstant)
+				return []string{expandedRoot}
+			},
+			expectedPromptCalls: 0,
+			expectedRenameCalls: 0,
+			expectedCleanChecks: 1,
+		},
+		{
+			name: "arguments_preserve_relative_roots",
+			configuration: &repos.RenameConfiguration{
+				DryRun:               true,
+				AssumeYes:            true,
+				RequireCleanWorktree: true,
+			},
+			arguments: []string{
+				renameDryRunFlagConstant,
+				renameAssumeYesFlagConstant,
+				renameRequireCleanFlagConstant,
+				renameRelativeRootConstant,
+			},
+			expectedRoots:       []string{renameRelativeRootConstant},
+			expectedPromptCalls: 0,
+			expectedRenameCalls: 0,
+			expectedCleanChecks: 1,
+		},
+		{
+			name: "arguments_expand_home_relative_root",
+			configuration: &repos.RenameConfiguration{
+				DryRun:               true,
+				AssumeYes:            true,
+				RequireCleanWorktree: true,
+			},
+			arguments: []string{
+				renameDryRunFlagConstant,
+				renameAssumeYesFlagConstant,
+				renameRequireCleanFlagConstant,
+				"~/" + renameHomeRootSuffixConstant,
+			},
+			expectedRootsBuilder: func(testingInstance testing.TB) []string {
+				homeDirectory, homeError := os.UserHomeDir()
+				require.NoError(testingInstance, homeError)
+				expandedRoot := filepath.Join(homeDirectory, renameHomeRootSuffixConstant)
+				return []string{expandedRoot}
+			},
+			expectedPromptCalls: 0,
+			expectedRenameCalls: 0,
+			expectedCleanChecks: 1,
 		},
 	}
 
@@ -170,7 +234,11 @@ func TestRenameCommandConfigurationPrecedence(testInstance *testing.T) {
 
 			require.NoError(subtest, executionError)
 
-			require.Equal(subtest, testCase.expectedRoots, discoverer.receivedRoots)
+			expectedRoots := testCase.expectedRoots
+			if testCase.expectedRootsBuilder != nil {
+				expectedRoots = testCase.expectedRootsBuilder(subtest)
+			}
+			require.Equal(subtest, expectedRoots, discoverer.receivedRoots)
 			require.Equal(subtest, testCase.expectedPromptCalls, prompter.calls)
 			require.Equal(subtest, testCase.expectedRenameCalls, len(fileSystem.renameOperations))
 			require.Equal(subtest, testCase.expectedCleanChecks, manager.checkCleanCalls)

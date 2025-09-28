@@ -3,6 +3,8 @@ package repos_test
 import (
 	"bytes"
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -24,6 +26,8 @@ const (
 	protocolSSHRemoteURL           = "ssh://git@github.com/origin/example.git"
 	protocolHTTPSRemoteURL         = "https://github.com/origin/example.git"
 	protocolMissingRootsMessage    = "no repository roots provided; specify --root or configure defaults"
+	protocolRelativeRootConstant   = "relative/protocol-root"
+	protocolHomeRootSuffixConstant = "protocol-home-root"
 )
 
 func TestProtocolCommandConfigurationPrecedence(testInstance *testing.T) {
@@ -33,6 +37,7 @@ func TestProtocolCommandConfigurationPrecedence(testInstance *testing.T) {
 		arguments               []string
 		initialRemoteURL        string
 		expectedRoots           []string
+		expectedRootsBuilder    func(testing.TB) []string
 		expectRemoteUpdates     int
 		expectPromptInvocations int
 		expectError             bool
@@ -102,6 +107,60 @@ func TestProtocolCommandConfigurationPrecedence(testInstance *testing.T) {
 			expectRemoteUpdates:     1,
 			expectPromptInvocations: 0,
 		},
+		{
+			name: "configuration_expands_home_relative_root",
+			configuration: repos.ProtocolConfiguration{
+				DryRun:          true,
+				AssumeYes:       true,
+				RepositoryRoots: []string{"~/" + protocolHomeRootSuffixConstant},
+				FromProtocol:    string(shared.RemoteProtocolHTTPS),
+				ToProtocol:      string(shared.RemoteProtocolSSH),
+			},
+			arguments:            []string{},
+			initialRemoteURL:     protocolHTTPSRemoteURL,
+			expectedRootsBuilder: protocolHomeRootBuilder,
+			expectRemoteUpdates:  0,
+		},
+		{
+			name: "arguments_preserve_relative_roots",
+			configuration: repos.ProtocolConfiguration{
+				FromProtocol: string(shared.RemoteProtocolHTTPS),
+				ToProtocol:   string(shared.RemoteProtocolSSH),
+			},
+			arguments: []string{
+				protocolFromFlagConstant,
+				string(shared.RemoteProtocolHTTPS),
+				protocolToFlagConstant,
+				string(shared.RemoteProtocolSSH),
+				protocolYesFlagConstant,
+				protocolDryRunFlagConstant,
+				protocolRelativeRootConstant,
+			},
+			initialRemoteURL:        protocolHTTPSRemoteURL,
+			expectedRoots:           []string{protocolRelativeRootConstant},
+			expectRemoteUpdates:     0,
+			expectPromptInvocations: 0,
+		},
+		{
+			name: "arguments_expand_home_relative_root",
+			configuration: repos.ProtocolConfiguration{
+				FromProtocol: string(shared.RemoteProtocolHTTPS),
+				ToProtocol:   string(shared.RemoteProtocolSSH),
+			},
+			arguments: []string{
+				protocolFromFlagConstant,
+				string(shared.RemoteProtocolHTTPS),
+				protocolToFlagConstant,
+				string(shared.RemoteProtocolSSH),
+				protocolYesFlagConstant,
+				protocolDryRunFlagConstant,
+				"~/" + protocolHomeRootSuffixConstant,
+			},
+			initialRemoteURL:        protocolHTTPSRemoteURL,
+			expectedRootsBuilder:    protocolHomeRootBuilder,
+			expectRemoteUpdates:     0,
+			expectPromptInvocations: 0,
+		},
 	}
 
 	for testCaseIndex := range testCases {
@@ -151,7 +210,11 @@ func TestProtocolCommandConfigurationPrecedence(testInstance *testing.T) {
 
 			require.NoError(subtest, executionError)
 
-			require.Equal(subtest, testCase.expectedRoots, discoverer.receivedRoots)
+			expectedRoots := testCase.expectedRoots
+			if testCase.expectedRootsBuilder != nil {
+				expectedRoots = testCase.expectedRootsBuilder(subtest)
+			}
+			require.Equal(subtest, expectedRoots, discoverer.receivedRoots)
 			require.Equal(subtest, testCase.expectPromptInvocations, prompter.calls)
 			require.Equal(subtest, testCase.expectRemoteUpdates, len(manager.setCalls))
 			if testCase.expectRemoteUpdates > 0 {
@@ -173,4 +236,11 @@ func detectProtocol(remoteURL string) string {
 	default:
 		return ""
 	}
+}
+
+func protocolHomeRootBuilder(testingInstance testing.TB) []string {
+	homeDirectory, homeError := os.UserHomeDir()
+	require.NoError(testingInstance, homeError)
+	expandedRoot := filepath.Join(homeDirectory, protocolHomeRootSuffixConstant)
+	return []string{expandedRoot}
 }
