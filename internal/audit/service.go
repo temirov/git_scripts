@@ -10,8 +10,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/temirov/git_scripts/internal/execshell"
-	"github.com/temirov/git_scripts/internal/repos/shared"
+	"github.com/temirov/gix/internal/execshell"
+	"github.com/temirov/gix/internal/repos/shared"
 )
 
 // Service coordinates repository discovery, reporting, and reconciliation.

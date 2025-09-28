@@ -9,8 +9,8 @@ import (
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 
-	"github.com/temirov/git_scripts/internal/execshell"
-	"github.com/temirov/git_scripts/internal/repos/discovery"
+	"github.com/temirov/gix/internal/execshell"
+	"github.com/temirov/gix/internal/repos/discovery"
 )
 
 const (

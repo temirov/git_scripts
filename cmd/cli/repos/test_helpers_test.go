@@ -3,8 +3,8 @@ package repos_test
 import (
 	"context"
 
-	"github.com/temirov/git_scripts/internal/execshell"
-	"github.com/temirov/git_scripts/internal/githubcli"
+	"github.com/temirov/gix/internal/execshell"
+	"github.com/temirov/gix/internal/githubcli"
 )
 
 type fakeRepositoryDiscoverer struct {

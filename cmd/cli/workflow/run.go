@@ -7,12 +7,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/temirov/git_scripts/internal/githubcli"
-	"github.com/temirov/git_scripts/internal/gitrepo"
-	"github.com/temirov/git_scripts/internal/repos/dependencies"
-	"github.com/temirov/git_scripts/internal/repos/shared"
-	"github.com/temirov/git_scripts/internal/utils"
-	"github.com/temirov/git_scripts/internal/workflow"
+	"github.com/temirov/gix/internal/githubcli"
+	"github.com/temirov/gix/internal/gitrepo"
+	"github.com/temirov/gix/internal/repos/dependencies"
+	"github.com/temirov/gix/internal/repos/shared"
+	"github.com/temirov/gix/internal/utils"
+	"github.com/temirov/gix/internal/workflow"
 )
 
 const (

@@ -1,6 +1,6 @@
 package audit
 
-import "github.com/temirov/git_scripts/internal/repos/shared"
+import "github.com/temirov/gix/internal/repos/shared"
 
 // RemoteProtocolType enumerates supported git remote protocols.
 type RemoteProtocolType = shared.RemoteProtocol

@@ -7,8 +7,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/temirov/git_scripts/internal/repos/shared"
-	"github.com/temirov/git_scripts/internal/workflow"
+	"github.com/temirov/gix/internal/repos/shared"
+	"github.com/temirov/gix/internal/workflow"
 )
 
 const (

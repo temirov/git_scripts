@@ -6,7 +6,7 @@ import (
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 
-	"github.com/temirov/git_scripts/internal/repos/dependencies"
+	"github.com/temirov/gix/internal/repos/dependencies"
 )
 
 // LoggerProvider supplies a zap logger for command execution.

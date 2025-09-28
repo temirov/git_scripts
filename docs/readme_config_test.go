@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 
-	"github.com/temirov/git_scripts/internal/workflow"
+	"github.com/temirov/gix/internal/workflow"
 )
 
 const (

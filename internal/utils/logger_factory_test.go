@@ -12,7 +12,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/temirov/git_scripts/internal/utils"
+	"github.com/temirov/gix/internal/utils"
 )
 
 const (

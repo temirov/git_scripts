@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/temirov/git_scripts/internal/execshell"
+	"github.com/temirov/gix/internal/execshell"
 )
 
 const (

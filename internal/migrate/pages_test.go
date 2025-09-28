@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
-	"github.com/temirov/git_scripts/internal/githubcli"
-	migrate "github.com/temirov/git_scripts/internal/migrate"
+	"github.com/temirov/gix/internal/githubcli"
+	migrate "github.com/temirov/gix/internal/migrate"
 )
 
 const (

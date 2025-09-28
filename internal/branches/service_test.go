@@ -13,8 +13,8 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest/observer"
 
-	branches "github.com/temirov/git_scripts/internal/branches"
-	"github.com/temirov/git_scripts/internal/execshell"
+	branches "github.com/temirov/gix/internal/branches"
+	"github.com/temirov/gix/internal/execshell"
 )
 
 const (

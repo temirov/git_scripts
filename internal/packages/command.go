@@ -11,9 +11,9 @@ import (
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 
-	"github.com/temirov/git_scripts/internal/ghcr"
-	"github.com/temirov/git_scripts/internal/repos/dependencies"
-	"github.com/temirov/git_scripts/internal/repos/shared"
+	"github.com/temirov/gix/internal/ghcr"
+	"github.com/temirov/gix/internal/repos/dependencies"
+	"github.com/temirov/gix/internal/repos/shared"
 )
 
 const (

@@ -8,8 +8,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/temirov/git_scripts/internal/repos/remotes"
-	"github.com/temirov/git_scripts/internal/repos/shared"
+	"github.com/temirov/gix/internal/repos/remotes"
+	"github.com/temirov/gix/internal/repos/shared"
 )
 
 type stubGitManager struct {

@@ -8,7 +8,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/temirov/git_scripts/internal/audit"
+	"github.com/temirov/gix/internal/audit"
 )
 
 const (

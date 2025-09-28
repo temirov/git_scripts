@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	conversion "github.com/temirov/git_scripts/internal/repos/protocol"
-	"github.com/temirov/git_scripts/internal/repos/shared"
+	conversion "github.com/temirov/gix/internal/repos/protocol"
+	"github.com/temirov/gix/internal/repos/shared"
 )
 
 const (

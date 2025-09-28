@@ -6,9 +6,9 @@ import (
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 
-	"github.com/temirov/git_scripts/internal/repos/prompt"
-	"github.com/temirov/git_scripts/internal/repos/shared"
-	pathutils "github.com/temirov/git_scripts/internal/utils/path"
+	"github.com/temirov/gix/internal/repos/prompt"
+	"github.com/temirov/gix/internal/repos/shared"
+	pathutils "github.com/temirov/gix/internal/utils/path"
 )
 
 const (

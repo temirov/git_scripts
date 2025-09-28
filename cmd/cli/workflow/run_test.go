@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
-	workflowcmd "github.com/temirov/git_scripts/cmd/cli/workflow"
-	"github.com/temirov/git_scripts/internal/execshell"
+	workflowcmd "github.com/temirov/gix/cmd/cli/workflow"
+	"github.com/temirov/gix/internal/execshell"
 )
 
 const (

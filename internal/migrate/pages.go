@@ -5,7 +5,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/temirov/git_scripts/internal/githubcli"
+	"github.com/temirov/gix/internal/githubcli"
 )
 
 const (

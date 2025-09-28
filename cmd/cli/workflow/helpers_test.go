@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/temirov/git_scripts/cmd/cli/workflow"
+	"github.com/temirov/gix/cmd/cli/workflow"
 )
 
 const (
