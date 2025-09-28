@@ -9,8 +9,8 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest/observer"
 
-	"github.com/temirov/git_scripts/internal/ghcr"
-	packages "github.com/temirov/git_scripts/internal/packages"
+	"github.com/temirov/gix/internal/ghcr"
+	packages "github.com/temirov/gix/internal/packages"
 )
 
 func TestPurgeServiceValidatesOptions(testingInstance *testing.T) {

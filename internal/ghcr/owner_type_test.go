@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/temirov/git_scripts/internal/ghcr"
+	"github.com/temirov/gix/internal/ghcr"
 )
 
 func TestParseOwnerTypeScenarios(testingInstance *testing.T) {

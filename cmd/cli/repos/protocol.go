@@ -7,10 +7,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/temirov/git_scripts/internal/audit"
-	"github.com/temirov/git_scripts/internal/repos/dependencies"
-	conversion "github.com/temirov/git_scripts/internal/repos/protocol"
-	"github.com/temirov/git_scripts/internal/repos/shared"
+	"github.com/temirov/gix/internal/audit"
+	"github.com/temirov/gix/internal/repos/dependencies"
+	conversion "github.com/temirov/gix/internal/repos/protocol"
+	"github.com/temirov/gix/internal/repos/shared"
 )
 
 const (

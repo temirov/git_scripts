@@ -7,8 +7,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/temirov/git_scripts/internal/execshell"
-	"github.com/temirov/git_scripts/internal/gitrepo"
+	"github.com/temirov/gix/internal/execshell"
+	"github.com/temirov/gix/internal/gitrepo"
 )
 
 const (

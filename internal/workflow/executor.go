@@ -8,11 +8,11 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/temirov/git_scripts/internal/audit"
-	"github.com/temirov/git_scripts/internal/githubcli"
-	"github.com/temirov/git_scripts/internal/gitrepo"
-	"github.com/temirov/git_scripts/internal/repos/shared"
-	pathutils "github.com/temirov/git_scripts/internal/utils/path"
+	"github.com/temirov/gix/internal/audit"
+	"github.com/temirov/gix/internal/githubcli"
+	"github.com/temirov/gix/internal/gitrepo"
+	"github.com/temirov/gix/internal/repos/shared"
+	pathutils "github.com/temirov/gix/internal/utils/path"
 )
 
 var workflowExecutorRepositoryPathSanitizer = pathutils.NewRepositoryPathSanitizer()

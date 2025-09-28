@@ -5,10 +5,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/temirov/git_scripts/internal/audit"
-	"github.com/temirov/git_scripts/internal/repos/dependencies"
-	"github.com/temirov/git_scripts/internal/repos/rename"
-	"github.com/temirov/git_scripts/internal/repos/shared"
+	"github.com/temirov/gix/internal/audit"
+	"github.com/temirov/gix/internal/repos/dependencies"
+	"github.com/temirov/gix/internal/repos/rename"
+	"github.com/temirov/gix/internal/repos/shared"
 )
 
 const (

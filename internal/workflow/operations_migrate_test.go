@@ -6,9 +6,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/temirov/git_scripts/internal/execshell"
-	"github.com/temirov/git_scripts/internal/githubcli"
-	"github.com/temirov/git_scripts/internal/gitrepo"
+	"github.com/temirov/gix/internal/execshell"
+	"github.com/temirov/gix/internal/githubcli"
+	"github.com/temirov/gix/internal/gitrepo"
 )
 
 type fakeGitExecutor struct{}

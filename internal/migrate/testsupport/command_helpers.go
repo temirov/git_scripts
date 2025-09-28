@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/temirov/git_scripts/internal/execshell"
-	migrate "github.com/temirov/git_scripts/internal/migrate"
+	"github.com/temirov/gix/internal/execshell"
+	migrate "github.com/temirov/gix/internal/migrate"
 )
 
 // RepositoryDiscovererStub implements repository discovery for tests.

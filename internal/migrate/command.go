@@ -11,10 +11,10 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
-	"github.com/temirov/git_scripts/internal/execshell"
-	"github.com/temirov/git_scripts/internal/githubcli"
-	"github.com/temirov/git_scripts/internal/gitrepo"
-	"github.com/temirov/git_scripts/internal/repos/discovery"
+	"github.com/temirov/gix/internal/execshell"
+	"github.com/temirov/gix/internal/githubcli"
+	"github.com/temirov/gix/internal/gitrepo"
+	"github.com/temirov/gix/internal/repos/discovery"
 )
 
 const (

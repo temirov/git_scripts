@@ -11,7 +11,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/temirov/git_scripts/internal/execshell"
+	"github.com/temirov/gix/internal/execshell"
 )
 
 const (

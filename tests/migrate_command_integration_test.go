@@ -12,9 +12,9 @@ import (
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
 
-	"github.com/temirov/git_scripts/internal/execshell"
-	migrate "github.com/temirov/git_scripts/internal/migrate"
-	"github.com/temirov/git_scripts/internal/migrate/testsupport"
+	"github.com/temirov/gix/internal/execshell"
+	migrate "github.com/temirov/gix/internal/migrate"
+	"github.com/temirov/gix/internal/migrate/testsupport"
 )
 
 const (

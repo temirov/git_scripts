@@ -14,13 +14,13 @@ import (
 	"github.com/spf13/pflag"
 	"go.uber.org/zap"
 
-	"github.com/temirov/git_scripts/cmd/cli/repos"
-	workflowcmd "github.com/temirov/git_scripts/cmd/cli/workflow"
-	"github.com/temirov/git_scripts/internal/audit"
-	"github.com/temirov/git_scripts/internal/branches"
-	"github.com/temirov/git_scripts/internal/migrate"
-	"github.com/temirov/git_scripts/internal/packages"
-	"github.com/temirov/git_scripts/internal/utils"
+	"github.com/temirov/gix/cmd/cli/repos"
+	workflowcmd "github.com/temirov/gix/cmd/cli/workflow"
+	"github.com/temirov/gix/internal/audit"
+	"github.com/temirov/gix/internal/branches"
+	"github.com/temirov/gix/internal/migrate"
+	"github.com/temirov/gix/internal/packages"
+	"github.com/temirov/gix/internal/utils"
 )
 
 const (

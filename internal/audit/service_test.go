@@ -9,9 +9,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/temirov/git_scripts/internal/audit"
-	"github.com/temirov/git_scripts/internal/execshell"
-	"github.com/temirov/git_scripts/internal/githubcli"
+	"github.com/temirov/gix/internal/audit"
+	"github.com/temirov/gix/internal/execshell"
+	"github.com/temirov/gix/internal/githubcli"
 )
 
 type stubDiscoverer struct {

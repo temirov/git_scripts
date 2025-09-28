@@ -14,8 +14,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
-	"github.com/temirov/git_scripts/internal/branches"
-	"github.com/temirov/git_scripts/internal/execshell"
+	"github.com/temirov/gix/internal/branches"
+	"github.com/temirov/gix/internal/execshell"
 )
 
 const (

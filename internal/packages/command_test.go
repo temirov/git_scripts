@@ -11,9 +11,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
-	"github.com/temirov/git_scripts/internal/ghcr"
-	"github.com/temirov/git_scripts/internal/githubcli"
-	packages "github.com/temirov/git_scripts/internal/packages"
+	"github.com/temirov/gix/internal/ghcr"
+	"github.com/temirov/gix/internal/githubcli"
+	packages "github.com/temirov/gix/internal/packages"
 )
 
 const (

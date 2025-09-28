@@ -9,7 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/temirov/git_scripts/cmd/cli"
+	"github.com/temirov/gix/cmd/cli"
 )
 
 const (
