@@ -1,0 +1,99 @@
+# config.yaml
+common:
+  log_level: info
+  log_format: console
+
+operations:
+  - operation: audit
+    with: &audit_defaults
+      roots:
+        - ~/Development
+      debug: false
+
+  - operation: repo-packages-purge
+    with: &packages_purge_defaults
+      # package: my-image  # Optional override; defaults to the repository name
+      roots:
+        - ~/Development
+
+  - operation: repo-prs-purge
+    with: &branch_cleanup_defaults
+      remote: origin
+      limit: 100
+      dry_run: false
+      roots:
+        - ~/Development
+
+  - operation: repo-remote-update
+    with: &repo_remotes_defaults
+      dry_run: false
+      assume_yes: true
+      roots:
+        - ~/Development
+
+  - operation: repo-protocol-convert
+    with: &repo_protocol_defaults
+      dry_run: false
+      assume_yes: true
+      roots:
+        - ~/Development
+      from: https
+      to: git
+
+  - operation: repo-folders-rename
+    with: &repo_rename_defaults
+      dry_run: false
+      assume_yes: true
+      require_clean: true
+      roots:
+        - ~/Development
+
+  - operation: workflow
+    with: &workflow_command_defaults
+      roots:
+        - ~/Development
+      dry_run: false
+      assume_yes: false
+
+  - operation: branch-migrate
+    with: &branch_migrate_defaults
+      debug: false
+      roots:
+        - ~/Development
+
+workflow:
+  - step:
+      order: 1
+      operation: convert-protocol
+      with:
+        <<: *repo_protocol_defaults
+
+  - step:
+      order: 2
+      operation: update-canonical-remote
+      with:
+        <<: *repo_remotes_defaults
+
+  - step:
+      order: 3
+      operation: rename-directories
+      with:
+        <<: *repo_rename_defaults
+
+  - step:
+      order: 4
+      operation: migrate-branch
+      with:
+        <<: *branch_migrate_defaults
+        targets:
+          - remote_name: origin
+            source_branch: main
+            target_branch: master
+            push_to_remote: true
+            delete_source_branch: false
+
+  - step:
+      order: 5
+      operation: audit-report
+      with:
+        output: ./reports/audit-latest.csv

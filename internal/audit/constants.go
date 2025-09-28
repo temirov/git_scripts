@@ -1,0 +1,25 @@
+package audit
+
+const (
+	commandUseConstant               = "audit"
+	commandShortDescription          = "Audit and reconcile local GitHub repositories"
+	commandLongDescription           = "Scans git repositories for GitHub remotes and produces audit reports or applies reconciliation actions."
+	flagRootNameConstant             = "root"
+	flagRootDescriptionConstant      = "Repository roots to scan (repeatable)"
+	flagDebugNameConstant            = "debug"
+	flagDebugDescriptionConstant     = "Print debug information while scanning"
+	missingRootsErrorMessageConstant = "no repository roots provided; specify --root or configure defaults"
+	debugDiscoveredTemplate          = "DEBUG: discovered %d candidate repos under: %s\n"
+	debugCheckingTemplate            = "DEBUG: checking %s\n"
+	csvHeaderFinalRepository         = "final_github_repo"
+	csvHeaderFolderName              = "folder_name"
+	csvHeaderNameMatches             = "name_matches"
+	csvHeaderRemoteDefault           = "remote_default_branch"
+	csvHeaderLocalBranch             = "local_branch"
+	csvHeaderInSync                  = "in_sync"
+	csvHeaderRemoteProtocol          = "remote_protocol"
+	csvHeaderOriginCanonical         = "origin_matches_canonical"
+	gitIsInsideWorkTreeFlagConstant  = "--is-inside-work-tree"
+	gitTrueOutputConstant            = "true"
+	notGitHubRemoteMessageConstant   = "not a github remote"
+)
