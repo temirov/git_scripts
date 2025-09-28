@@ -40,6 +40,7 @@ const (
 	reposIntegrationRenameCaseName              = "rename_plan"
 	reposIntegrationRemoteCaseName              = "update_canonical_remote"
 	reposIntegrationRemoteConfigCaseName        = "update_canonical_remote_config"
+	reposIntegrationRemoteTildeCaseName         = "update_canonical_remote_tilde_flag"
 	reposIntegrationProtocolCaseName            = "convert_protocol"
 	reposIntegrationProtocolConfigCaseName      = "convert_protocol_config"
 	reposIntegrationProtocolHelpCaseName        = "protocol_help_missing_flags"
@@ -49,6 +50,8 @@ const (
 	reposIntegrationConfigFileName              = "config.yaml"
 	reposIntegrationConfigTemplate              = "common:\n  log_level: error\noperations:\n  - operation: repo-remote-update\n    with:\n      roots:\n        - %s\n      assume_yes: true\n  - operation: repo-protocol-convert\n    with:\n      roots:\n        - %s\n      assume_yes: true\n      from: https\n      to: ssh\nworkflow: []\n"
 	reposIntegrationConfigSearchEnvName         = "GITSCRIPTS_CONFIG_SEARCH_PATH"
+	reposIntegrationHomeSymbolConstant          = "~"
+	reposIntegrationHomeRootPatternConstant     = "git-scripts-home-root-*"
 )
 
 func TestReposCommandIntegration(testInstance *testing.T) {
@@ -140,6 +143,50 @@ func TestReposCommandIntegration(testInstance *testing.T) {
 				writeError := os.WriteFile(configPath, []byte(configContent), 0o644)
 				require.NoError(testInstance, writeError)
 				*arguments = append(*arguments, reposIntegrationConfigFlagName, configPath)
+			},
+			omitRepositoryArgument: true,
+		},
+		{
+			name: reposIntegrationRemoteTildeCaseName,
+			setup: func(testInstance *testing.T) (string, string) {
+				repositoryPath, extendedPath := initializeRepositoryWithStub(testInstance)
+				homeDirectory, homeError := os.UserHomeDir()
+				require.NoError(testInstance, homeError)
+				homeRoot, homeRootError := os.MkdirTemp(homeDirectory, reposIntegrationHomeRootPatternConstant)
+				require.NoError(testInstance, homeRootError)
+				testInstance.Cleanup(func() {
+					_ = os.RemoveAll(homeRoot)
+				})
+				destinationPath := filepath.Join(homeRoot, filepath.Base(repositoryPath))
+				renameError := os.Rename(repositoryPath, destinationPath)
+				require.NoError(testInstance, renameError)
+				return destinationPath, extendedPath
+			},
+			arguments: []string{
+				reposIntegrationRunSubcommand,
+				reposIntegrationModulePathConstant,
+				reposIntegrationLogLevelFlag,
+				reposIntegrationErrorLevel,
+				reposIntegrationRemotesCommand,
+				reposIntegrationYesFlag,
+			},
+			expectedOutput: func(repositoryPath string) string {
+				return fmt.Sprintf("UPDATE-REMOTE-DONE: %s origin now https://github.com/canonical/example.git\n", repositoryPath)
+			},
+			verify: func(testInstance *testing.T, repositoryPath string) {
+				remoteCommand := exec.Command(reposIntegrationGitExecutable, "-C", repositoryPath, reposIntegrationRemoteSubcommand, reposIntegrationGetURLSubcommand, reposIntegrationOriginRemoteName)
+				remoteCommand.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+				outputBytes, remoteError := remoteCommand.CombinedOutput()
+				require.NoError(testInstance, remoteError, string(outputBytes))
+				require.Equal(testInstance, "https://github.com/canonical/example.git\n", string(outputBytes))
+			},
+			prepare: func(testInstance *testing.T, repositoryPath string, arguments *[]string) {
+				homeDirectory, homeError := os.UserHomeDir()
+				require.NoError(testInstance, homeError)
+				relativePath, relativeError := filepath.Rel(homeDirectory, repositoryPath)
+				require.NoError(testInstance, relativeError)
+				tildeRoot := reposIntegrationHomeSymbolConstant + string(os.PathSeparator) + relativePath
+				*arguments = append(*arguments, tildeRoot)
 			},
 			omitRepositoryArgument: true,
 		},
