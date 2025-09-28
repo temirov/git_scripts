@@ -1,4 +1,4 @@
-// Package githubcli wraps the GitHub CLI for git_scripts workflows.
+// Package githubcli wraps the GitHub CLI for gix workflows.
 //
 // It layers typed request and response structures for gh subcommands, exposes
 // interfaces consumed by other packages, and integrates with execshell so

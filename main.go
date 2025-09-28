@@ -11,7 +11,7 @@ const (
 	exitErrorTemplateConstant = "%v\n"
 )
 
-// main executes the git_scripts command-line application.
+// main executes the gix command-line application.
 func main() {
 	if executionError := cli.Execute(); executionError != nil {
 		fmt.Fprintf(os.Stderr, exitErrorTemplateConstant, executionError)

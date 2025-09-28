@@ -17,7 +17,7 @@ type DefaultPurgeServiceResolver struct {
 }
 
 const (
-	serviceBaseURLEnvironmentVariableNameConstant = "GITSCRIPTS_REPO_PACKAGES_PURGE_BASE_URL"
+	serviceBaseURLEnvironmentVariableNameConstant = "GIX_REPO_PACKAGES_PURGE_BASE_URL"
 )
 
 // Resolve creates a purge executor using configured collaborators or sensible defaults.

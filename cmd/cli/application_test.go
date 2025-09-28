@@ -18,7 +18,7 @@ const (
 	testOperationBlockTemplateConstant         = "  - operation: %s\n    with:\n%s"
 	testOperationRootsTemplateConstant         = "      roots:\n        - %s\n"
 	testOperationRootDirectoryConstant         = "/tmp/config-root"
-	testConfigurationSearchPathEnvironmentName = "GITSCRIPTS_CONFIG_SEARCH_PATH"
+	testConfigurationSearchPathEnvironmentName = "GIX_CONFIG_SEARCH_PATH"
 	testPackagesCommandNameConstant            = "repo-packages-purge"
 	testBranchMigrateCommandNameConstant       = "branch-migrate"
 )

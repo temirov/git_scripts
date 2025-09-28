@@ -2,7 +2,7 @@ GO_SOURCES := $(shell find . -name '*.go' -not -path "./vendor/*")
 UNIT_PACKAGES := $(shell go list ./... | grep -v '/tests$$')
 RELEASE_TARGETS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64
 RELEASE_DIRECTORY := dist
-RELEASE_BINARY_NAME := git-scripts
+RELEASE_BINARY_NAME := gix
 
 .PHONY: format check-format lint test test-unit test-integration build release ci
 
@@ -30,7 +30,7 @@ test: test-unit test-integration
 
 build:
 	mkdir -p bin
-	go build -o bin/git-scripts .
+	go build -o bin/gix .
 
 release:
 	rm -rf $(RELEASE_DIRECTORY)

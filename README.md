@@ -54,10 +54,10 @@ Build a reusable binary with either `go build` or the provided make target:
 
 ```shell
 go build
-./git_scripts --help
+./gix --help
 
 make build
-./bin/git-scripts --help
+./bin/gix --help
 ```
 
 `make release` cross-compiles platform-specific artifacts into `./dist` for distribution.
@@ -72,7 +72,7 @@ Global flags configure logging and optional configuration files:
 
 Configuration keys mirror the flags (`common.log_level`, `common.log_format`) and can also be provided via environment
 variables prefixed with
-`GITSCRIPTS_` (for example, `GITSCRIPTS_COMMON_LOG_LEVEL=error`).
+`GIX_` (for example, `GIX_COMMON_LOG_LEVEL=error`).
 
 ## Command catalog
 
@@ -202,7 +202,7 @@ workflow:
 ```
 
 The purge command automatically targets the public GitHub API. Set the
-`GITSCRIPTS_REPO_PACKAGES_PURGE_BASE_URL` environment variable when you need to
+`GIX_REPO_PACKAGES_PURGE_BASE_URL` environment variable when you need to
 point at a GitHub Enterprise instance during local testing.
 
 ```shell
@@ -238,7 +238,7 @@ make lint           # Run go vet across the module
 make test-unit      # Execute unit tests
 make test-integration  # Run integration tests under ./tests
 make test           # Run unit and integration suites
-make build          # Compile ./bin/git-scripts
+make build          # Compile ./bin/gix
 make release        # Cross-compile binaries into ./dist
 ```
 
