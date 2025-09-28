@@ -58,10 +58,22 @@ func trimRoots(raw []string) []string {
 		if len(candidate) == 0 {
 			continue
 		}
+		if isBooleanLiteral(candidate) {
+			continue
+		}
 		expanded := repositoryHomeDirectoryExpander.Expand(candidate)
 		trimmed = append(trimmed, expanded)
 	}
 	return trimmed
+}
+
+func isBooleanLiteral(value string) bool {
+	switch strings.ToLower(value) {
+	case "true", "false":
+		return true
+	default:
+		return false
+	}
 }
 
 func resolveLogger(provider LoggerProvider) *zap.Logger {

@@ -21,6 +21,7 @@ const (
 	reposIntegrationRemotesCommand              = "repo-remote-update"
 	reposIntegrationProtocolCommand             = "repo-protocol-convert"
 	reposIntegrationDryRunFlag                  = "--dry-run"
+	reposIntegrationBooleanTrueLiteral          = "true"
 	reposIntegrationYesFlag                     = "--yes"
 	reposIntegrationFromFlag                    = "--from"
 	reposIntegrationToFlag                      = "--to"
@@ -43,6 +44,7 @@ const (
 	reposIntegrationRemoteTildeCaseName         = "update_canonical_remote_tilde_flag"
 	reposIntegrationProtocolCaseName            = "convert_protocol"
 	reposIntegrationProtocolConfigCaseName      = "convert_protocol_config"
+	reposIntegrationProtocolConfigDryRunCase    = "convert_protocol_config_dry_run_literal"
 	reposIntegrationProtocolHelpCaseName        = "protocol_help_missing_flags"
 	reposIntegrationProtocolUsageSnippet        = "repo-protocol-convert [root ...]"
 	reposIntegrationProtocolMissingFlagsMessage = "specify both --from and --to"
@@ -239,6 +241,40 @@ func TestReposCommandIntegration(testInstance *testing.T) {
 				outputBytes, remoteError := remoteCommand.CombinedOutput()
 				require.NoError(testInstance, remoteError, string(outputBytes))
 				require.Equal(testInstance, "ssh://git@github.com/canonical/example.git\n", string(outputBytes))
+			},
+			prepare: func(testInstance *testing.T, repositoryPath string, arguments *[]string) {
+				configDirectory := testInstance.TempDir()
+				configPath := filepath.Join(configDirectory, reposIntegrationConfigFileName)
+				configContent := fmt.Sprintf(reposIntegrationConfigTemplate, repositoryPath, repositoryPath)
+				writeError := os.WriteFile(configPath, []byte(configContent), 0o644)
+				require.NoError(testInstance, writeError)
+				*arguments = append(*arguments, reposIntegrationConfigFlagName, configPath)
+			},
+			omitRepositoryArgument: true,
+		},
+		{
+			name: reposIntegrationProtocolConfigDryRunCase,
+			setup: func(testInstance *testing.T) (string, string) {
+				return initializeRepositoryWithStub(testInstance)
+			},
+			arguments: []string{
+				reposIntegrationRunSubcommand,
+				reposIntegrationModulePathConstant,
+				reposIntegrationLogLevelFlag,
+				reposIntegrationErrorLevel,
+				reposIntegrationProtocolCommand,
+				reposIntegrationDryRunFlag,
+				reposIntegrationBooleanTrueLiteral,
+			},
+			expectedOutput: func(repositoryPath string) string {
+				return fmt.Sprintf("PLAN-CONVERT: %s origin https://github.com/origin/example.git → ssh://git@github.com/canonical/example.git\n", repositoryPath)
+			},
+			verify: func(testInstance *testing.T, repositoryPath string) {
+				remoteCommand := exec.Command(reposIntegrationGitExecutable, "-C", repositoryPath, reposIntegrationRemoteSubcommand, reposIntegrationGetURLSubcommand, reposIntegrationOriginRemoteName)
+				remoteCommand.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+				outputBytes, remoteError := remoteCommand.CombinedOutput()
+				require.NoError(testInstance, remoteError, string(outputBytes))
+				require.Equal(testInstance, "https://github.com/origin/example.git\n", string(outputBytes))
 			},
 			prepare: func(testInstance *testing.T, repositoryPath string, arguments *[]string) {
 				configDirectory := testInstance.TempDir()
