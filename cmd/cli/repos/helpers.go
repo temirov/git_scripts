@@ -9,11 +9,14 @@ import (
 
 	"github.com/temirov/git_scripts/internal/repos/prompt"
 	"github.com/temirov/git_scripts/internal/repos/shared"
+	pathutils "github.com/temirov/git_scripts/internal/utils/path"
 )
 
 const (
 	missingRepositoryRootsErrorMessageConstant = "no repository roots provided; specify --root or configure defaults"
 )
+
+var repositoryHomeDirectoryExpander = pathutils.NewHomeExpander()
 
 // LoggerProvider yields a zap logger for command execution.
 type LoggerProvider func() *zap.Logger
@@ -55,7 +58,8 @@ func trimRoots(raw []string) []string {
 		if len(candidate) == 0 {
 			continue
 		}
-		trimmed = append(trimmed, candidate)
+		expanded := repositoryHomeDirectoryExpander.Expand(candidate)
+		trimmed = append(trimmed, expanded)
 	}
 	return trimmed
 }
