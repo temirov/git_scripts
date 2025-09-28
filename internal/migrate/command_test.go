@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -484,4 +486,40 @@ func appendOutcomeMap(input map[string]testsupport.ServiceOutcome) map[string]te
 		cloned[key] = value
 	}
 	return cloned
+}
+
+func TestMigrateCommandExpandsTildeArguments(testInstance *testing.T) {
+	testInstance.Helper()
+
+	homeDirectory, homeDirectoryError := os.UserHomeDir()
+	require.NoError(testInstance, homeDirectoryError)
+
+	tildeArgument := "~/migrate/roots"
+	expectedRoot := filepath.Join(homeDirectory, "migrate", "roots")
+
+	repositoryDiscoverer := &testsupport.RepositoryDiscovererStub{}
+	commandExecutor := &testsupport.CommandExecutorStub{}
+	migrationService := &testsupport.ServiceStub{}
+
+	builder := migrate.CommandBuilder{
+		LoggerProvider:       func() *zap.Logger { return zap.NewNop() },
+		Executor:             commandExecutor,
+		RepositoryDiscoverer: repositoryDiscoverer,
+		ServiceProvider: func(dependencies migrate.ServiceDependencies) (migrate.MigrationExecutor, error) {
+			return migrationService, nil
+		},
+		ConfigurationProvider: func() migrate.CommandConfiguration {
+			return migrate.CommandConfiguration{}
+		},
+	}
+
+	command, buildError := builder.Build()
+	require.NoError(testInstance, buildError)
+
+	command.SetContext(context.Background())
+	command.SetArgs([]string{tildeArgument})
+
+	executionError := command.Execute()
+	require.NoError(testInstance, executionError)
+	require.Equal(testInstance, []string{expectedRoot}, repositoryDiscoverer.ReceivedRoots)
 }

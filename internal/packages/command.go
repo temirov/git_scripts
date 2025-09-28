@@ -283,7 +283,7 @@ func (builder *CommandBuilder) determineRepositoryRoots(command *cobra.Command, 
 			return nil, flagError
 		}
 
-		sanitizedFlagRoots := sanitizeRoots(flagRoots)
+		sanitizedFlagRoots := packagesConfigurationRepositoryPathSanitizer.Sanitize(flagRoots)
 		if len(sanitizedFlagRoots) > 0 {
 			return sanitizedFlagRoots, nil
 		}

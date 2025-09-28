@@ -60,14 +60,14 @@ func DefaultToolsConfiguration() ToolsConfiguration {
 // sanitize normalizes repository configuration values.
 func (configuration RemotesConfiguration) sanitize() RemotesConfiguration {
 	sanitized := configuration
-	sanitized.RepositoryRoots = trimRoots(configuration.RepositoryRoots)
+	sanitized.RepositoryRoots = repositoryPathSanitizer.Sanitize(configuration.RepositoryRoots)
 	return sanitized
 }
 
 // sanitize normalizes protocol configuration values.
 func (configuration ProtocolConfiguration) sanitize() ProtocolConfiguration {
 	sanitized := configuration
-	sanitized.RepositoryRoots = trimRoots(configuration.RepositoryRoots)
+	sanitized.RepositoryRoots = repositoryPathSanitizer.Sanitize(configuration.RepositoryRoots)
 	sanitized.FromProtocol = strings.TrimSpace(configuration.FromProtocol)
 	sanitized.ToProtocol = strings.TrimSpace(configuration.ToProtocol)
 	return sanitized
@@ -76,6 +76,6 @@ func (configuration ProtocolConfiguration) sanitize() ProtocolConfiguration {
 // sanitize normalizes rename configuration values.
 func (configuration RenameConfiguration) sanitize() RenameConfiguration {
 	sanitized := configuration
-	sanitized.RepositoryRoots = trimRoots(configuration.RepositoryRoots)
+	sanitized.RepositoryRoots = repositoryPathSanitizer.Sanitize(configuration.RepositoryRoots)
 	return sanitized
 }

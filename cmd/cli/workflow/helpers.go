@@ -17,18 +17,18 @@ type PrompterFactory func(*cobra.Command) shared.ConfirmationPrompter
 // DetermineRoots selects the effective repository roots from flags and configuration.
 func DetermineRoots(flagValues []string, configured []string, preferFlag bool) []string {
 	if preferFlag {
-		trimmed := sanitizeRoots(flagValues)
+		trimmed := workflowConfigurationRepositoryPathSanitizer.Sanitize(flagValues)
 		if len(trimmed) > 0 {
 			return trimmed
 		}
 	}
 
-	configuredRoots := sanitizeRoots(configured)
+	configuredRoots := workflowConfigurationRepositoryPathSanitizer.Sanitize(configured)
 	if len(configuredRoots) > 0 {
 		return configuredRoots
 	}
 
-	trimmedFlagRoots := sanitizeRoots(flagValues)
+	trimmedFlagRoots := workflowConfigurationRepositoryPathSanitizer.Sanitize(flagValues)
 	if len(trimmedFlagRoots) > 0 {
 		return trimmedFlagRoots
 	}

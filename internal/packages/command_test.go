@@ -3,6 +3,8 @@ package packages_test
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -418,4 +420,41 @@ func (discoverer *stubRepositoryDiscoverer) DiscoverRepositories(roots []string)
 		return nil, discoverer.err
 	}
 	return discoverer.repositories, nil
+}
+
+func TestCommandBuilderExpandsTildeFlagRoots(testInstance *testing.T) {
+	testInstance.Helper()
+
+	homeDirectory, homeDirectoryError := os.UserHomeDir()
+	require.NoError(testInstance, homeDirectoryError)
+
+	expectedRoot := filepath.Join(homeDirectory, "packages", "roots")
+
+	executor := &stubPurgeExecutor{result: ghcr.PurgeResult{TotalVersions: 1}}
+	resolver := &stubServiceResolver{executor: executor}
+	repositoryManager := &stubRepositoryManager{remoteURLByPath: map[string]string{discoveredRepositoryOnePathConstant: repositoryOneRemoteURLConstant}}
+	githubResolver := &stubGitHubResolver{metadataByRepository: map[string]githubcli.RepositoryMetadata{repositoryOneIdentifierConstant: {NameWithOwner: repositoryOneOwnerConstant + "/ignored", IsInOrganization: true}}}
+	discoverer := &stubRepositoryDiscoverer{repositories: []string{discoveredRepositoryOnePathConstant}}
+
+	builder := packages.CommandBuilder{
+		LoggerProvider:           func() *zap.Logger { return zap.NewNop() },
+		ConfigurationProvider:    func() packages.Configuration { return packages.Configuration{} },
+		ServiceResolver:          resolver,
+		RepositoryManager:        repositoryManager,
+		GitHubResolver:           githubResolver,
+		RepositoryDiscoverer:     discoverer,
+		WorkingDirectoryResolver: func() (string, error) { return workingDirectoryPathConstant, nil },
+	}
+
+	command, buildError := builder.Build()
+	require.NoError(testInstance, buildError)
+
+	command.SetContext(context.Background())
+	command.SetArgs([]string{"--roots", "~/packages/roots"})
+	executionError := command.Execute()
+	require.NoError(testInstance, executionError)
+
+	require.NotEmpty(testInstance, discoverer.recordedRoots)
+	lastRoots := discoverer.recordedRoots[len(discoverer.recordedRoots)-1]
+	require.Equal(testInstance, []string{expectedRoot}, lastRoots)
 }

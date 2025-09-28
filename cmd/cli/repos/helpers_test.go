@@ -8,22 +8,51 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestTrimRootsSkipsBooleanLiterals(testInstance *testing.T) {
-	temporaryDirectory := testInstance.TempDir()
-	expectedPath := filepath.Join(temporaryDirectory, "repository")
+const (
+	testBooleanLiteralTrueConstant          = "true"
+	testBooleanLiteralFalseConstant         = "FALSE"
+	testRepositoryRelativePathConstant      = "projects/example"
+	testDetermineRootsArgumentsCaseConstant = "arguments_preferred"
+	testDetermineRootsConfigurationCase     = "configuration_used_when_arguments_filtered"
+)
 
-	inputs := []string{"", "true", "TrUe", "false", "FALSE", expectedPath}
-	trimmed := trimRoots(inputs)
+func TestDetermineRepositoryRootsSanitizesInputs(testInstance *testing.T) {
+	testInstance.Helper()
 
-	require.Equal(testInstance, []string{expectedPath}, trimmed)
-}
+	homeDirectory, homeDirectoryError := os.UserHomeDir()
+	require.NoError(testInstance, homeDirectoryError)
 
-func TestDetermineRepositoryRootsUsesConfiguredWhenArgumentsAreBooleanLiterals(testInstance *testing.T) {
-	homeDirectory, homeError := os.UserHomeDir()
-	require.NoError(testInstance, homeError)
+	tildeArgument := filepath.Join("~", testRepositoryRelativePathConstant)
+	expectedExpanded := filepath.Join(homeDirectory, testRepositoryRelativePathConstant)
+	configuredRoot := filepath.Join(homeDirectory, "configured")
 
-	configured := []string{filepath.Join(homeDirectory, "Development")}
-	resolved := determineRepositoryRoots([]string{"true", "FALSE"}, configured)
+	testCases := []struct {
+		name             string
+		arguments        []string
+		configured       []string
+		expectedResolved []string
+	}{
+		{
+			name:             testDetermineRootsArgumentsCaseConstant,
+			arguments:        []string{"  " + tildeArgument + "\t"},
+			configured:       []string{configuredRoot},
+			expectedResolved: []string{expectedExpanded},
+		},
+		{
+			name:             testDetermineRootsConfigurationCase,
+			arguments:        []string{"", testBooleanLiteralTrueConstant, testBooleanLiteralFalseConstant},
+			configured:       []string{"  " + tildeArgument + "  "},
+			expectedResolved: []string{expectedExpanded},
+		},
+	}
 
-	require.Equal(testInstance, configured, resolved)
+	for _, testCase := range testCases {
+		testCase := testCase
+		testInstance.Run(testCase.name, func(subTest *testing.T) {
+			subTest.Helper()
+
+			resolved := determineRepositoryRoots(testCase.arguments, testCase.configured)
+			require.Equal(subTest, testCase.expectedResolved, resolved)
+		})
+	}
 }

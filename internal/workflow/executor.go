@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strings"
 
 	"go.uber.org/zap"
 
@@ -16,12 +15,12 @@ import (
 	pathutils "github.com/temirov/git_scripts/internal/utils/path"
 )
 
-var workflowExecutorHomeDirectoryExpander = pathutils.NewHomeExpander()
+var workflowExecutorRepositoryPathSanitizer = pathutils.NewRepositoryPathSanitizer()
 
 const (
-	defaultWorkflowRootConstant            = "."
 	workflowExecutionErrorTemplateConstant = "workflow operation %s failed: %w"
 	workflowExecutorDependenciesMessage    = "workflow executor requires repository discovery, git, and GitHub dependencies"
+	workflowExecutorMissingRootsMessage    = "workflow executor requires at least one repository root"
 	workflowRepositoryLoadErrorTemplate    = "failed to inspect repositories: %w"
 )
 
@@ -61,7 +60,10 @@ func (executor *Executor) Execute(executionContext context.Context, roots []stri
 		return errors.New(workflowExecutorDependenciesMessage)
 	}
 
-	sanitizedRoots := sanitizeRoots(roots)
+	sanitizedRoots := workflowExecutorRepositoryPathSanitizer.Sanitize(roots)
+	if len(sanitizedRoots) == 0 {
+		return errors.New(workflowExecutorMissingRootsMessage)
+	}
 
 	auditService := audit.NewService(
 		executor.dependencies.RepositoryDiscoverer,
@@ -108,26 +110,4 @@ func (executor *Executor) Execute(executionContext context.Context, roots []stri
 	}
 
 	return nil
-}
-
-func sanitizeRoots(rawRoots []string) []string {
-	if len(rawRoots) == 0 {
-		return []string{defaultWorkflowRootConstant}
-	}
-
-	sanitized := make([]string, 0, len(rawRoots))
-	for rootIndex := range rawRoots {
-		trimmed := strings.TrimSpace(rawRoots[rootIndex])
-		if len(trimmed) == 0 {
-			continue
-		}
-		expandedRoot := workflowExecutorHomeDirectoryExpander.Expand(trimmed)
-		sanitized = append(sanitized, expandedRoot)
-	}
-
-	if len(sanitized) == 0 {
-		return []string{defaultWorkflowRootConstant}
-	}
-
-	return sanitized
 }
