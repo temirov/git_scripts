@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -13,6 +15,8 @@ import (
 	"github.com/temirov/gix/internal/execshell"
 	"github.com/temirov/gix/internal/githubcli"
 )
+
+const currentDirectoryRelativePathConstant = "."
 
 type stubDiscoverer struct {
 	repositories []string
@@ -190,4 +194,69 @@ func TestServiceRunBehaviors(testInstance *testing.T) {
 			require.Equal(testInstance, testCase.expectedError, errorBuffer.String())
 		})
 	}
+}
+
+func TestServiceRunNormalizesRepositoryPaths(testInstance *testing.T) {
+	testInstance.Helper()
+
+	workingDirectory, workingDirectoryError := os.Getwd()
+	require.NoError(testInstance, workingDirectoryError)
+
+	normalizedWorkingDirectory := filepath.Clean(workingDirectory)
+	repositoryFolderName := filepath.Base(normalizedWorkingDirectory)
+
+	outputBuffer := &bytes.Buffer{}
+	errorBuffer := &bytes.Buffer{}
+
+	service := audit.NewService(
+		stubDiscoverer{repositories: []string{currentDirectoryRelativePathConstant}},
+		stubGitManager{
+			cleanWorktree:       true,
+			branchName:          "main",
+			remoteURL:           "https://github.com/origin/example.git",
+			panicOnBranchLookup: true,
+		},
+		stubGitExecutor{
+			outputs: map[string]execshell.ExecutionResult{
+				"rev-parse --is-inside-work-tree": {StandardOutput: "true"},
+			},
+			panicOnUnexpectedCommand: true,
+		},
+		stubGitHubResolver{
+			metadata: githubcli.RepositoryMetadata{
+				NameWithOwner: "canonical/example",
+				DefaultBranch: "main",
+			},
+		},
+		outputBuffer,
+		errorBuffer,
+	)
+
+	options := audit.CommandOptions{
+		Roots:           []string{currentDirectoryRelativePathConstant},
+		InspectionDepth: audit.InspectionDepthMinimal,
+		DebugOutput:     true,
+	}
+
+	runError := service.Run(context.Background(), options)
+	require.NoError(testInstance, runError)
+
+	expectedNameMatches := "no"
+	if repositoryFolderName == "example" {
+		expectedNameMatches = "yes"
+	}
+
+	expectedCSVOutput := fmt.Sprintf(
+		"final_github_repo,folder_name,name_matches,remote_default_branch,local_branch,in_sync,remote_protocol,origin_matches_canonical\ncanonical/example,%s,%s,main,,n/a,https,no\n",
+		repositoryFolderName,
+		expectedNameMatches,
+	)
+	expectedDebugOutput := fmt.Sprintf(
+		"DEBUG: discovered 1 candidate repos under: %s\nDEBUG: checking %s\n",
+		currentDirectoryRelativePathConstant,
+		normalizedWorkingDirectory,
+	)
+
+	require.Equal(testInstance, expectedCSVOutput, outputBuffer.String())
+	require.Equal(testInstance, expectedDebugOutput, errorBuffer.String())
 }

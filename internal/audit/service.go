@@ -60,11 +60,16 @@ func (service *Service) DiscoverInspections(executionContext context.Context, ro
 		return nil, discoveryError
 	}
 
+	normalizedRepositories, normalizationError := normalizeRepositoryPaths(repositories)
+	if normalizationError != nil {
+		return nil, normalizationError
+	}
+
 	if debug {
 		fmt.Fprintf(service.errorWriter, debugDiscoveredTemplate, len(repositories), strings.Join(roots, " "))
 	}
 
-	uniqueRepositories := deduplicatePaths(repositories)
+	uniqueRepositories := deduplicatePaths(normalizedRepositories)
 	inspections := make([]RepositoryInspection, 0, len(uniqueRepositories))
 
 	for _, repositoryPath := range uniqueRepositories {
@@ -130,6 +135,26 @@ func deduplicatePaths(paths []string) []string {
 	}
 	sort.Strings(unique)
 	return unique
+}
+
+func normalizeRepositoryPaths(paths []string) ([]string, error) {
+	normalized := make([]string, 0, len(paths))
+	for _, repositoryPath := range paths {
+		cleanedPath := filepath.Clean(repositoryPath)
+		if filepath.IsAbs(cleanedPath) {
+			normalized = append(normalized, cleanedPath)
+			continue
+		}
+
+		absolutePath, absoluteError := filepath.Abs(cleanedPath)
+		if absoluteError != nil {
+			return nil, fmt.Errorf("%s: %w", normalizeRepositoryPathErrorMessageConstant, absoluteError)
+		}
+
+		normalized = append(normalized, absolutePath)
+	}
+
+	return normalized, nil
 }
 
 func normalizeInspectionDepth(depth InspectionDepth) InspectionDepth {
