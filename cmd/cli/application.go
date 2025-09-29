@@ -236,6 +236,9 @@ func NewApplication() *Application {
 		application.resolveConfigurationSearchPaths(),
 	)
 
+	embeddedConfigurationData, embeddedConfigurationType := EmbeddedDefaultConfiguration()
+	application.configurationLoader.SetEmbeddedConfiguration(embeddedConfigurationData, embeddedConfigurationType)
+
 	cobraCommand := &cobra.Command{
 		Use:           applicationNameConstant,
 		Short:         applicationShortDescriptionConstant,

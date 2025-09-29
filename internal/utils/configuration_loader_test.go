@@ -22,12 +22,14 @@ const (
 	testFileLogLevelConstant                       = "warn"
 	testConfigFileNameConstant                     = "config.yaml"
 	testConfigContentTemplateConstant              = "common:\n  log_level: %s\n"
+	testCaseEmbeddedMessageConstant                = "embedded configuration merges"
 	testCaseDefaultsMessageConstant                = "defaults are applied"
 	testCaseFileMessageConstant                    = "config file overrides defaults"
 	testCaseEnvironmentMessageConstant             = "environment overrides file"
 	testConfigurationNameConstant                  = "config"
 	testConfigurationTypeConstant                  = "yaml"
 	configurationLoaderSubtestNameTemplateConstant = "%d_%s"
+	testEmbeddedLogLevelConstant                   = "debug"
 )
 
 type configurationFixture struct {
@@ -41,24 +43,35 @@ type configurationCommonFixture struct {
 func TestConfigurationLoaderLoadConfiguration(testInstance *testing.T) {
 	testCases := []struct {
 		name                string
+		embeddedLogLevel    string
 		fileLogLevel        string
 		environmentLogLevel string
 		expectedLogLevel    string
 	}{
 		{
+			name:                testCaseEmbeddedMessageConstant,
+			embeddedLogLevel:    testEmbeddedLogLevelConstant,
+			fileLogLevel:        "",
+			environmentLogLevel: "",
+			expectedLogLevel:    testEmbeddedLogLevelConstant,
+		},
+		{
 			name:                testCaseDefaultsMessageConstant,
+			embeddedLogLevel:    testDefaultLogLevelConstant,
 			fileLogLevel:        "",
 			environmentLogLevel: "",
 			expectedLogLevel:    testDefaultLogLevelConstant,
 		},
 		{
 			name:                testCaseFileMessageConstant,
+			embeddedLogLevel:    testDefaultLogLevelConstant,
 			fileLogLevel:        testConfiguredLogLevelConstant,
 			environmentLogLevel: "",
 			expectedLogLevel:    testConfiguredLogLevelConstant,
 		},
 		{
 			name:                testCaseEnvironmentMessageConstant,
+			embeddedLogLevel:    testDefaultLogLevelConstant,
 			fileLogLevel:        testFileLogLevelConstant,
 			environmentLogLevel: testOverriddenLogLevelConstant,
 			expectedLogLevel:    testOverriddenLogLevelConstant,
@@ -87,6 +100,8 @@ func TestConfigurationLoaderLoadConfiguration(testInstance *testing.T) {
 			}
 
 			configurationLoader := utils.NewConfigurationLoader(testConfigurationNameConstant, testConfigurationTypeConstant, testEnvironmentPrefixConstant, []string{tempDirectory})
+
+			configurationLoader.SetEmbeddedConfiguration([]byte(fmt.Sprintf(testConfigContentTemplateConstant, testCase.embeddedLogLevel)), testConfigurationTypeConstant)
 
 			defaultValues := map[string]any{
 				testLogLevelKeyConstant: testDefaultLogLevelConstant,

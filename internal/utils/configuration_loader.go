@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"bytes"
 	"fmt"
 	"strings"
 
@@ -8,19 +9,22 @@ import (
 )
 
 const (
-	environmentKeySeparatorOldConstant          = "."
-	environmentKeySeparatorNewConstant          = "_"
-	configurationReadErrorTemplateConstant      = "failed to read configuration: %w"
-	configurationUnmarshalErrorTemplateConstant = "failed to parse configuration: %w"
+	environmentKeySeparatorOldConstant              = "."
+	environmentKeySeparatorNewConstant              = "_"
+	configurationReadErrorTemplateConstant          = "failed to read configuration: %w"
+	configurationUnmarshalErrorTemplateConstant     = "failed to parse configuration: %w"
+	embeddedConfigurationMergeErrorTemplateConstant = "failed to merge embedded configuration: %w"
 )
 
 // ConfigurationLoader wraps Viper to load structured configuration files and environment overrides.
 type ConfigurationLoader struct {
-	configurationName      string
-	configurationType      string
-	environmentPrefix      string
-	searchPaths            []string
-	environmentKeyReplacer *strings.Replacer
+	configurationName         string
+	configurationType         string
+	environmentPrefix         string
+	searchPaths               []string
+	environmentKeyReplacer    *strings.Replacer
+	embeddedConfiguration     []byte
+	embeddedConfigurationType string
 }
 
 // LoadedConfiguration surfaces metadata about the resolved configuration.
@@ -42,11 +46,44 @@ func NewConfigurationLoader(configurationName string, configurationType string, 
 	}
 }
 
+// SetEmbeddedConfiguration stores embedded configuration data merged before user-provided configuration files.
+func (loader *ConfigurationLoader) SetEmbeddedConfiguration(configurationData []byte, configurationType string) {
+	if loader == nil {
+		return
+	}
+
+	loader.embeddedConfiguration = nil
+	loader.embeddedConfigurationType = strings.TrimSpace(configurationType)
+
+	if len(configurationData) == 0 {
+		return
+	}
+
+	duplicatedData := make([]byte, len(configurationData))
+	copy(duplicatedData, configurationData)
+	loader.embeddedConfiguration = duplicatedData
+}
+
 // LoadConfiguration populates targetConfiguration using configuration files, defaults, and environment variables.
 func (loader *ConfigurationLoader) LoadConfiguration(configurationFilePath string, defaultValues map[string]any, targetConfiguration any) (LoadedConfiguration, error) {
 	viperInstance := viper.New()
 	viperInstance.SetConfigName(loader.configurationName)
 	viperInstance.SetConfigType(loader.configurationType)
+
+	if len(loader.embeddedConfiguration) > 0 {
+		configurationType := loader.configurationType
+		if len(loader.embeddedConfigurationType) > 0 {
+			configurationType = loader.embeddedConfigurationType
+		}
+
+		viperInstance.SetConfigType(configurationType)
+		mergeError := viperInstance.MergeConfig(bytes.NewReader(loader.embeddedConfiguration))
+		if mergeError != nil {
+			return LoadedConfiguration{}, fmt.Errorf(embeddedConfigurationMergeErrorTemplateConstant, mergeError)
+		}
+
+		viperInstance.SetConfigType(loader.configurationType)
+	}
 
 	for _, searchPath := range loader.searchPaths {
 		viperInstance.AddConfigPath(searchPath)
