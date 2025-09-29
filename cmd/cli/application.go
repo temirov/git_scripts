@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"syscall"
@@ -53,6 +54,7 @@ const (
 	logFieldArgumentsConstant                           = "arguments"
 	loggerNotInitializedMessageConstant                 = "logger not initialized"
 	defaultConfigurationSearchPathConstant              = "."
+	userConfigurationDirectoryNameConstant              = ".gix"
 	configurationSearchPathEnvironmentVariableConstant  = "GIX_CONFIG_SEARCH_PATH"
 	auditOperationNameConstant                          = "audit"
 	packagesPurgeOperationNameConstant                  = "repo-packages-purge"
@@ -375,7 +377,13 @@ func Execute() error {
 func (application *Application) resolveConfigurationSearchPaths() []string {
 	overrideValue := strings.TrimSpace(os.Getenv(configurationSearchPathEnvironmentVariableConstant))
 	if len(overrideValue) == 0 {
-		return []string{defaultConfigurationSearchPathConstant}
+		defaultSearchPaths := []string{defaultConfigurationSearchPathConstant}
+		userConfigurationDirectoryPath, userConfigurationDirectoryResolved := application.resolveUserConfigurationDirectoryPath()
+		if userConfigurationDirectoryResolved {
+			defaultSearchPaths = append(defaultSearchPaths, userConfigurationDirectoryPath)
+		}
+
+		return defaultSearchPaths
 	}
 
 	overridePaths := strings.FieldsFunc(overrideValue, func(candidate rune) bool {
@@ -396,6 +404,28 @@ func (application *Application) resolveConfigurationSearchPaths() []string {
 	}
 
 	return cleanedPaths
+}
+
+func (application *Application) resolveUserConfigurationDirectoryPath() (string, bool) {
+	userConfigurationBaseDirectoryPath, userConfigurationDirectoryError := os.UserConfigDir()
+	if userConfigurationDirectoryError == nil {
+		trimmedBaseDirectoryPath := strings.TrimSpace(userConfigurationBaseDirectoryPath)
+		if len(trimmedBaseDirectoryPath) > 0 {
+			return filepath.Join(trimmedBaseDirectoryPath, userConfigurationDirectoryNameConstant), true
+		}
+	}
+
+	userHomeDirectoryPath, userHomeDirectoryError := os.UserHomeDir()
+	if userHomeDirectoryError != nil {
+		return "", false
+	}
+
+	trimmedHomeDirectoryPath := strings.TrimSpace(userHomeDirectoryPath)
+	if len(trimmedHomeDirectoryPath) == 0 {
+		return "", false
+	}
+
+	return filepath.Join(trimmedHomeDirectoryPath, userConfigurationDirectoryNameConstant), true
 }
 
 func (application *Application) initializeConfiguration(command *cobra.Command) error {

@@ -13,23 +13,27 @@ import (
 )
 
 const (
-	testEnvironmentPrefixConstant                  = "TESTGIX"
-	testCommonSectionKeyConstant                   = "common"
-	testLogLevelKeyConstant                        = testCommonSectionKeyConstant + ".log_level"
-	testDefaultLogLevelConstant                    = "info"
-	testConfiguredLogLevelConstant                 = "debug"
-	testOverriddenLogLevelConstant                 = "error"
-	testFileLogLevelConstant                       = "warn"
-	testConfigFileNameConstant                     = "config.yaml"
-	testConfigContentTemplateConstant              = "common:\n  log_level: %s\n"
-	testCaseEmbeddedMessageConstant                = "embedded configuration merges"
-	testCaseDefaultsMessageConstant                = "defaults are applied"
-	testCaseFileMessageConstant                    = "config file overrides defaults"
-	testCaseEnvironmentMessageConstant             = "environment overrides file"
-	testConfigurationNameConstant                  = "config"
-	testConfigurationTypeConstant                  = "yaml"
-	configurationLoaderSubtestNameTemplateConstant = "%d_%s"
-	testEmbeddedLogLevelConstant                   = "debug"
+	testEnvironmentPrefixConstant                     = "TESTGIX"
+	testCommonSectionKeyConstant                      = "common"
+	testLogLevelKeyConstant                           = testCommonSectionKeyConstant + ".log_level"
+	testDefaultLogLevelConstant                       = "info"
+	testConfiguredLogLevelConstant                    = "debug"
+	testOverriddenLogLevelConstant                    = "error"
+	testFileLogLevelConstant                          = "warn"
+	testConfigFileNameConstant                        = "config.yaml"
+	testConfigContentTemplateConstant                 = "common:\n  log_level: %s\n"
+	testCaseEmbeddedMessageConstant                   = "embedded configuration merges"
+	testCaseDefaultsMessageConstant                   = "defaults are applied"
+	testCaseFileMessageConstant                       = "config file overrides defaults"
+	testCaseEnvironmentMessageConstant                = "environment overrides file"
+	testConfigurationNameConstant                     = "config"
+	testConfigurationTypeConstant                     = "yaml"
+	configurationLoaderSubtestNameTemplateConstant    = "%d_%s"
+	testEmbeddedLogLevelConstant                      = "debug"
+	testUserConfigurationDirectoryNameConstant        = ".gix"
+	testXDGConfigHomeDirectoryNameConstant            = "config"
+	testCaseSearchPathWorkingDirectoryMessageConstant = "searches working directory"
+	testCaseSearchPathHomeDirectoryMessageConstant    = "searches home configuration directory"
 )
 
 type configurationFixture struct {
@@ -117,6 +121,71 @@ func TestConfigurationLoaderLoadConfiguration(testInstance *testing.T) {
 			} else {
 				require.Empty(testInstance, metadata.ConfigFileUsed)
 			}
+		})
+	}
+}
+
+func TestConfigurationLoaderSearchPaths(testInstance *testing.T) {
+	testCases := []struct {
+		name                         string
+		configurationDirectorySelect func(workingDirectoryPath string, userConfigurationDirectoryPath string) string
+	}{
+		{
+			name: testCaseSearchPathWorkingDirectoryMessageConstant,
+			configurationDirectorySelect: func(workingDirectoryPath string, userConfigurationDirectoryPath string) string {
+				return workingDirectoryPath
+			},
+		},
+		{
+			name: testCaseSearchPathHomeDirectoryMessageConstant,
+			configurationDirectorySelect: func(workingDirectoryPath string, userConfigurationDirectoryPath string) string {
+				return userConfigurationDirectoryPath
+			},
+		},
+	}
+
+	for testCaseIndex, testCase := range testCases {
+		testInstance.Run(fmt.Sprintf(configurationLoaderSubtestNameTemplateConstant, testCaseIndex, testCase.name), func(testInstance *testing.T) {
+			workingDirectoryPath := testInstance.TempDir()
+			homeDirectoryPath := testInstance.TempDir()
+			xdgConfigHomeDirectoryPath := filepath.Join(homeDirectoryPath, testXDGConfigHomeDirectoryNameConstant)
+
+			testInstance.Setenv("HOME", homeDirectoryPath)
+			testInstance.Setenv("XDG_CONFIG_HOME", xdgConfigHomeDirectoryPath)
+
+			userConfigurationBaseDirectoryPath, userConfigurationDirectoryError := os.UserConfigDir()
+			require.NoError(testInstance, userConfigurationDirectoryError)
+			require.NotEmpty(testInstance, userConfigurationBaseDirectoryPath)
+
+			userConfigurationDirectoryPath := filepath.Join(userConfigurationBaseDirectoryPath, testUserConfigurationDirectoryNameConstant)
+			createDirectoryError := os.MkdirAll(userConfigurationDirectoryPath, 0o755)
+			require.NoError(testInstance, createDirectoryError)
+
+			selectedConfigurationDirectoryPath := testCase.configurationDirectorySelect(workingDirectoryPath, userConfigurationDirectoryPath)
+			ensureSelectedDirectoryError := os.MkdirAll(selectedConfigurationDirectoryPath, 0o755)
+			require.NoError(testInstance, ensureSelectedDirectoryError)
+
+			configurationFilePath := filepath.Join(selectedConfigurationDirectoryPath, testConfigFileNameConstant)
+			configurationContent := fmt.Sprintf(testConfigContentTemplateConstant, testConfiguredLogLevelConstant)
+			writeConfigurationError := os.WriteFile(configurationFilePath, []byte(configurationContent), 0o600)
+			require.NoError(testInstance, writeConfigurationError)
+
+			configurationLoader := utils.NewConfigurationLoader(
+				testConfigurationNameConstant,
+				testConfigurationTypeConstant,
+				testEnvironmentPrefixConstant,
+				[]string{workingDirectoryPath, userConfigurationDirectoryPath},
+			)
+
+			defaultValues := map[string]any{
+				testLogLevelKeyConstant: testDefaultLogLevelConstant,
+			}
+
+			loadedConfiguration := configurationFixture{}
+			metadata, loadError := configurationLoader.LoadConfiguration("", defaultValues, &loadedConfiguration)
+			require.NoError(testInstance, loadError)
+			require.Equal(testInstance, testConfiguredLogLevelConstant, loadedConfiguration.Common.LogLevel)
+			require.Equal(testInstance, configurationFilePath, metadata.ConfigFileUsed)
 		})
 	}
 }
