@@ -136,7 +136,7 @@ func TestRemotesCommandConfigurationPrecedence(testInstance *testing.T) {
 			executor := &fakeGitExecutor{}
 			manager := &fakeGitRepositoryManager{remoteURL: remotesOriginURLConstant, currentBranch: remotesMetadataDefaultBranch, panicOnCurrentBranchLookup: true}
 			resolver := &fakeGitHubResolver{metadata: githubcli.RepositoryMetadata{NameWithOwner: remotesCanonicalRepository, DefaultBranch: remotesMetadataDefaultBranch}}
-			prompter := &recordingPrompter{confirmResult: true}
+			prompter := &recordingPrompter{result: shared.ConfirmationResult{Confirmed: true}}
 
 			builder := repos.RemotesCommandBuilder{
 				LoggerProvider: func() *zap.Logger { return zap.NewNop() },

@@ -41,6 +41,11 @@ func (operation *CanonicalRemoteOperation) Execute(executionContext context.Cont
 			continue
 		}
 
+		assumeYes := false
+		if environment.PromptState != nil {
+			assumeYes = environment.PromptState.IsAssumeYesEnabled()
+		}
+
 		options := remotes.Options{
 			RepositoryPath:           repository.Path,
 			CurrentOriginURL:         repository.Inspection.OriginURL,
@@ -48,7 +53,7 @@ func (operation *CanonicalRemoteOperation) Execute(executionContext context.Cont
 			CanonicalOwnerRepository: repository.Inspection.CanonicalOwnerRepo,
 			RemoteProtocol:           shared.RemoteProtocol(repository.Inspection.RemoteProtocol),
 			DryRun:                   environment.DryRun,
-			AssumeYes:                environment.AssumeYes,
+			AssumeYes:                assumeYes,
 		}
 
 		remotes.Execute(executionContext, dependencies, options)

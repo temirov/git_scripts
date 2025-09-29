@@ -97,9 +97,10 @@ func (builder *RemotesCommandBuilder) run(command *cobra.Command, arguments []st
 		return inspectionError
 	}
 
+	trackingPrompter := newCascadingConfirmationPrompter(prompter, assumeYes)
 	remotesDependencies := remotes.Dependencies{
 		GitManager: gitManager,
-		Prompter:   prompter,
+		Prompter:   trackingPrompter,
 		Output:     command.OutOrStdout(),
 	}
 
@@ -115,7 +116,7 @@ func (builder *RemotesCommandBuilder) run(command *cobra.Command, arguments []st
 			CanonicalOwnerRepository: inspection.CanonicalOwnerRepo,
 			RemoteProtocol:           shared.RemoteProtocol(inspection.RemoteProtocol),
 			DryRun:                   dryRun,
-			AssumeYes:                assumeYes,
+			AssumeYes:                trackingPrompter.AssumeYes(),
 		}
 
 		remotes.Execute(command.Context(), remotesDependencies, remotesOptions)

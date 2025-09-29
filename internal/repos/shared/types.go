@@ -51,9 +51,15 @@ type FileSystem interface {
 	Abs(path string) (string, error)
 }
 
+// ConfirmationResult captures the outcome of a user confirmation prompt.
+type ConfirmationResult struct {
+	Confirmed  bool
+	ApplyToAll bool
+}
+
 // ConfirmationPrompter collects user confirmations prior to mutating actions.
 type ConfirmationPrompter interface {
-	Confirm(prompt string) (bool, error)
+	Confirm(prompt string) (ConfirmationResult, error)
 }
 
 // GitExecutor exposes the subset of shell execution used by repository services.

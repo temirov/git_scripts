@@ -108,10 +108,11 @@ func (builder *RenameCommandBuilder) run(command *cobra.Command, arguments []str
 		return inspectionError
 	}
 
+	trackingPrompter := newCascadingConfirmationPrompter(prompter, assumeYes)
 	renameDependencies := rename.Dependencies{
 		FileSystem: fileSystem,
 		GitManager: gitManager,
-		Prompter:   prompter,
+		Prompter:   trackingPrompter,
 		Clock:      shared.SystemClock{},
 		Output:     command.OutOrStdout(),
 		Errors:     command.ErrOrStderr(),
@@ -130,7 +131,7 @@ func (builder *RenameCommandBuilder) run(command *cobra.Command, arguments []str
 			DesiredFolderName:    inspection.DesiredFolderName,
 			DryRun:               dryRun,
 			RequireCleanWorktree: requireClean,
-			AssumeYes:            assumeYes,
+			AssumeYes:            trackingPrompter.AssumeYes(),
 		}
 
 		rename.Execute(command.Context(), renameDependencies, renameOptions)

@@ -47,6 +47,11 @@ func (operation *RenameOperation) Execute(executionContext context.Context, envi
 			continue
 		}
 
+		assumeYes := false
+		if environment.PromptState != nil {
+			assumeYes = environment.PromptState.IsAssumeYesEnabled()
+		}
+
 		originalPath := repository.Path
 
 		options := rename.Options{
@@ -54,7 +59,7 @@ func (operation *RenameOperation) Execute(executionContext context.Context, envi
 			DesiredFolderName:    desiredName,
 			DryRun:               environment.DryRun,
 			RequireCleanWorktree: operation.RequireCleanWorktree,
-			AssumeYes:            environment.AssumeYes,
+			AssumeYes:            assumeYes,
 		}
 
 		rename.Execute(executionContext, dependencies, options)
