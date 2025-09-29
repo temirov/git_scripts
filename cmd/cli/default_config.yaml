@@ -1,6 +1,6 @@
 common:
   log_level: info
-  log_format: structured
+  log_format: console
 
 operations:
   - operation: audit
