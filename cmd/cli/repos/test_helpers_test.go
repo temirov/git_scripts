@@ -5,6 +5,7 @@ import (
 
 	"github.com/temirov/gix/internal/execshell"
 	"github.com/temirov/gix/internal/githubcli"
+	"github.com/temirov/gix/internal/repos/shared"
 )
 
 type fakeRepositoryDiscoverer struct {
@@ -79,11 +80,15 @@ func (resolver *fakeGitHubResolver) ResolveRepoMetadata(context.Context, string)
 }
 
 type recordingPrompter struct {
-	confirmResult bool
-	calls         int
+	result shared.ConfirmationResult
+	err    error
+	calls  int
 }
 
-func (prompter *recordingPrompter) Confirm(string) (bool, error) {
+func (prompter *recordingPrompter) Confirm(string) (shared.ConfirmationResult, error) {
 	prompter.calls++
-	return prompter.confirmResult, nil
+	if prompter.err != nil {
+		return shared.ConfirmationResult{}, prompter.err
+	}
+	return prompter.result, nil
 }

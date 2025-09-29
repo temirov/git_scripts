@@ -4,11 +4,15 @@ import (
 	"bufio"
 	"io"
 	"strings"
+
+	"github.com/temirov/gix/internal/repos/shared"
 )
 
 const (
 	affirmativeShortResponseConstant = "y"
 	affirmativeLongResponseConstant  = "yes"
+	applyAllShortResponseConstant    = "a"
+	applyAllLongResponseConstant     = "all"
 )
 
 // IOConfirmationPrompter reads confirmation responses from an io.Reader.
@@ -22,24 +26,26 @@ func NewIOConfirmationPrompter(input io.Reader, output io.Writer) *IOConfirmatio
 	return &IOConfirmationPrompter{reader: bufio.NewReader(input), writer: output}
 }
 
-// Confirm writes the prompt and interprets affirmative responses (y/yes).
-func (prompter *IOConfirmationPrompter) Confirm(prompt string) (bool, error) {
+// Confirm writes the prompt and interprets affirmative responses including "all" to apply globally.
+func (prompter *IOConfirmationPrompter) Confirm(prompt string) (shared.ConfirmationResult, error) {
 	if prompter.writer != nil {
 		if _, writeError := io.WriteString(prompter.writer, prompt); writeError != nil {
-			return false, writeError
+			return shared.ConfirmationResult{}, writeError
 		}
 	}
 
 	response, readError := prompter.reader.ReadString('\n')
 	if readError != nil && readError != io.EOF {
-		return false, readError
+		return shared.ConfirmationResult{}, readError
 	}
 
-	trimmedResponse := strings.TrimSpace(strings.ToLower(response))
-	switch trimmedResponse {
+	normalizedResponse := strings.TrimSpace(strings.ToLower(response))
+	switch normalizedResponse {
 	case affirmativeShortResponseConstant, affirmativeLongResponseConstant:
-		return true, nil
+		return shared.ConfirmationResult{Confirmed: true}, nil
+	case applyAllShortResponseConstant, applyAllLongResponseConstant:
+		return shared.ConfirmationResult{Confirmed: true, ApplyToAll: true}, nil
 	default:
-		return false, nil
+		return shared.ConfirmationResult{}, nil
 	}
 }

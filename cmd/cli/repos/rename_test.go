@@ -159,7 +159,7 @@ func TestRenameCommandConfigurationPrecedence(testInstance *testing.T) {
 				panicOnCurrentBranchLookup: true,
 			}
 			resolver := &fakeGitHubResolver{metadata: githubcli.RepositoryMetadata{NameWithOwner: renameCanonicalRepositoryConstant, DefaultBranch: renameMetadataDefaultBranchConstant}}
-			prompter := &recordingPrompter{confirmResult: true}
+			prompter := &recordingPrompter{result: shared.ConfirmationResult{Confirmed: true}}
 			fileSystem := newRecordingFileSystem([]string{renameParentDirectoryPathConstant, renameDiscoveredRepositoryPath})
 
 			var configurationProvider func() repos.RenameConfiguration

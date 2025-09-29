@@ -139,9 +139,10 @@ func (builder *ProtocolCommandBuilder) run(command *cobra.Command, arguments []s
 		return inspectionError
 	}
 
+	trackingPrompter := newCascadingConfirmationPrompter(prompter, assumeYes)
 	protocolDependencies := conversion.Dependencies{
 		GitManager: gitManager,
-		Prompter:   prompter,
+		Prompter:   trackingPrompter,
 		Output:     command.OutOrStdout(),
 		Errors:     command.ErrOrStderr(),
 	}
@@ -158,7 +159,7 @@ func (builder *ProtocolCommandBuilder) run(command *cobra.Command, arguments []s
 			CurrentProtocol:          fromProtocol,
 			TargetProtocol:           toProtocol,
 			DryRun:                   dryRun,
-			AssumeYes:                assumeYes,
+			AssumeYes:                trackingPrompter.AssumeYes(),
 		}
 
 		conversion.Execute(command.Context(), protocolDependencies, conversionOptions)

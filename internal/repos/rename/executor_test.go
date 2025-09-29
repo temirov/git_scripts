@@ -81,15 +81,15 @@ func (manager stubGitManager) SetRemoteURL(ctx context.Context, repositoryPath s
 }
 
 type stubPrompter struct {
-	response bool
-	err      error
+	result shared.ConfirmationResult
+	err    error
 }
 
-func (prompter stubPrompter) Confirm(prompt string) (bool, error) {
+func (prompter stubPrompter) Confirm(prompt string) (shared.ConfirmationResult, error) {
 	if prompter.err != nil {
-		return false, prompter.err
+		return shared.ConfirmationResult{}, prompter.err
 	}
-	return prompter.response, nil
+	return prompter.result, nil
 }
 
 type stubClock struct{}
@@ -142,18 +142,73 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 			},
 			fileSystem: &stubFileSystem{
 				existingPaths: map[string]bool{
-					renameTestRootDirectory:    true,
-					renameTestTargetFolderPath: false,
+					renameTestRootDirectory:     true,
+					renameTestProjectFolderPath: true,
+					renameTestTargetFolderPath:  false,
 				},
 			},
 			gitManager:      stubGitManager{clean: true},
-			prompter:        stubPrompter{response: false},
+			prompter:        stubPrompter{result: shared.ConfirmationResult{Confirmed: false}},
 			expectedOutput:  fmt.Sprintf("SKIP: %s\n", renameTestProjectFolderPath),
 			expectedErrors:  "",
 			expectedRenames: 0,
 		},
 		{
-			name: "rename_success",
+			name: "prompter_accepts_once",
+			options: rename.Options{
+				RepositoryPath:    renameTestProjectFolderPath,
+				DesiredFolderName: renameTestDesiredFolderName,
+			},
+			fileSystem: &stubFileSystem{
+				existingPaths: map[string]bool{
+					renameTestRootDirectory:     true,
+					renameTestProjectFolderPath: true,
+				},
+			},
+			gitManager:      stubGitManager{clean: true},
+			prompter:        stubPrompter{result: shared.ConfirmationResult{Confirmed: true}},
+			expectedOutput:  fmt.Sprintf("Renamed %s → %s\n", renameTestProjectFolderPath, renameTestTargetFolderPath),
+			expectedErrors:  "",
+			expectedRenames: 1,
+		},
+		{
+			name: "prompter_accepts_all",
+			options: rename.Options{
+				RepositoryPath:    renameTestProjectFolderPath,
+				DesiredFolderName: renameTestDesiredFolderName,
+			},
+			fileSystem: &stubFileSystem{
+				existingPaths: map[string]bool{
+					renameTestRootDirectory:     true,
+					renameTestProjectFolderPath: true,
+				},
+			},
+			gitManager:      stubGitManager{clean: true},
+			prompter:        stubPrompter{result: shared.ConfirmationResult{Confirmed: true, ApplyToAll: true}},
+			expectedOutput:  fmt.Sprintf("Renamed %s → %s\n", renameTestProjectFolderPath, renameTestTargetFolderPath),
+			expectedErrors:  "",
+			expectedRenames: 1,
+		},
+		{
+			name: "prompter_error",
+			options: rename.Options{
+				RepositoryPath:    renameTestProjectFolderPath,
+				DesiredFolderName: renameTestDesiredFolderName,
+			},
+			fileSystem: &stubFileSystem{
+				existingPaths: map[string]bool{
+					renameTestRootDirectory:     true,
+					renameTestProjectFolderPath: true,
+				},
+			},
+			gitManager:      stubGitManager{clean: true},
+			prompter:        stubPrompter{err: errors.New("read failure")},
+			expectedOutput:  "",
+			expectedErrors:  fmt.Sprintf("ERROR: rename failed for %s → %s\n", renameTestProjectFolderPath, renameTestTargetFolderPath),
+			expectedRenames: 0,
+		},
+		{
+			name: "assume_yes_skips_prompt",
 			options: rename.Options{
 				RepositoryPath:    renameTestProjectFolderPath,
 				DesiredFolderName: renameTestDesiredFolderName,
@@ -192,7 +247,7 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		testInstance.Run(testCase.name, func(testInstance *testing.T) {
+		testInstance.Run(testCase.name, func(testingInstance *testing.T) {
 			outputBuffer := &bytes.Buffer{}
 			errorBuffer := &bytes.Buffer{}
 			executor := rename.NewExecutor(rename.Dependencies{
@@ -205,9 +260,9 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 			})
 
 			executor.Execute(context.Background(), testCase.options)
-			require.Equal(testInstance, testCase.expectedOutput, outputBuffer.String())
-			require.Equal(testInstance, testCase.expectedErrors, errorBuffer.String())
-			require.Len(testInstance, testCase.fileSystem.renamedPairs, testCase.expectedRenames)
+			require.Equal(testingInstance, testCase.expectedOutput, outputBuffer.String())
+			require.Equal(testingInstance, testCase.expectedErrors, errorBuffer.String())
+			require.Len(testingInstance, testCase.fileSystem.renamedPairs, testCase.expectedRenames)
 		})
 	}
 }

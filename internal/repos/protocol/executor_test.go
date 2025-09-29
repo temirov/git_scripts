@@ -43,15 +43,15 @@ func (manager *stubGitManager) SetRemoteURL(ctx context.Context, repositoryPath 
 }
 
 type stubPrompter struct {
-	response bool
-	err      error
+	result shared.ConfirmationResult
+	err    error
 }
 
-func (prompter stubPrompter) Confirm(prompt string) (bool, error) {
+func (prompter stubPrompter) Confirm(prompt string) (shared.ConfirmationResult, error) {
 	if prompter.err != nil {
-		return false, prompter.err
+		return shared.ConfirmationResult{}, prompter.err
 	}
-	return prompter.response, nil
+	return prompter.result, nil
 }
 
 const (
@@ -64,6 +64,7 @@ const (
 	protocolTestPlanMessage        = "PLAN-CONVERT: %s origin %s → %s\n"
 	protocolTestDeclinedMessage    = "CONVERT-SKIP: user declined for %s\n"
 	protocolTestSuccessMessage     = "CONVERT-DONE: %s origin now %s\n"
+	protocolTestFailureMessage     = "ERROR: failed to set origin to %s in %s\n"
 )
 
 func TestExecutorBehaviors(testInstance *testing.T) {
@@ -111,11 +112,53 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 				TargetProtocol:           shared.RemoteProtocolSSH,
 			},
 			gitManager:     &stubGitManager{currentURL: protocolTestOriginURL},
-			prompter:       stubPrompter{response: false},
+			prompter:       stubPrompter{result: shared.ConfirmationResult{Confirmed: false}},
 			expectedOutput: fmt.Sprintf(protocolTestDeclinedMessage, protocolTestRepositoryPath),
 		},
 		{
-			name: "update_success",
+			name: "prompter_accepts_once",
+			options: protocol.Options{
+				RepositoryPath:           protocolTestRepositoryPath,
+				OriginOwnerRepository:    protocolTestOriginOwnerRepo,
+				CanonicalOwnerRepository: protocolTestCanonicalOwnerRepo,
+				CurrentProtocol:          shared.RemoteProtocolHTTPS,
+				TargetProtocol:           shared.RemoteProtocolSSH,
+			},
+			gitManager:      &stubGitManager{currentURL: protocolTestOriginURL},
+			prompter:        stubPrompter{result: shared.ConfirmationResult{Confirmed: true}},
+			expectedOutput:  fmt.Sprintf(protocolTestSuccessMessage, protocolTestRepositoryPath, protocolTestTargetURL),
+			expectedUpdates: 1,
+		},
+		{
+			name: "prompter_accepts_all",
+			options: protocol.Options{
+				RepositoryPath:           protocolTestRepositoryPath,
+				OriginOwnerRepository:    protocolTestOriginOwnerRepo,
+				CanonicalOwnerRepository: protocolTestCanonicalOwnerRepo,
+				CurrentProtocol:          shared.RemoteProtocolHTTPS,
+				TargetProtocol:           shared.RemoteProtocolSSH,
+			},
+			gitManager:      &stubGitManager{currentURL: protocolTestOriginURL},
+			prompter:        stubPrompter{result: shared.ConfirmationResult{Confirmed: true, ApplyToAll: true}},
+			expectedOutput:  fmt.Sprintf(protocolTestSuccessMessage, protocolTestRepositoryPath, protocolTestTargetURL),
+			expectedUpdates: 1,
+		},
+		{
+			name: "prompter_error",
+			options: protocol.Options{
+				RepositoryPath:           protocolTestRepositoryPath,
+				OriginOwnerRepository:    protocolTestOriginOwnerRepo,
+				CanonicalOwnerRepository: protocolTestCanonicalOwnerRepo,
+				CurrentProtocol:          shared.RemoteProtocolHTTPS,
+				TargetProtocol:           shared.RemoteProtocolSSH,
+			},
+			gitManager:      &stubGitManager{currentURL: protocolTestOriginURL},
+			prompter:        stubPrompter{err: fmt.Errorf("prompt failure")},
+			expectedErrors:  fmt.Sprintf(protocolTestFailureMessage, protocolTestTargetURL, protocolTestRepositoryPath),
+			expectedUpdates: 0,
+		},
+		{
+			name: "assume_yes_updates_without_prompt",
 			options: protocol.Options{
 				RepositoryPath:           protocolTestRepositoryPath,
 				OriginOwnerRepository:    protocolTestOriginOwnerRepo,
@@ -131,7 +174,7 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		testInstance.Run(testCase.name, func(testInstance *testing.T) {
+		testInstance.Run(testCase.name, func(testingInstance *testing.T) {
 			outputBuffer := &bytes.Buffer{}
 			errorBuffer := &bytes.Buffer{}
 
@@ -143,9 +186,9 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 			})
 
 			executor.Execute(context.Background(), testCase.options)
-			require.Equal(testInstance, testCase.expectedOutput, outputBuffer.String())
-			require.Equal(testInstance, testCase.expectedErrors, errorBuffer.String())
-			require.Len(testInstance, testCase.gitManager.setURLs, testCase.expectedUpdates)
+			require.Equal(testingInstance, testCase.expectedOutput, outputBuffer.String())
+			require.Equal(testingInstance, testCase.expectedErrors, errorBuffer.String())
+			require.Len(testingInstance, testCase.gitManager.setURLs, testCase.expectedUpdates)
 		})
 	}
 }
