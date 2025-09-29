@@ -103,7 +103,7 @@ func (loader *ConfigurationLoader) LoadConfiguration(configurationFilePath strin
 		viperInstance.SetConfigFile(configurationFilePath)
 	}
 
-	readError := viperInstance.ReadInConfig()
+	readError := viperInstance.MergeInConfig()
 	if readError != nil {
 		if _, isNotFound := readError.(viper.ConfigFileNotFoundError); !isNotFound {
 			return LoadedConfiguration{}, fmt.Errorf(configurationReadErrorTemplateConstant, readError)
