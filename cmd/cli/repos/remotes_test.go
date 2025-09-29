@@ -134,7 +134,7 @@ func TestRemotesCommandConfigurationPrecedence(testInstance *testing.T) {
 		testInstance.Run(testCase.name, func(subtest *testing.T) {
 			discoverer := &fakeRepositoryDiscoverer{repositories: []string{remotesDiscoveredRepository}}
 			executor := &fakeGitExecutor{}
-			manager := &fakeGitRepositoryManager{remoteURL: remotesOriginURLConstant, currentBranch: remotesMetadataDefaultBranch}
+			manager := &fakeGitRepositoryManager{remoteURL: remotesOriginURLConstant, currentBranch: remotesMetadataDefaultBranch, panicOnCurrentBranchLookup: true}
 			resolver := &fakeGitHubResolver{metadata: githubcli.RepositoryMetadata{NameWithOwner: remotesCanonicalRepository, DefaultBranch: remotesMetadataDefaultBranch}}
 			prompter := &recordingPrompter{confirmResult: true}
 

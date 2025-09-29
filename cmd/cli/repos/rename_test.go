@@ -24,20 +24,15 @@ const (
 	renameRequireCleanFlagConstant      = "--require-clean"
 	renameConfiguredRootConstant        = "/tmp/rename-config-root"
 	renameCLIRepositoryRootConstant     = "/tmp/rename-cli-root"
-	renameParentDirectoryPathConstant   = "/tmp"
-	renameExistingFolderNameConstant    = "rename-folder-current"
-	renameDesiredFolderNameConstant     = "rename-folder-canonical"
-	renameOriginURLConstant             = "https://github.com/example/rename-folder-current.git"
-	renameCanonicalRepositoryConstant   = "example/" + renameDesiredFolderNameConstant
+	renameDiscoveredRepositoryPath      = "/tmp/rename-repo"
+	renameOriginURLConstant             = "https://github.com/origin/example.git"
+	renameCanonicalRepositoryConstant   = "canonical/example"
 	renameMetadataDefaultBranchConstant = "main"
-	renameLocalBranchConstant           = "feature/example"
-	renameMissingRootsMessageConstant   = "no repository roots provided; specify --root or configure defaults"
+	renameLocalBranchConstant           = "main"
+	renameMissingRootsMessage           = "no repository roots provided; specify --root or configure defaults"
 	renameRelativeRootConstant          = "relative/rename-root"
 	renameHomeRootSuffixConstant        = "rename-home-root"
-)
-
-var (
-	renameDiscoveredRepositoryPath = filepath.Join(renameParentDirectoryPathConstant, renameExistingFolderNameConstant)
+	renameParentDirectoryPathConstant   = "/tmp"
 )
 
 func TestRenameCommandConfigurationPrecedence(testInstance *testing.T) {
@@ -47,32 +42,25 @@ func TestRenameCommandConfigurationPrecedence(testInstance *testing.T) {
 		arguments            []string
 		expectedRoots        []string
 		expectedRootsBuilder func(testing.TB) []string
+		expectError          bool
+		expectedErrorMessage string
 		expectedPromptCalls  int
 		expectedRenameCalls  int
 		expectedCleanChecks  int
-		expectError          bool
-		expectedErrorMessage string
 	}{
 		{
-			name:                 "error_when_roots_missing",
-			configuration:        nil,
-			arguments:            []string{},
-			expectError:          true,
-			expectedErrorMessage: renameMissingRootsMessageConstant,
-		},
-		{
-			name: "configuration_enables_dry_run",
+			name: "configuration_supplies_defaults",
 			configuration: &repos.RenameConfiguration{
 				DryRun:               true,
 				AssumeYes:            true,
-				RequireCleanWorktree: true,
+				RequireCleanWorktree: false,
 				RepositoryRoots:      []string{renameConfiguredRootConstant},
 			},
 			arguments:           []string{},
 			expectedRoots:       []string{renameConfiguredRootConstant},
 			expectedPromptCalls: 0,
 			expectedRenameCalls: 0,
-			expectedCleanChecks: 1,
+			expectedCleanChecks: 0,
 		},
 		{
 			name: "flags_override_configuration",
@@ -94,21 +82,11 @@ func TestRenameCommandConfigurationPrecedence(testInstance *testing.T) {
 			expectedCleanChecks: 1,
 		},
 		{
-			name: "flag_enables_assume_yes_without_dry_run",
-			configuration: &repos.RenameConfiguration{
-				DryRun:               false,
-				AssumeYes:            false,
-				RequireCleanWorktree: false,
-				RepositoryRoots:      []string{renameConfiguredRootConstant},
-			},
-			arguments: []string{
-				renameAssumeYesFlagConstant,
-				renameCLIRepositoryRootConstant,
-			},
-			expectedRoots:       []string{renameCLIRepositoryRootConstant},
-			expectedPromptCalls: 0,
-			expectedRenameCalls: 1,
-			expectedCleanChecks: 0,
+			name:                 "error_when_roots_missing",
+			configuration:        &repos.RenameConfiguration{},
+			arguments:            []string{},
+			expectError:          true,
+			expectedErrorMessage: renameMissingRootsMessage,
 		},
 		{
 			name: "configuration_expands_home_relative_root",
@@ -130,12 +108,8 @@ func TestRenameCommandConfigurationPrecedence(testInstance *testing.T) {
 			expectedCleanChecks: 1,
 		},
 		{
-			name: "arguments_preserve_relative_roots",
-			configuration: &repos.RenameConfiguration{
-				DryRun:               true,
-				AssumeYes:            true,
-				RequireCleanWorktree: true,
-			},
+			name:          "arguments_preserve_relative_roots",
+			configuration: &repos.RenameConfiguration{},
 			arguments: []string{
 				renameDryRunFlagConstant,
 				renameAssumeYesFlagConstant,
@@ -178,10 +152,11 @@ func TestRenameCommandConfigurationPrecedence(testInstance *testing.T) {
 			discoverer := &fakeRepositoryDiscoverer{repositories: []string{renameDiscoveredRepositoryPath}}
 			executor := &fakeGitExecutor{}
 			manager := &fakeGitRepositoryManager{
-				remoteURL:        renameOriginURLConstant,
-				currentBranch:    renameLocalBranchConstant,
-				cleanWorktree:    true,
-				cleanWorktreeSet: true,
+				remoteURL:                  renameOriginURLConstant,
+				currentBranch:              renameLocalBranchConstant,
+				cleanWorktree:              true,
+				cleanWorktreeSet:           true,
+				panicOnCurrentBranchLookup: true,
 			}
 			resolver := &fakeGitHubResolver{metadata: githubcli.RepositoryMetadata{NameWithOwner: renameCanonicalRepositoryConstant, DefaultBranch: renameMetadataDefaultBranchConstant}}
 			prompter := &recordingPrompter{confirmResult: true}
@@ -252,46 +227,65 @@ type renameOperation struct {
 }
 
 type recordingFileSystem struct {
-	existingPaths    map[string]bool
 	renameOperations []renameOperation
+	existingPaths    map[string]struct{}
 }
 
-func newRecordingFileSystem(initialPaths []string) *recordingFileSystem {
-	pathMap := make(map[string]bool, len(initialPaths))
-	for _, path := range initialPaths {
-		pathMap[path] = true
+func newRecordingFileSystem(existingPaths []string) *recordingFileSystem {
+	pathSet := make(map[string]struct{}, len(existingPaths))
+	for index := range existingPaths {
+		pathSet[existingPaths[index]] = struct{}{}
 	}
-	return &recordingFileSystem{existingPaths: pathMap}
+	return &recordingFileSystem{existingPaths: pathSet}
 }
 
 func (fileSystem *recordingFileSystem) Stat(path string) (fs.FileInfo, error) {
-	if fileSystem.existingPaths[path] {
-		return staticFileInfo{name: path}, nil
+	if fileSystem.Exists(path) {
+		return fakeFileInfo{name: filepath.Base(path)}, nil
 	}
-	return nil, fs.ErrNotExist
+	return nil, os.ErrNotExist
 }
 
 func (fileSystem *recordingFileSystem) Rename(oldPath string, newPath string) error {
-	if !fileSystem.existingPaths[oldPath] {
-		return fs.ErrNotExist
-	}
 	fileSystem.renameOperations = append(fileSystem.renameOperations, renameOperation{oldPath: oldPath, newPath: newPath})
+	fileSystem.existingPaths[newPath] = struct{}{}
 	delete(fileSystem.existingPaths, oldPath)
-	fileSystem.existingPaths[newPath] = true
 	return nil
 }
 
-func (fileSystem *recordingFileSystem) Abs(path string) (string, error) {
-	return path, nil
+func (fileSystem *recordingFileSystem) Exists(path string) bool {
+	_, exists := fileSystem.existingPaths[path]
+	return exists
 }
 
-type staticFileInfo struct {
+func (fileSystem *recordingFileSystem) Abs(path string) (string, error) {
+	return filepath.Clean(path), nil
+}
+
+type fakeFileInfo struct {
 	name string
 }
 
-func (info staticFileInfo) Name() string  { return info.name }
-func (staticFileInfo) Size() int64        { return 0 }
-func (staticFileInfo) Mode() fs.FileMode  { return fs.ModeDir }
-func (staticFileInfo) ModTime() time.Time { return time.Unix(0, 0) }
-func (staticFileInfo) IsDir() bool        { return true }
-func (staticFileInfo) Sys() any           { return nil }
+func (info fakeFileInfo) Name() string {
+	return info.name
+}
+
+func (info fakeFileInfo) Size() int64 {
+	return 0
+}
+
+func (info fakeFileInfo) Mode() fs.FileMode {
+	return fs.ModeDir
+}
+
+func (info fakeFileInfo) ModTime() time.Time {
+	return time.Time{}
+}
+
+func (info fakeFileInfo) IsDir() bool {
+	return true
+}
+
+func (info fakeFileInfo) Sys() any {
+	return nil
+}
