@@ -23,13 +23,17 @@ func (discoverer stubDiscoverer) DiscoverRepositories(roots []string) ([]string,
 }
 
 type stubGitExecutor struct {
-	outputs map[string]execshell.ExecutionResult
+	outputs                  map[string]execshell.ExecutionResult
+	panicOnUnexpectedCommand bool
 }
 
 func (executor stubGitExecutor) ExecuteGit(executionContext context.Context, details execshell.CommandDetails) (execshell.ExecutionResult, error) {
 	key := strings.Join(details.Arguments, " ")
 	if result, found := executor.outputs[key]; found {
 		return result, nil
+	}
+	if executor.panicOnUnexpectedCommand {
+		panic(fmt.Sprintf("unexpected git command: %s", key))
 	}
 	return execshell.ExecutionResult{}, fmt.Errorf("unexpected git command: %s", key)
 }
@@ -40,9 +44,10 @@ func (executor stubGitExecutor) ExecuteGitHubCLI(executionContext context.Contex
 }
 
 type stubGitManager struct {
-	cleanWorktree bool
-	branchName    string
-	remoteURL     string
+	cleanWorktree       bool
+	branchName          string
+	remoteURL           string
+	panicOnBranchLookup bool
 }
 
 func (manager stubGitManager) CheckCleanWorktree(ctx context.Context, repositoryPath string) (bool, error) {
@@ -50,6 +55,9 @@ func (manager stubGitManager) CheckCleanWorktree(ctx context.Context, repository
 }
 
 func (manager stubGitManager) GetCurrentBranch(ctx context.Context, repositoryPath string) (string, error) {
+	if manager.panicOnBranchLookup {
+		panic("GetCurrentBranch should not be called during minimal inspection")
+	}
 	return manager.branchName, nil
 }
 
@@ -75,19 +83,21 @@ func (resolver stubGitHubResolver) ResolveRepoMetadata(ctx context.Context, repo
 
 func TestServiceRunBehaviors(testInstance *testing.T) {
 	testCases := []struct {
-		name            string
-		options         audit.CommandOptions
-		discoverer      audit.RepositoryDiscoverer
-		executorOutputs map[string]execshell.ExecutionResult
-		gitManager      audit.GitRepositoryManager
-		githubResolver  audit.GitHubMetadataResolver
-		expectedOutput  string
-		expectedError   string
+		name                 string
+		options              audit.CommandOptions
+		discoverer           audit.RepositoryDiscoverer
+		executorOutputs      map[string]execshell.ExecutionResult
+		gitManager           audit.GitRepositoryManager
+		githubResolver       audit.GitHubMetadataResolver
+		expectedOutput       string
+		expectedError        string
+		panicOnUnexpectedGit bool
 	}{
 		{
-			name: "audit_report",
+			name: "audit_report_full_depth",
 			options: audit.CommandOptions{
-				Roots: []string{"/tmp/example"},
+				Roots:           []string{"/tmp/example"},
+				InspectionDepth: audit.InspectionDepthFull,
 			},
 			discoverer: stubDiscoverer{repositories: []string{"/tmp/example"}},
 			executorOutputs: map[string]execshell.ExecutionResult{
@@ -108,10 +118,37 @@ func TestServiceRunBehaviors(testInstance *testing.T) {
 			expectedError:  "",
 		},
 		{
-			name: "audit_debug",
+			name: "audit_report_minimal_depth",
 			options: audit.CommandOptions{
-				DebugOutput: true,
-				Roots:       []string{"/tmp/example"},
+				Roots:           []string{"/tmp/example"},
+				InspectionDepth: audit.InspectionDepthMinimal,
+			},
+			discoverer: stubDiscoverer{repositories: []string{"/tmp/example"}},
+			executorOutputs: map[string]execshell.ExecutionResult{
+				"rev-parse --is-inside-work-tree": {StandardOutput: "true"},
+			},
+			gitManager: stubGitManager{
+				cleanWorktree:       true,
+				branchName:          "feature",
+				remoteURL:           "https://github.com/origin/example.git",
+				panicOnBranchLookup: true,
+			},
+			githubResolver: stubGitHubResolver{
+				metadata: githubcli.RepositoryMetadata{
+					NameWithOwner: "canonical/example",
+					DefaultBranch: "main",
+				},
+			},
+			expectedOutput:       "final_github_repo,folder_name,name_matches,remote_default_branch,local_branch,in_sync,remote_protocol,origin_matches_canonical\ncanonical/example,example,yes,main,,n/a,https,no\n",
+			expectedError:        "",
+			panicOnUnexpectedGit: true,
+		},
+		{
+			name: "audit_debug_full_depth",
+			options: audit.CommandOptions{
+				DebugOutput:     true,
+				Roots:           []string{"/tmp/example"},
+				InspectionDepth: audit.InspectionDepthFull,
 			},
 			discoverer: stubDiscoverer{repositories: []string{"/tmp/example"}},
 			executorOutputs: map[string]execshell.ExecutionResult{
@@ -141,7 +178,7 @@ func TestServiceRunBehaviors(testInstance *testing.T) {
 			service := audit.NewService(
 				testCase.discoverer,
 				testCase.gitManager,
-				stubGitExecutor{outputs: testCase.executorOutputs},
+				stubGitExecutor{outputs: testCase.executorOutputs, panicOnUnexpectedCommand: testCase.panicOnUnexpectedGit},
 				testCase.githubResolver,
 				outputBuffer,
 				errorBuffer,

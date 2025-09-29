@@ -43,7 +43,7 @@ func (service *Service) Run(executionContext context.Context, options CommandOpt
 		return errors.New(missingRootsErrorMessageConstant)
 	}
 
-	inspections, inspectionError := service.DiscoverInspections(executionContext, roots, options.DebugOutput)
+	inspections, inspectionError := service.DiscoverInspections(executionContext, roots, options.DebugOutput, options.InspectionDepth)
 	if inspectionError != nil {
 		return inspectionError
 	}
@@ -52,7 +52,9 @@ func (service *Service) Run(executionContext context.Context, options CommandOpt
 }
 
 // DiscoverInspections collects repository inspections for the provided roots.
-func (service *Service) DiscoverInspections(executionContext context.Context, roots []string, debug bool) ([]RepositoryInspection, error) {
+func (service *Service) DiscoverInspections(executionContext context.Context, roots []string, debug bool, inspectionDepth InspectionDepth) ([]RepositoryInspection, error) {
+	normalizedDepth := normalizeInspectionDepth(inspectionDepth)
+
 	repositories, discoveryError := service.discoverer.DiscoverRepositories(roots)
 	if discoveryError != nil {
 		return nil, discoveryError
@@ -74,7 +76,7 @@ func (service *Service) DiscoverInspections(executionContext context.Context, ro
 			continue
 		}
 
-		inspection, inspectError := service.inspectRepository(executionContext, repositoryPath)
+		inspection, inspectError := service.inspectRepository(executionContext, repositoryPath, normalizedDepth)
 		if inspectError != nil {
 			continue
 		}
@@ -130,6 +132,15 @@ func deduplicatePaths(paths []string) []string {
 	return unique
 }
 
+func normalizeInspectionDepth(depth InspectionDepth) InspectionDepth {
+	switch depth {
+	case InspectionDepthMinimal:
+		return InspectionDepthMinimal
+	default:
+		return InspectionDepthFull
+	}
+}
+
 func (service *Service) isGitRepository(executionContext context.Context, repositoryPath string) bool {
 	commandDetails := execshell.CommandDetails{
 		Arguments:        []string{gitRevParseSubcommandConstant, gitIsInsideWorkTreeFlagConstant},
@@ -144,7 +155,7 @@ func (service *Service) isGitRepository(executionContext context.Context, reposi
 	return strings.TrimSpace(executionResult.StandardOutput) == gitTrueOutputConstant
 }
 
-func (service *Service) inspectRepository(executionContext context.Context, repositoryPath string) (RepositoryInspection, error) {
+func (service *Service) inspectRepository(executionContext context.Context, repositoryPath string, inspectionDepth InspectionDepth) (RepositoryInspection, error) {
 	folderName := filepath.Base(repositoryPath)
 
 	originURL, originError := service.gitManager.GetRemoteURL(executionContext, repositoryPath, shared.OriginRemoteNameConstant)
@@ -175,13 +186,16 @@ func (service *Service) inspectRepository(executionContext context.Context, repo
 		remoteDefaultBranch = service.resolveDefaultBranchFromGit(executionContext, repositoryPath)
 	}
 
-	localBranch, localBranchError := service.gitManager.GetCurrentBranch(executionContext, repositoryPath)
-	if localBranchError != nil {
-		localBranch = ""
+	localBranch := ""
+	inSyncStatus := TernaryValueNotApplicable
+	if inspectionDepth == InspectionDepthFull {
+		branchName, localBranchError := service.gitManager.GetCurrentBranch(executionContext, repositoryPath)
+		if localBranchError == nil {
+			sanitizedBranch := sanitizeBranchName(branchName)
+			localBranch = sanitizedBranch
+			inSyncStatus = service.computeInSync(executionContext, repositoryPath, remoteDefaultBranch, sanitizedBranch, remoteProtocol)
+		}
 	}
-	localBranch = sanitizeBranchName(localBranch)
-
-	inSync := service.computeInSync(executionContext, repositoryPath, remoteDefaultBranch, localBranch, remoteProtocol)
 
 	finalOwnerRepo := originOwnerRepo
 	if len(strings.TrimSpace(canonicalOwnerRepo)) > 0 {
@@ -199,7 +213,7 @@ func (service *Service) inspectRepository(executionContext context.Context, repo
 		RemoteProtocol:         remoteProtocol,
 		RemoteDefaultBranch:    remoteDefaultBranch,
 		LocalBranch:            localBranch,
-		InSyncStatus:           inSync,
+		InSyncStatus:           inSyncStatus,
 		OriginMatchesCanonical: matchesCanonical(originOwnerRepo, canonicalOwnerRepo),
 	}
 	return inspection, nil

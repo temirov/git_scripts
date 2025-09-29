@@ -74,7 +74,7 @@ func (executor *Executor) Execute(executionContext context.Context, roots []stri
 		executor.dependencies.Errors,
 	)
 
-	inspections, inspectionError := auditService.DiscoverInspections(executionContext, sanitizedRoots, false)
+	inspections, inspectionError := auditService.DiscoverInspections(executionContext, sanitizedRoots, false, audit.InspectionDepthFull)
 	if inspectionError != nil {
 		return fmt.Errorf(workflowRepositoryLoadErrorTemplate, inspectionError)
 	}

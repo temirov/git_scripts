@@ -14,21 +14,21 @@ import (
 )
 
 const (
-	protocolUseConstant          = "repo-protocol-convert [root ...]"
-	protocolShortDescription     = "Convert repository origin remotes between protocols"
-	protocolLongDescription      = "repo-protocol-convert updates origin remotes to use the requested Git protocol."
-	protocolDryRunFlagName       = "dry-run"
-	protocolDryRunDescription    = "Preview protocol conversions without making changes"
-	protocolAssumeYesFlagName    = "yes"
-	protocolAssumeYesShorthand   = "y"
-	protocolAssumeYesDescription = "Automatically confirm protocol conversions"
-	protocolFromFlagName         = "from"
-	protocolFromDescription      = "Current protocol to convert from (git|ssh|https)"
-	protocolToFlagName           = "to"
-	protocolToDescription        = "Protocol to convert to (git|ssh|https)"
-	protocolErrorMissingPair     = "specify both --from and --to"
-	protocolErrorSamePair        = "--from and --to cannot be the same protocol"
-	protocolErrorInvalidValue    = "unsupported protocol value: %s"
+	protocolUseConstant            = "repo-protocol-convert [root ...]"
+	protocolShortDescription       = "Convert repository origin URLs between git/ssh/https"
+	protocolLongDescription        = "repo-protocol-convert converts origin URLs to a desired protocol."
+	protocolDryRunFlagName         = "dry-run"
+	protocolDryRunFlagDescription  = "Preview protocol conversions without making changes"
+	protocolAssumeYesFlagName      = "yes"
+	protocolAssumeYesFlagShorthand = "y"
+	protocolAssumeYesDescription   = "Automatically confirm protocol conversions"
+	protocolFromFlagName           = "from"
+	protocolFromFlagDescription    = "Current protocol to convert from (git, ssh, https)"
+	protocolToFlagName             = "to"
+	protocolToFlagDescription      = "Target protocol to convert to (git, ssh, https)"
+	protocolErrorMissingPair       = "specify both --from and --to"
+	protocolErrorSamePair          = "--from and --to must differ"
+	protocolErrorInvalidValue      = "invalid protocol value: %s"
 )
 
 // ProtocolCommandBuilder assembles the repo-protocol-convert command.
@@ -52,10 +52,10 @@ func (builder *ProtocolCommandBuilder) Build() (*cobra.Command, error) {
 		RunE:  builder.run,
 	}
 
-	command.Flags().Bool(protocolDryRunFlagName, false, protocolDryRunDescription)
-	command.Flags().BoolP(protocolAssumeYesFlagName, protocolAssumeYesShorthand, false, protocolAssumeYesDescription)
-	command.Flags().String(protocolFromFlagName, "", protocolFromDescription)
-	command.Flags().String(protocolToFlagName, "", protocolToDescription)
+	command.Flags().Bool(protocolDryRunFlagName, false, protocolDryRunFlagDescription)
+	command.Flags().BoolP(protocolAssumeYesFlagName, protocolAssumeYesFlagShorthand, false, protocolAssumeYesDescription)
+	command.Flags().String(protocolFromFlagName, "", protocolFromFlagDescription)
+	command.Flags().String(protocolToFlagName, "", protocolToFlagDescription)
 
 	return command, nil
 }
@@ -134,7 +134,7 @@ func (builder *ProtocolCommandBuilder) run(command *cobra.Command, arguments []s
 
 	service := audit.NewService(repositoryDiscoverer, gitManager, gitExecutor, githubResolver, command.OutOrStdout(), command.ErrOrStderr())
 
-	inspections, inspectionError := service.DiscoverInspections(command.Context(), roots, false)
+	inspections, inspectionError := service.DiscoverInspections(command.Context(), roots, false, audit.InspectionDepthMinimal)
 	if inspectionError != nil {
 		return inspectionError
 	}

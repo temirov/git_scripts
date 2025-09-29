@@ -36,12 +36,13 @@ type remoteUpdateCall struct {
 }
 
 type fakeGitRepositoryManager struct {
-	remoteURL        string
-	currentBranch    string
-	setCalls         []remoteUpdateCall
-	cleanWorktree    bool
-	cleanWorktreeSet bool
-	checkCleanCalls  int
+	remoteURL                  string
+	currentBranch              string
+	setCalls                   []remoteUpdateCall
+	cleanWorktree              bool
+	cleanWorktreeSet           bool
+	checkCleanCalls            int
+	panicOnCurrentBranchLookup bool
 }
 
 func (manager *fakeGitRepositoryManager) CheckCleanWorktree(context.Context, string) (bool, error) {
@@ -53,6 +54,9 @@ func (manager *fakeGitRepositoryManager) CheckCleanWorktree(context.Context, str
 }
 
 func (manager *fakeGitRepositoryManager) GetCurrentBranch(context.Context, string) (string, error) {
+	if manager.panicOnCurrentBranchLookup {
+		panic("GetCurrentBranch should not be called during minimal inspection")
+	}
 	return manager.currentBranch, nil
 }
 
