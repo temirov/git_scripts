@@ -47,6 +47,7 @@ const (
 	configurationLoadErrorTemplateConstant              = "unable to load configuration: %w"
 	loggerCreationErrorTemplateConstant                 = "unable to create logger: %w"
 	loggerSyncErrorTemplateConstant                     = "unable to flush logger: %w"
+	configurationInitializedConsoleTemplateConstant     = "%s | log level=%s | log format=%s | config file=%s"
 	rootCommandInfoMessageConstant                      = "gix CLI executed"
 	rootCommandDebugMessageConstant                     = "gix CLI diagnostics"
 	logFieldCommandNameConstant                         = "command_name"
@@ -85,6 +86,10 @@ var commandOperationRequirements = map[string][]string{
 }
 
 var requiredOperationConfigurationNames = collectRequiredOperationConfigurationNames()
+
+type loggerOutputsFactory interface {
+	CreateLoggerOutputs(utils.LogLevel, utils.LogFormat) (utils.LoggerOutputs, error)
+}
 
 // DuplicateOperationConfigurationError indicates that the configuration file defines the same operation multiple times.
 type DuplicateOperationConfigurationError struct {
@@ -212,8 +217,9 @@ func normalizeOperationName(raw string) string {
 type Application struct {
 	rootCommand             *cobra.Command
 	configurationLoader     *utils.ConfigurationLoader
-	loggerFactory           *utils.LoggerFactory
+	loggerFactory           loggerOutputsFactory
 	logger                  *zap.Logger
+	consoleLogger           *zap.Logger
 	configuration           ApplicationConfiguration
 	configurationMetadata   utils.LoadedConfiguration
 	configurationFilePath   string
@@ -228,6 +234,7 @@ func NewApplication() *Application {
 	application := &Application{
 		loggerFactory:          utils.NewLoggerFactory(),
 		logger:                 zap.NewNop(),
+		consoleLogger:          zap.NewNop(),
 		commandContextAccessor: utils.NewCommandContextAccessor(),
 	}
 
@@ -468,13 +475,16 @@ func (application *Application) initializeConfiguration(command *cobra.Command) 
 	}
 
 	application.logger = loggerOutputs.DiagnosticLogger
+	if application.logger == nil {
+		application.logger = zap.NewNop()
+	}
 
-	application.logger.Info(
-		configurationInitializedMessageConstant,
-		zap.String(configurationLogLevelFieldConstant, application.configuration.Common.LogLevel),
-		zap.String(configurationLogFormatFieldConstant, application.configuration.Common.LogFormat),
-		zap.String(configurationFileFieldConstant, application.configurationMetadata.ConfigFileUsed),
-	)
+	application.consoleLogger = loggerOutputs.ConsoleLogger
+	if application.consoleLogger == nil {
+		application.consoleLogger = zap.NewNop()
+	}
+
+	application.logConfigurationInitialization()
 
 	if command != nil {
 		updatedContext := application.commandContextAccessor.WithConfigurationFilePath(
@@ -499,6 +509,27 @@ func (application *Application) InitializeForCommand(commandUse string) error {
 func (application *Application) humanReadableLoggingEnabled() bool {
 	logFormatValue := strings.TrimSpace(application.configuration.Common.LogFormat)
 	return strings.EqualFold(logFormatValue, string(utils.LogFormatConsole))
+}
+
+func (application *Application) logConfigurationInitialization() {
+	if application.humanReadableLoggingEnabled() {
+		bannerMessage := fmt.Sprintf(
+			configurationInitializedConsoleTemplateConstant,
+			configurationInitializedMessageConstant,
+			application.configuration.Common.LogLevel,
+			application.configuration.Common.LogFormat,
+			application.configurationMetadata.ConfigFileUsed,
+		)
+		application.consoleLogger.Info(bannerMessage)
+		return
+	}
+
+	application.logger.Info(
+		configurationInitializedMessageConstant,
+		zap.String(configurationLogLevelFieldConstant, application.configuration.Common.LogLevel),
+		zap.String(configurationLogFormatFieldConstant, application.configuration.Common.LogFormat),
+		zap.String(configurationFileFieldConstant, application.configurationMetadata.ConfigFileUsed),
+	)
 }
 
 func (application *Application) auditCommandConfiguration() audit.CommandConfiguration {
@@ -680,6 +711,11 @@ func (application *Application) flushLogger() error {
 	if syncError := application.syncLoggerInstance(application.logger); syncError != nil {
 		return syncError
 	}
+
+	if syncError := application.syncLoggerInstance(application.consoleLogger); syncError != nil {
+		return syncError
+	}
+
 	return nil
 }
 
