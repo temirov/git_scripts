@@ -90,8 +90,9 @@ func (builder *CommandBuilder) parseOptions(command *cobra.Command) (CommandOpti
 	}
 
 	options := CommandOptions{
-		Roots:       roots,
-		DebugOutput: debugMode,
+		Roots:           roots,
+		DebugOutput:     debugMode,
+		InspectionDepth: InspectionDepthFull,
 	}
 
 	return options, nil

@@ -1,0 +1,39 @@
+common:
+  log_level: info
+  log_format: console
+
+operations:
+  - operation: audit
+    with:
+      roots:
+        - .
+  - operation: repo-packages-purge
+    with:
+      roots:
+        - .
+  - operation: repo-prs-purge
+    with:
+      remote: origin
+      limit: 100
+      roots:
+        - .
+  - operation: repo-remote-update
+    with:
+      roots:
+        - .
+  - operation: repo-protocol-convert
+    with:
+      roots:
+        - .
+  - operation: repo-folders-rename
+    with:
+      roots:
+        - .
+  - operation: workflow
+    with:
+      roots:
+        - .
+  - operation: branch-migrate
+    with:
+      roots:
+        - .

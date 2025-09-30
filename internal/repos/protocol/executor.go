@@ -90,12 +90,12 @@ func (executor *Executor) Execute(executionContext context.Context, options Opti
 
 	if !options.AssumeYes && executor.dependencies.Prompter != nil {
 		prompt := fmt.Sprintf(promptTemplate, options.RepositoryPath, currentProtocol, options.TargetProtocol)
-		confirmed, promptError := executor.dependencies.Prompter.Confirm(prompt)
+		confirmationResult, promptError := executor.dependencies.Prompter.Confirm(prompt)
 		if promptError != nil {
 			executor.printfError(failureMessage, targetURL, options.RepositoryPath)
 			return
 		}
-		if !confirmed {
+		if !confirmationResult.Confirmed {
 			executor.printfOutput(declinedMessage, options.RepositoryPath)
 			return
 		}

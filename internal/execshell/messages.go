@@ -143,28 +143,29 @@ const (
 )
 
 const (
-	githubRepoSubcommandNameConstant            = "repo"
-	githubRepoViewSubcommandNameConstant        = "view"
-	githubPullRequestSubcommandNameConstant     = "pr"
-	githubPullRequestListSubcommandNameConstant = "list"
-	githubPullRequestEditSubcommandNameConstant = "edit"
-	githubAPICommandNameConstant                = "api"
-	githubRepoFlagConstant                      = "--repo"
-	githubStateFlagConstant                     = "--state"
-	githubBaseFlagConstant                      = "--base"
-	githubLimitFlagConstant                     = "--limit"
-	githubMethodFlagConstant                    = "-X"
-	githubFieldFlagConstant                     = "-f"
-	githubInputFlagConstant                     = "--input"
-	githubPagesEndpointSubstringConstant        = "/pages"
-	githubBranchesEndpointSubstringConstant     = "/branches/"
-	githubProtectionEndpointSuffixConstant      = "/protection"
-	githubDefaultBranchFieldPrefixConstant      = "default_branch="
-	githubPagesUpdateMethodConstant             = "PUT"
-	githubPagesReadMethodConstant               = "GET"
-	githubDefaultBranchUpdateMethodConstant     = "PATCH"
-	githubBranchProtectionMethodConstant        = "GET"
-	githubCurrentRepositoryLabelConstant        = "current repository"
+	githubRepoSubcommandNameConstant                  = "repo"
+	githubRepoViewSubcommandNameConstant              = "view"
+	githubPullRequestSubcommandNameConstant           = "pr"
+	githubPullRequestListSubcommandNameConstant       = "list"
+	githubPullRequestEditSubcommandNameConstant       = "edit"
+	githubAPICommandNameConstant                      = "api"
+	githubRepoFlagConstant                            = "--repo"
+	githubStateFlagConstant                           = "--state"
+	githubBaseFlagConstant                            = "--base"
+	githubLimitFlagConstant                           = "--limit"
+	githubMethodFlagConstant                          = "-X"
+	githubFieldFlagConstant                           = "-f"
+	githubInputFlagConstant                           = "--input"
+	githubPagesEndpointSubstringConstant              = "/pages"
+	githubBranchesEndpointSubstringConstant           = "/branches/"
+	githubProtectionEndpointSuffixConstant            = "/protection"
+	githubDefaultBranchFieldPrefixConstant            = "default_branch="
+	githubPagesUpdateMethodConstant                   = "PUT"
+	githubPagesReadMethodConstant                     = "GET"
+	githubDefaultBranchUpdateMethodConstant           = "PATCH"
+	githubBranchProtectionMethodConstant              = "GET"
+	githubCurrentRepositoryLabelConstant              = "current repository"
+	githubRepoViewIdentificationArgumentCountConstant = 2
 )
 
 const (
@@ -223,6 +224,25 @@ func (formatter CommandMessageFormatter) BuildFailureMessage(command ShellComman
 // BuildExecutionFailureMessage formats the message describing an unexpected execution failure.
 func (formatter CommandMessageFormatter) BuildExecutionFailureMessage(command ShellCommand, failure error) string {
 	return formatter.buildMessage(command, ExecutionResult{}, failure, messageStageExecutionFailure)
+}
+
+func (formatter CommandMessageFormatter) shouldLogStartMessage(command ShellCommand) bool {
+	if command.Name != CommandGitHub {
+		return true
+	}
+	if formatter.isGitHubRepoViewCommand(command.Details.Arguments) {
+		return false
+	}
+	return true
+}
+
+func (formatter CommandMessageFormatter) isGitHubRepoViewCommand(arguments []string) bool {
+	if len(arguments) < githubRepoViewIdentificationArgumentCountConstant {
+		return false
+	}
+	primaryArgument := strings.TrimSpace(arguments[0])
+	secondaryArgument := strings.TrimSpace(arguments[1])
+	return primaryArgument == githubRepoSubcommandNameConstant && secondaryArgument == githubRepoViewSubcommandNameConstant
 }
 
 func (formatter CommandMessageFormatter) buildMessage(command ShellCommand, result ExecutionResult, failure error, stage messageStage) string {

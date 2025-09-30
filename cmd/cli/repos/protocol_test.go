@@ -168,9 +168,9 @@ func TestProtocolCommandConfigurationPrecedence(testInstance *testing.T) {
 		testInstance.Run(testCase.name, func(subtest *testing.T) {
 			discoverer := &fakeRepositoryDiscoverer{repositories: []string{remotesDiscoveredRepository}}
 			executor := &fakeGitExecutor{}
-			manager := &fakeGitRepositoryManager{remoteURL: testCase.initialRemoteURL, currentBranch: remotesMetadataDefaultBranch}
+			manager := &fakeGitRepositoryManager{remoteURL: testCase.initialRemoteURL, currentBranch: remotesMetadataDefaultBranch, panicOnCurrentBranchLookup: true}
 			resolver := &fakeGitHubResolver{metadata: githubcli.RepositoryMetadata{NameWithOwner: remotesCanonicalRepository, DefaultBranch: remotesMetadataDefaultBranch}}
-			prompter := &recordingPrompter{confirmResult: true}
+			prompter := &recordingPrompter{result: shared.ConfirmationResult{Confirmed: true}}
 
 			builder := repos.ProtocolCommandBuilder{
 				LoggerProvider: func() *zap.Logger { return zap.NewNop() },

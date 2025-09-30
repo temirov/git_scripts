@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"syscall"
@@ -46,6 +47,7 @@ const (
 	configurationLoadErrorTemplateConstant              = "unable to load configuration: %w"
 	loggerCreationErrorTemplateConstant                 = "unable to create logger: %w"
 	loggerSyncErrorTemplateConstant                     = "unable to flush logger: %w"
+	configurationInitializedConsoleTemplateConstant     = "%s | log level=%s | log format=%s | config file=%s"
 	rootCommandInfoMessageConstant                      = "gix CLI executed"
 	rootCommandDebugMessageConstant                     = "gix CLI diagnostics"
 	logFieldCommandNameConstant                         = "command_name"
@@ -53,6 +55,7 @@ const (
 	logFieldArgumentsConstant                           = "arguments"
 	loggerNotInitializedMessageConstant                 = "logger not initialized"
 	defaultConfigurationSearchPathConstant              = "."
+	userConfigurationDirectoryNameConstant              = ".gix"
 	configurationSearchPathEnvironmentVariableConstant  = "GIX_CONFIG_SEARCH_PATH"
 	auditOperationNameConstant                          = "audit"
 	packagesPurgeOperationNameConstant                  = "repo-packages-purge"
@@ -83,6 +86,10 @@ var commandOperationRequirements = map[string][]string{
 }
 
 var requiredOperationConfigurationNames = collectRequiredOperationConfigurationNames()
+
+type loggerOutputsFactory interface {
+	CreateLoggerOutputs(utils.LogLevel, utils.LogFormat) (utils.LoggerOutputs, error)
+}
 
 // DuplicateOperationConfigurationError indicates that the configuration file defines the same operation multiple times.
 type DuplicateOperationConfigurationError struct {
@@ -210,8 +217,9 @@ func normalizeOperationName(raw string) string {
 type Application struct {
 	rootCommand             *cobra.Command
 	configurationLoader     *utils.ConfigurationLoader
-	loggerFactory           *utils.LoggerFactory
+	loggerFactory           loggerOutputsFactory
 	logger                  *zap.Logger
+	consoleLogger           *zap.Logger
 	configuration           ApplicationConfiguration
 	configurationMetadata   utils.LoadedConfiguration
 	configurationFilePath   string
@@ -226,6 +234,7 @@ func NewApplication() *Application {
 	application := &Application{
 		loggerFactory:          utils.NewLoggerFactory(),
 		logger:                 zap.NewNop(),
+		consoleLogger:          zap.NewNop(),
 		commandContextAccessor: utils.NewCommandContextAccessor(),
 	}
 
@@ -235,6 +244,9 @@ func NewApplication() *Application {
 		environmentPrefixConstant,
 		application.resolveConfigurationSearchPaths(),
 	)
+
+	embeddedConfigurationData, embeddedConfigurationType := EmbeddedDefaultConfiguration()
+	application.configurationLoader.SetEmbeddedConfiguration(embeddedConfigurationData, embeddedConfigurationType)
 
 	cobraCommand := &cobra.Command{
 		Use:           applicationNameConstant,
@@ -372,7 +384,13 @@ func Execute() error {
 func (application *Application) resolveConfigurationSearchPaths() []string {
 	overrideValue := strings.TrimSpace(os.Getenv(configurationSearchPathEnvironmentVariableConstant))
 	if len(overrideValue) == 0 {
-		return []string{defaultConfigurationSearchPathConstant}
+		defaultSearchPaths := []string{defaultConfigurationSearchPathConstant}
+		userConfigurationDirectoryPath, userConfigurationDirectoryResolved := application.resolveUserConfigurationDirectoryPath()
+		if userConfigurationDirectoryResolved {
+			defaultSearchPaths = append(defaultSearchPaths, userConfigurationDirectoryPath)
+		}
+
+		return defaultSearchPaths
 	}
 
 	overridePaths := strings.FieldsFunc(overrideValue, func(candidate rune) bool {
@@ -393,6 +411,28 @@ func (application *Application) resolveConfigurationSearchPaths() []string {
 	}
 
 	return cleanedPaths
+}
+
+func (application *Application) resolveUserConfigurationDirectoryPath() (string, bool) {
+	userConfigurationBaseDirectoryPath, userConfigurationDirectoryError := os.UserConfigDir()
+	if userConfigurationDirectoryError == nil {
+		trimmedBaseDirectoryPath := strings.TrimSpace(userConfigurationBaseDirectoryPath)
+		if len(trimmedBaseDirectoryPath) > 0 {
+			return filepath.Join(trimmedBaseDirectoryPath, userConfigurationDirectoryNameConstant), true
+		}
+	}
+
+	userHomeDirectoryPath, userHomeDirectoryError := os.UserHomeDir()
+	if userHomeDirectoryError != nil {
+		return "", false
+	}
+
+	trimmedHomeDirectoryPath := strings.TrimSpace(userHomeDirectoryPath)
+	if len(trimmedHomeDirectoryPath) == 0 {
+		return "", false
+	}
+
+	return filepath.Join(trimmedHomeDirectoryPath, userConfigurationDirectoryNameConstant), true
 }
 
 func (application *Application) initializeConfiguration(command *cobra.Command) error {
@@ -435,13 +475,16 @@ func (application *Application) initializeConfiguration(command *cobra.Command) 
 	}
 
 	application.logger = loggerOutputs.DiagnosticLogger
+	if application.logger == nil {
+		application.logger = zap.NewNop()
+	}
 
-	application.logger.Info(
-		configurationInitializedMessageConstant,
-		zap.String(configurationLogLevelFieldConstant, application.configuration.Common.LogLevel),
-		zap.String(configurationLogFormatFieldConstant, application.configuration.Common.LogFormat),
-		zap.String(configurationFileFieldConstant, application.configurationMetadata.ConfigFileUsed),
-	)
+	application.consoleLogger = loggerOutputs.ConsoleLogger
+	if application.consoleLogger == nil {
+		application.consoleLogger = zap.NewNop()
+	}
+
+	application.logConfigurationInitialization()
 
 	if command != nil {
 		updatedContext := application.commandContextAccessor.WithConfigurationFilePath(
@@ -466,6 +509,27 @@ func (application *Application) InitializeForCommand(commandUse string) error {
 func (application *Application) humanReadableLoggingEnabled() bool {
 	logFormatValue := strings.TrimSpace(application.configuration.Common.LogFormat)
 	return strings.EqualFold(logFormatValue, string(utils.LogFormatConsole))
+}
+
+func (application *Application) logConfigurationInitialization() {
+	if application.humanReadableLoggingEnabled() {
+		bannerMessage := fmt.Sprintf(
+			configurationInitializedConsoleTemplateConstant,
+			configurationInitializedMessageConstant,
+			application.configuration.Common.LogLevel,
+			application.configuration.Common.LogFormat,
+			application.configurationMetadata.ConfigFileUsed,
+		)
+		application.consoleLogger.Info(bannerMessage)
+		return
+	}
+
+	application.logger.Info(
+		configurationInitializedMessageConstant,
+		zap.String(configurationLogLevelFieldConstant, application.configuration.Common.LogLevel),
+		zap.String(configurationLogFormatFieldConstant, application.configuration.Common.LogFormat),
+		zap.String(configurationFileFieldConstant, application.configurationMetadata.ConfigFileUsed),
+	)
 }
 
 func (application *Application) auditCommandConfiguration() audit.CommandConfiguration {
@@ -647,6 +711,11 @@ func (application *Application) flushLogger() error {
 	if syncError := application.syncLoggerInstance(application.logger); syncError != nil {
 		return syncError
 	}
+
+	if syncError := application.syncLoggerInstance(application.consoleLogger); syncError != nil {
+		return syncError
+	}
+
 	return nil
 }
 
@@ -664,6 +733,8 @@ func (application *Application) syncLoggerInstance(logger *zap.Logger) error {
 	case errors.Is(syncError, syscall.EINVAL):
 		return nil
 	case errors.Is(syncError, syscall.EBADF):
+		return nil
+	case errors.Is(syncError, syscall.ENOTTY):
 		return nil
 	default:
 		return syncError

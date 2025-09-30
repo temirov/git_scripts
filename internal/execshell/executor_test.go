@@ -14,18 +14,26 @@ import (
 )
 
 const (
-	testExecutionSuccessCaseNameConstant         = "success"
-	testExecutionFailureCaseNameConstant         = "failure_exit_code"
-	testExecutionRunnerErrorCaseNameConstant     = "runner_error"
-	testGitWrapperCaseNameConstant               = "git_wrapper"
-	testGitHubWrapperCaseNameConstant            = "github_wrapper"
-	testCurlWrapperCaseNameConstant              = "curl_wrapper"
-	testCommandArgumentConstant                  = "--version"
-	testWorkingDirectoryConstant                 = "."
-	testStandardErrorOutputConstant              = "failure"
-	testLoggerInitializationCaseNameConstant     = "logger_validation"
-	testRunnerInitializationCaseNameConstant     = "runner_validation"
-	testSuccessfulInitializationCaseNameConstant = "successful_initialization"
+	testExecutionSuccessCaseNameConstant              = "success"
+	testExecutionFailureCaseNameConstant              = "failure_exit_code"
+	testExecutionRunnerErrorCaseNameConstant          = "runner_error"
+	testGitWrapperCaseNameConstant                    = "git_wrapper"
+	testGitHubWrapperCaseNameConstant                 = "github_wrapper"
+	testCurlWrapperCaseNameConstant                   = "curl_wrapper"
+	testCommandArgumentConstant                       = "--version"
+	testWorkingDirectoryConstant                      = "."
+	testStandardErrorOutputConstant                   = "failure"
+	testRunnerFailureMessageConstant                  = "runner failure"
+	testLoggerInitializationCaseNameConstant          = "logger_validation"
+	testRunnerInitializationCaseNameConstant          = "runner_validation"
+	testSuccessfulInitializationCaseNameConstant      = "successful_initialization"
+	testGitHubRepoViewPrimaryArgumentConstant         = "repo"
+	testGitHubRepoViewSubcommandConstant              = "view"
+	testGitHubRepositoryArgumentConstant              = "owner/repo"
+	testGitHubRepoViewSuccessMessageConstant          = "Retrieved repository details for owner/repo"
+	testGitHubRepoViewFailureMessageConstant          = "Failed to retrieve repository details for owner/repo (exit code 1: failure)"
+	testGitHubRepoViewExecutionFailureMessageConstant = "Unable to retrieve repository details for owner/repo: runner failure"
+	testGitRunnerErrorMessageConstant                 = "git --version (in .) failed: runner failure"
 )
 
 type recordingCommandRunner struct {
@@ -111,7 +119,7 @@ func TestShellExecutorExecuteBehavior(testInstance *testing.T) {
 		},
 		{
 			name:             testExecutionRunnerErrorCaseNameConstant,
-			runnerError:      errors.New("runner failure"),
+			runnerError:      errors.New(testRunnerFailureMessageConstant),
 			expectErrorType:  execshell.CommandExecutionError{},
 			expectedLogCount: 2,
 			expectedLevels:   []zapcore.Level{zap.InfoLevel, zap.ErrorLevel},
@@ -180,10 +188,10 @@ func TestShellExecutorHumanReadableLogging(testInstance *testing.T) {
 		},
 		{
 			name:        testExecutionRunnerErrorCaseNameConstant,
-			runnerError: errors.New("runner failure"),
+			runnerError: errors.New(testRunnerFailureMessageConstant),
 			expectedMessages: []string{
 				"Running git --version (in .)",
-				"git --version (in .) failed: runner failure",
+				testGitRunnerErrorMessageConstant,
 			},
 			expectedLevels: []zapcore.Level{zap.InfoLevel, zap.ErrorLevel},
 		},
@@ -204,6 +212,76 @@ func TestShellExecutorHumanReadableLogging(testInstance *testing.T) {
 
 			commandDetails := execshell.CommandDetails{Arguments: []string{testCommandArgumentConstant}, WorkingDirectory: testWorkingDirectoryConstant}
 			_, _ = shellExecutor.ExecuteGit(context.Background(), commandDetails)
+
+			capturedLogs := observedLogs.All()
+			require.Len(testInstance, capturedLogs, len(testCase.expectedMessages))
+			for logIndex := range capturedLogs {
+				require.Equal(testInstance, testCase.expectedMessages[logIndex], capturedLogs[logIndex].Message)
+				require.Equal(testInstance, testCase.expectedLevels[logIndex], capturedLogs[logIndex].Level)
+			}
+		})
+	}
+}
+
+func TestShellExecutorHumanReadableLoggingForGitHubRepoView(testInstance *testing.T) {
+	testCases := []struct {
+		name             string
+		runnerResult     execshell.ExecutionResult
+		runnerError      error
+		expectedMessages []string
+		expectedLevels   []zapcore.Level
+	}{
+		{
+			name:         testExecutionSuccessCaseNameConstant,
+			runnerResult: execshell.ExecutionResult{ExitCode: 0},
+			expectedMessages: []string{
+				testGitHubRepoViewSuccessMessageConstant,
+			},
+			expectedLevels: []zapcore.Level{zap.InfoLevel},
+		},
+		{
+			name: testExecutionFailureCaseNameConstant,
+			runnerResult: execshell.ExecutionResult{
+				StandardError: testStandardErrorOutputConstant,
+				ExitCode:      1,
+			},
+			expectedMessages: []string{
+				testGitHubRepoViewFailureMessageConstant,
+			},
+			expectedLevels: []zapcore.Level{zap.WarnLevel},
+		},
+		{
+			name:        testExecutionRunnerErrorCaseNameConstant,
+			runnerError: errors.New(testRunnerFailureMessageConstant),
+			expectedMessages: []string{
+				testGitHubRepoViewExecutionFailureMessageConstant,
+			},
+			expectedLevels: []zapcore.Level{zap.ErrorLevel},
+		},
+	}
+
+	for _, testCase := range testCases {
+		testInstance.Run(testCase.name, func(testInstance *testing.T) {
+			observerCore, observedLogs := observer.New(zap.InfoLevel)
+			logger := zap.New(observerCore)
+
+			recordingRunner := &recordingCommandRunner{
+				executionResult: testCase.runnerResult,
+				executionError:  testCase.runnerError,
+			}
+
+			shellExecutor, creationError := execshell.NewShellExecutor(logger, recordingRunner, true)
+			require.NoError(testInstance, creationError)
+
+			commandDetails := execshell.CommandDetails{
+				Arguments: []string{
+					testGitHubRepoViewPrimaryArgumentConstant,
+					testGitHubRepoViewSubcommandConstant,
+					testGitHubRepositoryArgumentConstant,
+				},
+			}
+
+			_, _ = shellExecutor.ExecuteGitHubCLI(context.Background(), commandDetails)
 
 			capturedLogs := observedLogs.All()
 			require.Len(testInstance, capturedLogs, len(testCase.expectedMessages))

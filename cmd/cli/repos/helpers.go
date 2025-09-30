@@ -71,6 +71,34 @@ func resolvePrompter(factory PrompterFactory, command *cobra.Command) shared.Con
 	return prompt.NewIOConfirmationPrompter(command.InOrStdin(), command.OutOrStdout())
 }
 
+// cascadingConfirmationPrompter forwards confirmations while tracking apply-to-all decisions.
+type cascadingConfirmationPrompter struct {
+	basePrompter shared.ConfirmationPrompter
+	assumeYes    bool
+}
+
+func newCascadingConfirmationPrompter(base shared.ConfirmationPrompter, initialAssumeYes bool) *cascadingConfirmationPrompter {
+	return &cascadingConfirmationPrompter{basePrompter: base, assumeYes: initialAssumeYes}
+}
+
+func (prompter *cascadingConfirmationPrompter) Confirm(prompt string) (shared.ConfirmationResult, error) {
+	if prompter.basePrompter == nil {
+		return shared.ConfirmationResult{}, nil
+	}
+	result, err := prompter.basePrompter.Confirm(prompt)
+	if err != nil {
+		return shared.ConfirmationResult{}, err
+	}
+	if result.ApplyToAll {
+		prompter.assumeYes = true
+	}
+	return result, nil
+}
+
+func (prompter *cascadingConfirmationPrompter) AssumeYes() bool {
+	return prompter.assumeYes
+}
+
 func displayCommandHelp(command *cobra.Command) error {
 	if command == nil {
 		return nil

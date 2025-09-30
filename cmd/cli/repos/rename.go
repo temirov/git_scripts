@@ -103,15 +103,16 @@ func (builder *RenameCommandBuilder) run(command *cobra.Command, arguments []str
 
 	service := audit.NewService(repositoryDiscoverer, gitManager, gitExecutor, githubResolver, command.OutOrStdout(), command.ErrOrStderr())
 
-	inspections, inspectionError := service.DiscoverInspections(command.Context(), roots, false)
+	inspections, inspectionError := service.DiscoverInspections(command.Context(), roots, false, audit.InspectionDepthMinimal)
 	if inspectionError != nil {
 		return inspectionError
 	}
 
+	trackingPrompter := newCascadingConfirmationPrompter(prompter, assumeYes)
 	renameDependencies := rename.Dependencies{
 		FileSystem: fileSystem,
 		GitManager: gitManager,
-		Prompter:   prompter,
+		Prompter:   trackingPrompter,
 		Clock:      shared.SystemClock{},
 		Output:     command.OutOrStdout(),
 		Errors:     command.ErrOrStderr(),
@@ -130,7 +131,7 @@ func (builder *RenameCommandBuilder) run(command *cobra.Command, arguments []str
 			DesiredFolderName:    inspection.DesiredFolderName,
 			DryRun:               dryRun,
 			RequireCleanWorktree: requireClean,
-			AssumeYes:            assumeYes,
+			AssumeYes:            trackingPrompter.AssumeYes(),
 		}
 
 		rename.Execute(command.Context(), renameDependencies, renameOptions)

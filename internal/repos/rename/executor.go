@@ -92,12 +92,12 @@ func (executor *Executor) Execute(executionContext context.Context, options Opti
 
 	if !options.AssumeYes && executor.dependencies.Prompter != nil {
 		prompt := fmt.Sprintf(promptTemplate, oldAbsolutePath, newAbsolutePath)
-		confirmed, promptError := executor.dependencies.Prompter.Confirm(prompt)
+		confirmationResult, promptError := executor.dependencies.Prompter.Confirm(prompt)
 		if promptError != nil {
 			executor.printfError(failureMessage, oldAbsolutePath, newAbsolutePath)
 			return
 		}
-		if !confirmed {
+		if !confirmationResult.Confirmed {
 			executor.printfOutput(skipMessage, oldAbsolutePath)
 			return
 		}
@@ -200,23 +200,30 @@ func (executor *Executor) performRename(oldAbsolutePath string, newAbsolutePath 
 		return false
 	}
 
-	if isCaseOnlyRename(oldAbsolutePath, newAbsolutePath) {
-		timestamp := executor.dependencies.Clock.Now().UnixNano()
-		intermediatePath := computeIntermediateRenamePath(oldAbsolutePath, timestamp)
-		if renameError := executor.dependencies.FileSystem.Rename(oldAbsolutePath, intermediatePath); renameError != nil {
-			return false
-		}
-		if renameError := executor.dependencies.FileSystem.Rename(intermediatePath, newAbsolutePath); renameError != nil {
-			_ = executor.dependencies.FileSystem.Rename(intermediatePath, oldAbsolutePath)
-			return false
-		}
+	if executor.dependencies.Clock == nil {
+		executor.dependencies.Clock = shared.SystemClock{}
+	}
+
+	if executor.dependencies.GitManager == nil {
+		return false
+	}
+
+	renameError := executor.dependencies.FileSystem.Rename(oldAbsolutePath, newAbsolutePath)
+	if renameError == nil {
 		return true
 	}
 
-	if renameError := executor.dependencies.FileSystem.Rename(oldAbsolutePath, newAbsolutePath); renameError != nil {
-		return false
+	for attempt := 0; attempt < 5; attempt++ {
+		intermediate := fmt.Sprintf(intermediateRenameTemplate, oldAbsolutePath, attempt)
+		if renameError = executor.dependencies.FileSystem.Rename(oldAbsolutePath, intermediate); renameError != nil {
+			continue
+		}
+		if renameError = executor.dependencies.FileSystem.Rename(intermediate, newAbsolutePath); renameError == nil {
+			return true
+		}
 	}
-	return true
+
+	return false
 }
 
 func (executor *Executor) printfOutput(format string, arguments ...any) {
@@ -235,8 +242,4 @@ func (executor *Executor) printfError(format string, arguments ...any) {
 
 func isCaseOnlyRename(oldPath string, newPath string) bool {
 	return strings.EqualFold(oldPath, newPath) && oldPath != newPath
-}
-
-func computeIntermediateRenamePath(oldPath string, timestamp int64) string {
-	return fmt.Sprintf(intermediateRenameTemplate, oldPath, timestamp)
 }

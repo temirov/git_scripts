@@ -42,6 +42,11 @@ func (operation *ProtocolConversionOperation) Execute(executionContext context.C
 			continue
 		}
 
+		assumeYes := false
+		if environment.PromptState != nil {
+			assumeYes = environment.PromptState.IsAssumeYesEnabled()
+		}
+
 		options := conversion.Options{
 			RepositoryPath:           repository.Path,
 			OriginOwnerRepository:    repository.Inspection.OriginOwnerRepo,
@@ -49,7 +54,7 @@ func (operation *ProtocolConversionOperation) Execute(executionContext context.C
 			CurrentProtocol:          operation.FromProtocol,
 			TargetProtocol:           operation.ToProtocol,
 			DryRun:                   environment.DryRun,
-			AssumeYes:                environment.AssumeYes,
+			AssumeYes:                assumeYes,
 		}
 
 		conversion.Execute(executionContext, dependencies, options)

@@ -38,15 +38,15 @@ func (manager *stubGitManager) SetRemoteURL(ctx context.Context, repositoryPath 
 }
 
 type stubPrompter struct {
-	response bool
-	err      error
+	result shared.ConfirmationResult
+	err    error
 }
 
-func (prompter stubPrompter) Confirm(prompt string) (bool, error) {
+func (prompter stubPrompter) Confirm(prompt string) (shared.ConfirmationResult, error) {
 	if prompter.err != nil {
-		return false, prompter.err
+		return shared.ConfirmationResult{}, prompter.err
 	}
-	return prompter.response, nil
+	return prompter.result, nil
 }
 
 const (
@@ -59,6 +59,7 @@ const (
 	remotesTestSkippedCanonicalMessage = "UPDATE-REMOTE-SKIP: %s (no upstream: no canonical redirect found)\n"
 	remotesTestPlanMessage             = "PLAN-UPDATE-REMOTE: %s origin %s → %s\n"
 	remotesTestDeclinedMessage         = "UPDATE-REMOTE-SKIP: user declined for %s\n"
+	remotesTestPromptErrorMessage      = "UPDATE-REMOTE-SKIP: %s (error: could not construct target URL)\n"
 	remotesTestSuccessMessage          = "UPDATE-REMOTE-DONE: %s origin now %s\n"
 )
 
@@ -119,12 +120,54 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 				RemoteProtocol:           shared.RemoteProtocolHTTPS,
 			},
 			gitManager:      &stubGitManager{},
-			prompter:        stubPrompter{response: false},
+			prompter:        stubPrompter{result: shared.ConfirmationResult{Confirmed: false}},
 			expectedOutput:  fmt.Sprintf(remotesTestDeclinedMessage, remotesTestRepositoryPath),
 			expectedUpdates: 0,
 		},
 		{
-			name: "update_success",
+			name: "prompter_accepts_once",
+			options: remotes.Options{
+				RepositoryPath:           remotesTestRepositoryPath,
+				CurrentOriginURL:         remotesTestCurrentOriginURL,
+				OriginOwnerRepository:    remotesTestOriginOwnerRepository,
+				CanonicalOwnerRepository: remotesTestCanonicalOwnerRepo,
+				RemoteProtocol:           shared.RemoteProtocolHTTPS,
+			},
+			gitManager:      &stubGitManager{},
+			prompter:        stubPrompter{result: shared.ConfirmationResult{Confirmed: true}},
+			expectedOutput:  fmt.Sprintf(remotesTestSuccessMessage, remotesTestRepositoryPath, remotesTestCanonicalURL),
+			expectedUpdates: 1,
+		},
+		{
+			name: "prompter_accepts_all",
+			options: remotes.Options{
+				RepositoryPath:           remotesTestRepositoryPath,
+				CurrentOriginURL:         remotesTestCurrentOriginURL,
+				OriginOwnerRepository:    remotesTestOriginOwnerRepository,
+				CanonicalOwnerRepository: remotesTestCanonicalOwnerRepo,
+				RemoteProtocol:           shared.RemoteProtocolHTTPS,
+			},
+			gitManager:      &stubGitManager{},
+			prompter:        stubPrompter{result: shared.ConfirmationResult{Confirmed: true, ApplyToAll: true}},
+			expectedOutput:  fmt.Sprintf(remotesTestSuccessMessage, remotesTestRepositoryPath, remotesTestCanonicalURL),
+			expectedUpdates: 1,
+		},
+		{
+			name: "prompter_error",
+			options: remotes.Options{
+				RepositoryPath:           remotesTestRepositoryPath,
+				CurrentOriginURL:         remotesTestCurrentOriginURL,
+				OriginOwnerRepository:    remotesTestOriginOwnerRepository,
+				CanonicalOwnerRepository: remotesTestCanonicalOwnerRepo,
+				RemoteProtocol:           shared.RemoteProtocolHTTPS,
+			},
+			gitManager:      &stubGitManager{},
+			prompter:        stubPrompter{err: fmt.Errorf("prompt failed")},
+			expectedOutput:  fmt.Sprintf(remotesTestPromptErrorMessage, remotesTestRepositoryPath),
+			expectedUpdates: 0,
+		},
+		{
+			name: "assume_yes_updates_without_prompt",
 			options: remotes.Options{
 				RepositoryPath:           remotesTestRepositoryPath,
 				CurrentOriginURL:         remotesTestCurrentOriginURL,
@@ -140,7 +183,7 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		testInstance.Run(testCase.name, func(testInstance *testing.T) {
+		testInstance.Run(testCase.name, func(testingInstance *testing.T) {
 			outputBuffer := &bytes.Buffer{}
 			executor := remotes.NewExecutor(remotes.Dependencies{
 				GitManager: testCase.gitManager,
@@ -149,8 +192,8 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 			})
 
 			executor.Execute(context.Background(), testCase.options)
-			require.Equal(testInstance, testCase.expectedOutput, outputBuffer.String())
-			require.Len(testInstance, testCase.gitManager.urlsSet, testCase.expectedUpdates)
+			require.Equal(testingInstance, testCase.expectedOutput, outputBuffer.String())
+			require.Len(testingInstance, testCase.gitManager.urlsSet, testCase.expectedUpdates)
 		})
 	}
 }

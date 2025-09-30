@@ -20,6 +20,8 @@ const (
 	gitMetadataDirectoryName           = ".git"
 	singleRootSubtestTitle             = "discoversRepositoriesFromSingleRoot"
 	combinedRootsSubtestTitle          = "discoversRepositoriesFromParentAndNestedRoots"
+	relativeRootSubtestTitle           = "discoversRepositoriesUsingRelativeRoot"
+	relativeRootReferenceConstant      = "."
 	repositoryDirectoryPermissions     = 0o755
 )
 
@@ -39,8 +41,9 @@ func (definition repositoryDefinition) gitMetadataPath(rootDirectory string) str
 }
 
 type filesystemDiscoveryTestScenario struct {
-	title                      string
-	rootDirectoriesConstructor func(string) []string
+	title                              string
+	rootDirectoriesConstructor         func(string) []string
+	changeWorkingDirectoryToRootFolder bool
 }
 
 func (scenario filesystemDiscoveryTestScenario) execute(
@@ -54,6 +57,19 @@ func (scenario filesystemDiscoveryTestScenario) execute(
 		gitMetadataDirectoryPath := repositoryDefinition.gitMetadataPath(temporaryRootDirectory)
 		creationError := os.MkdirAll(gitMetadataDirectoryPath, repositoryDirectoryPermissions)
 		require.NoError(testFramework, creationError)
+	}
+
+	if scenario.changeWorkingDirectoryToRootFolder {
+		currentWorkingDirectory, workingDirectoryError := os.Getwd()
+		require.NoError(testFramework, workingDirectoryError)
+
+		changeDirectoryError := os.Chdir(temporaryRootDirectory)
+		require.NoError(testFramework, changeDirectoryError)
+
+		testFramework.Cleanup(func() {
+			revertError := os.Chdir(currentWorkingDirectory)
+			require.NoError(testFramework, revertError)
+		})
 	}
 
 	repositoryDiscoverer := discovery.NewFilesystemRepositoryDiscoverer()
@@ -92,6 +108,13 @@ func TestFilesystemRepositoryDiscovererDiscoversNestedLayouts(testFramework *tes
 				developerDirectoryPath := filepath.Join(rootDirectory, developerDirectoryName)
 				engineeringGroupDirectoryPath := filepath.Join(developerDirectoryPath, engineeringGroupDirectoryName)
 				return []string{rootDirectory, developerDirectoryPath, engineeringGroupDirectoryPath}
+			},
+		},
+		{
+			title:                              relativeRootSubtestTitle,
+			changeWorkingDirectoryToRootFolder: true,
+			rootDirectoriesConstructor: func(string) []string {
+				return []string{relativeRootReferenceConstant}
 			},
 		},
 	}

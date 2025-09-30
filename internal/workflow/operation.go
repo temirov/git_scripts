@@ -26,9 +26,9 @@ type Environment struct {
 	GitHubClient      *githubcli.Client
 	FileSystem        shared.FileSystem
 	Prompter          shared.ConfirmationPrompter
+	PromptState       *PromptState
 	Output            io.Writer
 	Errors            io.Writer
 	Logger            *zap.Logger
 	DryRun            bool
-	AssumeYes         bool
 }

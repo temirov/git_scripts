@@ -23,10 +23,20 @@ const (
 	TernaryValueNotApplicable TernaryValue = "n/a"
 )
 
+// InspectionDepth determines how much repository state should be gathered.
+type InspectionDepth string
+
+// Supported inspection depth variants.
+const (
+	InspectionDepthFull    InspectionDepth = "full"
+	InspectionDepthMinimal InspectionDepth = "minimal"
+)
+
 // CommandOptions captures the configurable parameters for the audit command.
 type CommandOptions struct {
-	Roots       []string
-	DebugOutput bool
+	Roots           []string
+	DebugOutput     bool
+	InspectionDepth InspectionDepth
 }
 
 // RepositoryInspection captures gathered repository state.

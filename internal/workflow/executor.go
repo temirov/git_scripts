@@ -74,7 +74,7 @@ func (executor *Executor) Execute(executionContext context.Context, roots []stri
 		executor.dependencies.Errors,
 	)
 
-	inspections, inspectionError := auditService.DiscoverInspections(executionContext, sanitizedRoots, false)
+	inspections, inspectionError := auditService.DiscoverInspections(executionContext, sanitizedRoots, false, audit.InspectionDepthFull)
 	if inspectionError != nil {
 		return fmt.Errorf(workflowRepositoryLoadErrorTemplate, inspectionError)
 	}
@@ -84,6 +84,9 @@ func (executor *Executor) Execute(executionContext context.Context, roots []stri
 		repositoryStates = append(repositoryStates, NewRepositoryState(inspections[inspectionIndex]))
 	}
 
+	promptState := NewPromptState(runtimeOptions.AssumeYes)
+	dispatchingPrompter := newPromptDispatcher(executor.dependencies.Prompter, promptState)
+
 	state := &State{Roots: sanitizedRoots, Repositories: repositoryStates}
 	environment := &Environment{
 		AuditService:      auditService,
@@ -91,12 +94,12 @@ func (executor *Executor) Execute(executionContext context.Context, roots []stri
 		RepositoryManager: executor.dependencies.RepositoryManager,
 		GitHubClient:      executor.dependencies.GitHubClient,
 		FileSystem:        executor.dependencies.FileSystem,
-		Prompter:          executor.dependencies.Prompter,
+		Prompter:          dispatchingPrompter,
+		PromptState:       promptState,
 		Output:            executor.dependencies.Output,
 		Errors:            executor.dependencies.Errors,
 		Logger:            executor.dependencies.Logger,
 		DryRun:            runtimeOptions.DryRun,
-		AssumeYes:         runtimeOptions.AssumeYes,
 	}
 
 	for operationIndex := range executor.operations {

@@ -22,7 +22,12 @@ func (discoverer *FilesystemRepositoryDiscoverer) DiscoverRepositories(roots []s
 	var repositories []string
 
 	for _, root := range roots {
-		walkError := filepath.WalkDir(root, func(path string, directoryEntry fs.DirEntry, walkError error) error {
+		normalizedRoot, normalizationError := filepath.Abs(root)
+		if normalizationError != nil {
+			return nil, normalizationError
+		}
+
+		walkError := filepath.WalkDir(normalizedRoot, func(path string, directoryEntry fs.DirEntry, walkError error) error {
 			if walkError != nil {
 				return nil
 			}
@@ -31,7 +36,7 @@ func (discoverer *FilesystemRepositoryDiscoverer) DiscoverRepositories(roots []s
 				return nil
 			}
 
-			repositoryPath := filepath.Dir(path)
+			repositoryPath := filepath.Clean(filepath.Dir(path))
 			if _, alreadySeen := seen[repositoryPath]; alreadySeen {
 				if directoryEntry.IsDir() {
 					return fs.SkipDir

@@ -133,7 +133,9 @@ func (executor *ShellExecutor) Execute(executionContext context.Context, command
 	}
 
 	if executor.humanReadableLogging {
-		executor.logger.Info(executor.messageFormatter.BuildStartedMessage(command))
+		if executor.messageFormatter.shouldLogStartMessage(command) {
+			executor.logger.Info(executor.messageFormatter.BuildStartedMessage(command))
+		}
 	} else {
 		executor.logger.Info(commandStartMessageConstant,
 			zap.String(commandNameFieldNameConstant, string(command.Name)),

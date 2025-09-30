@@ -5,6 +5,7 @@ import (
 
 	"github.com/temirov/gix/internal/execshell"
 	"github.com/temirov/gix/internal/githubcli"
+	"github.com/temirov/gix/internal/repos/shared"
 )
 
 type fakeRepositoryDiscoverer struct {
@@ -36,12 +37,13 @@ type remoteUpdateCall struct {
 }
 
 type fakeGitRepositoryManager struct {
-	remoteURL        string
-	currentBranch    string
-	setCalls         []remoteUpdateCall
-	cleanWorktree    bool
-	cleanWorktreeSet bool
-	checkCleanCalls  int
+	remoteURL                  string
+	currentBranch              string
+	setCalls                   []remoteUpdateCall
+	cleanWorktree              bool
+	cleanWorktreeSet           bool
+	checkCleanCalls            int
+	panicOnCurrentBranchLookup bool
 }
 
 func (manager *fakeGitRepositoryManager) CheckCleanWorktree(context.Context, string) (bool, error) {
@@ -53,6 +55,9 @@ func (manager *fakeGitRepositoryManager) CheckCleanWorktree(context.Context, str
 }
 
 func (manager *fakeGitRepositoryManager) GetCurrentBranch(context.Context, string) (string, error) {
+	if manager.panicOnCurrentBranchLookup {
+		panic("GetCurrentBranch should not be called during minimal inspection")
+	}
 	return manager.currentBranch, nil
 }
 
@@ -75,11 +80,15 @@ func (resolver *fakeGitHubResolver) ResolveRepoMetadata(context.Context, string)
 }
 
 type recordingPrompter struct {
-	confirmResult bool
-	calls         int
+	result shared.ConfirmationResult
+	err    error
+	calls  int
 }
 
-func (prompter *recordingPrompter) Confirm(string) (bool, error) {
+func (prompter *recordingPrompter) Confirm(string) (shared.ConfirmationResult, error) {
 	prompter.calls++
-	return prompter.confirmResult, nil
+	if prompter.err != nil {
+		return shared.ConfirmationResult{}, prompter.err
+	}
+	return prompter.result, nil
 }

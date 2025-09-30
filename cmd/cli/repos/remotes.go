@@ -92,14 +92,15 @@ func (builder *RemotesCommandBuilder) run(command *cobra.Command, arguments []st
 
 	service := audit.NewService(repositoryDiscoverer, gitManager, gitExecutor, githubResolver, command.OutOrStdout(), command.ErrOrStderr())
 
-	inspections, inspectionError := service.DiscoverInspections(command.Context(), roots, false)
+	inspections, inspectionError := service.DiscoverInspections(command.Context(), roots, false, audit.InspectionDepthMinimal)
 	if inspectionError != nil {
 		return inspectionError
 	}
 
+	trackingPrompter := newCascadingConfirmationPrompter(prompter, assumeYes)
 	remotesDependencies := remotes.Dependencies{
 		GitManager: gitManager,
-		Prompter:   prompter,
+		Prompter:   trackingPrompter,
 		Output:     command.OutOrStdout(),
 	}
 
@@ -115,7 +116,7 @@ func (builder *RemotesCommandBuilder) run(command *cobra.Command, arguments []st
 			CanonicalOwnerRepository: inspection.CanonicalOwnerRepo,
 			RemoteProtocol:           shared.RemoteProtocol(inspection.RemoteProtocol),
 			DryRun:                   dryRun,
-			AssumeYes:                assumeYes,
+			AssumeYes:                trackingPrompter.AssumeYes(),
 		}
 
 		remotes.Execute(command.Context(), remotesDependencies, remotesOptions)
