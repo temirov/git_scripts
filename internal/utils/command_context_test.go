@@ -30,14 +30,26 @@ func TestWithRepositoryContextSkipsEmptyValues(t *testing.T) {
 func TestWithBranchContextStoresNormalizedValue(t *testing.T) {
 	accessor := NewCommandContextAccessor()
 	base := context.Background()
-	enriched := accessor.WithBranchContext(base, BranchContext{Name: " main "})
+	enriched := accessor.WithBranchContext(base, BranchContext{Name: " main ", RequireClean: true})
 
 	branchContext, exists := accessor.BranchContext(enriched)
 	require.True(t, exists)
 	require.Equal(t, "main", branchContext.Name)
+	require.True(t, branchContext.RequireClean)
 }
 
-func TestWithBranchContextSkipsEmptyValue(t *testing.T) {
+func TestWithBranchContextStoresRequireCleanWithoutName(t *testing.T) {
+	accessor := NewCommandContextAccessor()
+	base := context.Background()
+	enriched := accessor.WithBranchContext(base, BranchContext{RequireClean: true})
+
+	branchContext, exists := accessor.BranchContext(enriched)
+	require.True(t, exists)
+	require.Equal(t, "", branchContext.Name)
+	require.True(t, branchContext.RequireClean)
+}
+
+func TestWithBranchContextSkipsEmptyValueWhenNoDetails(t *testing.T) {
 	accessor := NewCommandContextAccessor()
 	base := context.Background()
 	enriched := accessor.WithBranchContext(base, BranchContext{})

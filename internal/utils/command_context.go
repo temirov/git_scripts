@@ -23,7 +23,8 @@ type RepositoryContext struct {
 
 // BranchContext describes branch-level execution context.
 type BranchContext struct {
-	Name string
+	Name         string
+	RequireClean bool
 }
 
 // ExecutionFlags captures standardized execution modifiers derived from CLI flags.
@@ -72,10 +73,10 @@ func (accessor CommandContextAccessor) WithBranchContext(parentContext context.C
 		parentContext = context.Background()
 	}
 	normalizedName := strings.TrimSpace(branch.Name)
-	if len(normalizedName) == 0 {
+	if len(normalizedName) == 0 && !branch.RequireClean {
 		return parentContext
 	}
-	normalized := BranchContext{Name: normalizedName}
+	normalized := BranchContext{Name: normalizedName, RequireClean: branch.RequireClean}
 	return context.WithValue(parentContext, branchContextKeyConstant, normalized)
 }
 

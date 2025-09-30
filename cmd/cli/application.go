@@ -536,11 +536,11 @@ func (application *Application) initializeConfiguration(command *cobra.Command) 
 		updatedContext = application.commandContextAccessor.WithExecutionFlags(updatedContext, executionFlags)
 		updatedContext = application.commandContextAccessor.WithLogLevel(updatedContext, application.configuration.Common.LogLevel)
 
+		branchContext := utils.BranchContext{RequireClean: true}
 		if application.branchFlagValues != nil {
-			branchContext := utils.BranchContext{}
 			branchContext.Name = application.branchFlagValues.Name
-			updatedContext = application.commandContextAccessor.WithBranchContext(updatedContext, branchContext)
 		}
+		updatedContext = application.commandContextAccessor.WithBranchContext(updatedContext, branchContext)
 
 		command.SetContext(updatedContext)
 		if rootCommand := command.Root(); rootCommand != nil {

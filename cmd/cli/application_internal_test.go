@@ -112,6 +112,7 @@ func TestInitializeConfigurationAttachesBranchContext(t *testing.T) {
 	branchContext, branchExists := application.commandContextAccessor.BranchContext(rootCommand.Context())
 	require.True(t, branchExists)
 	require.Equal(t, "main", branchContext.Name)
+	require.True(t, branchContext.RequireClean)
 
 	executionFlags, executionFlagsAvailable := application.commandContextAccessor.ExecutionFlags(rootCommand.Context())
 	require.True(t, executionFlagsAvailable)
