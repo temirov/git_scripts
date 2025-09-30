@@ -534,6 +534,7 @@ func (application *Application) initializeConfiguration(command *cobra.Command) 
 
 		executionFlags := application.collectExecutionFlags(command)
 		updatedContext = application.commandContextAccessor.WithExecutionFlags(updatedContext, executionFlags)
+		updatedContext = application.commandContextAccessor.WithLogLevel(updatedContext, application.configuration.Common.LogLevel)
 
 		if application.branchFlagValues != nil {
 			branchContext := utils.BranchContext{}
@@ -610,6 +611,9 @@ func (application *Application) collectExecutionFlags(command *cobra.Command) ut
 func (application *Application) auditCommandConfiguration() audit.CommandConfiguration {
 	var configuration audit.CommandConfiguration
 	application.decodeOperationConfiguration(auditOperationNameConstant, &configuration)
+	if strings.EqualFold(application.configuration.Common.LogLevel, string(utils.LogLevelDebug)) {
+		configuration.Debug = true
+	}
 	return configuration
 }
 
@@ -703,8 +707,11 @@ func (application *Application) workflowCommandConfiguration() workflowcmd.Comma
 }
 
 func (application *Application) branchMigrateConfiguration() migrate.CommandConfiguration {
-	var configuration migrate.CommandConfiguration
+	configuration := migrate.DefaultCommandConfiguration()
 	application.decodeOperationConfiguration(branchMigrateOperationNameConstant, &configuration)
+	if strings.EqualFold(application.configuration.Common.LogLevel, string(utils.LogLevelDebug)) {
+		configuration.EnableDebugLogging = true
+	}
 	return configuration
 }
 

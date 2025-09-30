@@ -10,6 +10,7 @@ const (
 	repositoryContextKeyConstant            = commandContextKey("repositoryContext")
 	branchContextKeyConstant                = commandContextKey("branchContext")
 	executionFlagsContextKeyConstant        = commandContextKey("executionFlags")
+	logLevelContextKeyConstant              = commandContextKey("logLevel")
 )
 
 type commandContextKey string
@@ -86,6 +87,18 @@ func (accessor CommandContextAccessor) WithExecutionFlags(parentContext context.
 	return context.WithValue(parentContext, executionFlagsContextKeyConstant, flags)
 }
 
+// WithLogLevel attaches the effective log level to the provided context.
+func (accessor CommandContextAccessor) WithLogLevel(parentContext context.Context, logLevel string) context.Context {
+	if parentContext == nil {
+		parentContext = context.Background()
+	}
+	trimmedLogLevel := strings.TrimSpace(logLevel)
+	if len(trimmedLogLevel) == 0 {
+		return parentContext
+	}
+	return context.WithValue(parentContext, logLevelContextKeyConstant, trimmedLogLevel)
+}
+
 // ConfigurationFilePath extracts the configuration file path from the provided context.
 func (accessor CommandContextAccessor) ConfigurationFilePath(executionContext context.Context) (string, bool) {
 	if executionContext == nil {
@@ -130,6 +143,18 @@ func (accessor CommandContextAccessor) ExecutionFlags(executionContext context.C
 	value, valueAvailable := executionContext.Value(executionFlagsContextKeyConstant).(ExecutionFlags)
 	if !valueAvailable {
 		return ExecutionFlags{}, false
+	}
+	return value, true
+}
+
+// LogLevel extracts the effective log level from the provided context.
+func (accessor CommandContextAccessor) LogLevel(executionContext context.Context) (string, bool) {
+	if executionContext == nil {
+		return "", false
+	}
+	value, valueAvailable := executionContext.Value(logLevelContextKeyConstant).(string)
+	if !valueAvailable {
+		return "", false
 	}
 	return value, true
 }

@@ -15,6 +15,7 @@ import (
 	"github.com/temirov/gix/internal/githubcli"
 	"github.com/temirov/gix/internal/gitrepo"
 	"github.com/temirov/gix/internal/repos/discovery"
+	"github.com/temirov/gix/internal/utils"
 	flagutils "github.com/temirov/gix/internal/utils/flags"
 )
 
@@ -23,9 +24,12 @@ const (
 	commandShortDescriptionConstant              = "Migrate repository defaults from main to master"
 	commandLongDescriptionConstant               = "branch-migrate retargets workflows, updates GitHub configuration, and evaluates safety gates before switching the default branch."
 	migrateCommandExecutionErrorTemplateConstant = "branch migration failed: %w"
-	debugFlagNameConstant                        = "debug"
-	debugFlagDescriptionConstant                 = "Enable verbose debug logging for migration diagnostics"
 	defaultRemoteNameConstant                    = "origin"
+	sourceBranchFlagNameConstant                 = "from"
+	sourceBranchFlagUsageConstant                = "Source branch to migrate from"
+	targetBranchFlagNameConstant                 = "to"
+	targetBranchFlagUsageConstant                = "Target branch to migrate to"
+	identicalBranchesErrorMessageConstant        = "--from and --to must differ"
 	workflowsDirectoryConstant                   = ".github/workflows"
 	repositoryDiscoveryErrorTemplateConstant     = "repository discovery failed: %w"
 	repositoryResolutionErrorTemplateConstant    = "unable to resolve repository identifier: %w"
@@ -58,6 +62,8 @@ type ServiceProvider func(dependencies ServiceDependencies) (MigrationExecutor, 
 type commandOptions struct {
 	debugLoggingEnabled bool
 	repositoryRoots     []string
+	sourceBranch        BranchName
+	targetBranch        BranchName
 }
 
 // LoggerProvider supplies a zap logger instance.
@@ -85,7 +91,8 @@ func (builder *CommandBuilder) Build() (*cobra.Command, error) {
 		RunE:          builder.runMigrate,
 	}
 
-	command.Flags().Bool(debugFlagNameConstant, DefaultCommandConfiguration().EnableDebugLogging, debugFlagDescriptionConstant)
+	command.Flags().String(sourceBranchFlagNameConstant, string(BranchMain), sourceBranchFlagUsageConstant)
+	command.Flags().String(targetBranchFlagNameConstant, string(BranchMaster), targetBranchFlagUsageConstant)
 
 	return command, nil
 }
@@ -165,8 +172,8 @@ func (builder *CommandBuilder) runMigrate(command *cobra.Command, arguments []st
 			RepositoryRemoteName: defaultRemoteNameConstant,
 			RepositoryIdentifier: repositoryIdentifier,
 			WorkflowsDirectory:   workflowsDirectoryConstant,
-			SourceBranch:         BranchMain,
-			TargetBranch:         BranchMaster,
+			SourceBranch:         options.sourceBranch,
+			TargetBranch:         options.targetBranch,
 			PushUpdates:          true,
 			EnableDebugLogging:   options.debugLoggingEnabled,
 		}
@@ -196,8 +203,13 @@ func (builder *CommandBuilder) parseOptions(command *cobra.Command, arguments []
 	configuration := builder.resolveConfiguration()
 
 	debugEnabled := configuration.EnableDebugLogging
-	if command != nil && command.Flags().Changed(debugFlagNameConstant) {
-		debugEnabled, _ = command.Flags().GetBool(debugFlagNameConstant)
+	if command != nil {
+		contextAccessor := utils.NewCommandContextAccessor()
+		if logLevel, available := contextAccessor.LogLevel(command.Context()); available {
+			if strings.EqualFold(logLevel, string(utils.LogLevelDebug)) {
+				debugEnabled = true
+			}
+		}
 	}
 
 	repositoryRoots := builder.determineRepositoryRoots(command, arguments, configuration.RepositoryRoots)
@@ -208,7 +220,40 @@ func (builder *CommandBuilder) parseOptions(command *cobra.Command, arguments []
 		return commandOptions{}, errors.New(missingRepositoryRootsErrorMessageConstant)
 	}
 
-	return commandOptions{debugLoggingEnabled: debugEnabled, repositoryRoots: repositoryRoots}, nil
+	sourceBranchName := strings.TrimSpace(configuration.SourceBranch)
+	if len(sourceBranchName) == 0 {
+		sourceBranchName = string(BranchMain)
+	}
+	targetBranchName := strings.TrimSpace(configuration.TargetBranch)
+	if len(targetBranchName) == 0 {
+		targetBranchName = string(BranchMaster)
+	}
+
+	if command != nil {
+		if command.Flags().Changed(sourceBranchFlagNameConstant) {
+			flagValue, _ := command.Flags().GetString(sourceBranchFlagNameConstant)
+			sourceBranchName = strings.TrimSpace(flagValue)
+		}
+		if command.Flags().Changed(targetBranchFlagNameConstant) {
+			flagValue, _ := command.Flags().GetString(targetBranchFlagNameConstant)
+			targetBranchName = strings.TrimSpace(flagValue)
+		}
+	}
+
+	if len(sourceBranchName) == 0 {
+		sourceBranchName = string(BranchMain)
+	}
+	if len(targetBranchName) == 0 {
+		targetBranchName = string(BranchMaster)
+	}
+
+	sourceBranch := BranchName(sourceBranchName)
+	targetBranch := BranchName(targetBranchName)
+	if sourceBranch == targetBranch {
+		return commandOptions{}, errors.New(identicalBranchesErrorMessageConstant)
+	}
+
+	return commandOptions{debugLoggingEnabled: debugEnabled, repositoryRoots: repositoryRoots, sourceBranch: sourceBranch, targetBranch: targetBranch}, nil
 }
 
 func (builder *CommandBuilder) determineRepositoryRoots(command *cobra.Command, arguments []string, configuredRoots []string) []string {

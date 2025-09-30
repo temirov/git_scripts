@@ -2,11 +2,13 @@ package audit
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 
 	"github.com/temirov/gix/internal/repos/dependencies"
+	"github.com/temirov/gix/internal/utils"
 )
 
 // LoggerProvider supplies a zap logger for command execution.
@@ -34,8 +36,6 @@ func (builder *CommandBuilder) Build() (*cobra.Command, error) {
 	}
 
 	command.Flags().StringSlice(flagRootNameConstant, nil, flagRootDescriptionConstant)
-	command.Flags().Bool(flagDebugNameConstant, false, flagDebugDescriptionConstant)
-
 	return command, nil
 }
 
@@ -71,9 +71,13 @@ func (builder *CommandBuilder) parseOptions(command *cobra.Command) (CommandOpti
 	configuration := builder.resolveConfiguration()
 
 	debugMode := configuration.Debug
-	if command != nil && command.Flags().Changed(flagDebugNameConstant) {
-		debugFlagValue, _ := command.Flags().GetBool(flagDebugNameConstant)
-		debugMode = debugFlagValue
+	if command != nil {
+		contextAccessor := utils.NewCommandContextAccessor()
+		if logLevel, available := contextAccessor.LogLevel(command.Context()); available {
+			if strings.EqualFold(logLevel, string(utils.LogLevelDebug)) {
+				debugMode = true
+			}
+		}
 	}
 
 	roots := append([]string{}, configuration.Roots...)

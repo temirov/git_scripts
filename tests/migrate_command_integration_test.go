@@ -156,6 +156,8 @@ func TestBranchMigrateCommandIntegration(testInstance *testing.T) {
 				expectedIdentifier, exists := expectedIdentifiers[options.RepositoryPath]
 				require.True(subtest, exists)
 				require.Equal(subtest, expectedIdentifier, options.RepositoryIdentifier)
+				require.Equal(subtest, migrate.BranchMain, options.SourceBranch)
+				require.Equal(subtest, migrate.BranchMaster, options.TargetBranch)
 			}
 
 			executedGitPaths := collectIntegrationGitPaths(commandExecutor.ExecutedGitCommands)
