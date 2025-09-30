@@ -15,6 +15,7 @@ import (
 	"github.com/temirov/gix/internal/githubcli"
 	"github.com/temirov/gix/internal/gitrepo"
 	"github.com/temirov/gix/internal/repos/discovery"
+	flagutils "github.com/temirov/gix/internal/utils/flags"
 )
 
 const (
@@ -199,7 +200,7 @@ func (builder *CommandBuilder) parseOptions(command *cobra.Command, arguments []
 		debugEnabled, _ = command.Flags().GetBool(debugFlagNameConstant)
 	}
 
-	repositoryRoots := builder.determineRepositoryRoots(arguments, configuration.RepositoryRoots)
+	repositoryRoots := builder.determineRepositoryRoots(command, arguments, configuration.RepositoryRoots)
 	if len(repositoryRoots) == 0 {
 		if command != nil {
 			_ = command.Help()
@@ -210,7 +211,17 @@ func (builder *CommandBuilder) parseOptions(command *cobra.Command, arguments []
 	return commandOptions{debugLoggingEnabled: debugEnabled, repositoryRoots: repositoryRoots}, nil
 }
 
-func (builder *CommandBuilder) determineRepositoryRoots(arguments []string, configuredRoots []string) []string {
+func (builder *CommandBuilder) determineRepositoryRoots(command *cobra.Command, arguments []string, configuredRoots []string) []string {
+	if command != nil {
+		flagRoots, flagError := command.Flags().GetStringSlice(flagutils.DefaultRootFlagName)
+		if flagError == nil {
+			sanitizedFlagRoots := migrateConfigurationRepositoryPathSanitizer.Sanitize(flagRoots)
+			if len(sanitizedFlagRoots) > 0 {
+				return sanitizedFlagRoots
+			}
+		}
+	}
+
 	argumentRoots := migrateConfigurationRepositoryPathSanitizer.Sanitize(arguments)
 	if len(argumentRoots) > 0 {
 		return argumentRoots

@@ -1,12 +1,39 @@
 package utils
 
-import "context"
+import (
+	"context"
+	"strings"
+)
 
 const (
 	configurationFilePathContextKeyConstant = commandContextKey("configurationFilePath")
+	repositoryContextKeyConstant            = commandContextKey("repositoryContext")
+	branchContextKeyConstant                = commandContextKey("branchContext")
+	executionFlagsContextKeyConstant        = commandContextKey("executionFlags")
 )
 
 type commandContextKey string
+
+// RepositoryContext describes repository-level execution context.
+type RepositoryContext struct {
+	Owner string
+	Name  string
+}
+
+// BranchContext describes branch-level execution context.
+type BranchContext struct {
+	Name string
+}
+
+// ExecutionFlags captures standardized execution modifiers derived from CLI flags.
+type ExecutionFlags struct {
+	DryRun       bool
+	DryRunSet    bool
+	AssumeYes    bool
+	AssumeYesSet bool
+	Remote       string
+	RemoteSet    bool
+}
 
 // CommandContextAccessor manages values stored in command execution contexts.
 type CommandContextAccessor struct{}
@@ -24,6 +51,41 @@ func (accessor CommandContextAccessor) WithConfigurationFilePath(parentContext c
 	return context.WithValue(parentContext, configurationFilePathContextKeyConstant, configurationFilePath)
 }
 
+// WithRepositoryContext attaches repository context details to the provided context when values are present.
+func (accessor CommandContextAccessor) WithRepositoryContext(parentContext context.Context, repository RepositoryContext) context.Context {
+	if parentContext == nil {
+		parentContext = context.Background()
+	}
+	normalizedOwner := strings.TrimSpace(repository.Owner)
+	normalizedName := strings.TrimSpace(repository.Name)
+	if len(normalizedOwner) == 0 && len(normalizedName) == 0 {
+		return parentContext
+	}
+	normalized := RepositoryContext{Owner: normalizedOwner, Name: normalizedName}
+	return context.WithValue(parentContext, repositoryContextKeyConstant, normalized)
+}
+
+// WithBranchContext attaches branch context details to the provided context when values are present.
+func (accessor CommandContextAccessor) WithBranchContext(parentContext context.Context, branch BranchContext) context.Context {
+	if parentContext == nil {
+		parentContext = context.Background()
+	}
+	normalizedName := strings.TrimSpace(branch.Name)
+	if len(normalizedName) == 0 {
+		return parentContext
+	}
+	normalized := BranchContext{Name: normalizedName}
+	return context.WithValue(parentContext, branchContextKeyConstant, normalized)
+}
+
+// WithExecutionFlags attaches execution flag values to the provided context.
+func (accessor CommandContextAccessor) WithExecutionFlags(parentContext context.Context, flags ExecutionFlags) context.Context {
+	if parentContext == nil {
+		parentContext = context.Background()
+	}
+	return context.WithValue(parentContext, executionFlagsContextKeyConstant, flags)
+}
+
 // ConfigurationFilePath extracts the configuration file path from the provided context.
 func (accessor CommandContextAccessor) ConfigurationFilePath(executionContext context.Context) (string, bool) {
 	if executionContext == nil {
@@ -34,4 +96,40 @@ func (accessor CommandContextAccessor) ConfigurationFilePath(executionContext co
 		return "", false
 	}
 	return configurationFilePath, true
+}
+
+// RepositoryContext extracts repository context details from the provided execution context.
+func (accessor CommandContextAccessor) RepositoryContext(executionContext context.Context) (RepositoryContext, bool) {
+	if executionContext == nil {
+		return RepositoryContext{}, false
+	}
+	value, valueAvailable := executionContext.Value(repositoryContextKeyConstant).(RepositoryContext)
+	if !valueAvailable {
+		return RepositoryContext{}, false
+	}
+	return value, true
+}
+
+// BranchContext extracts branch context details from the provided execution context.
+func (accessor CommandContextAccessor) BranchContext(executionContext context.Context) (BranchContext, bool) {
+	if executionContext == nil {
+		return BranchContext{}, false
+	}
+	value, valueAvailable := executionContext.Value(branchContextKeyConstant).(BranchContext)
+	if !valueAvailable {
+		return BranchContext{}, false
+	}
+	return value, true
+}
+
+// ExecutionFlags extracts execution flag values from the provided context.
+func (accessor CommandContextAccessor) ExecutionFlags(executionContext context.Context) (ExecutionFlags, bool) {
+	if executionContext == nil {
+		return ExecutionFlags{}, false
+	}
+	value, valueAvailable := executionContext.Value(executionFlagsContextKeyConstant).(ExecutionFlags)
+	if !valueAvailable {
+		return ExecutionFlags{}, false
+	}
+	return value, true
 }

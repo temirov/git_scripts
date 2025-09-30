@@ -6,9 +6,11 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
 	"github.com/temirov/gix/internal/repos/shared"
+	flagutils "github.com/temirov/gix/internal/utils/flags"
 )
 
 const (
@@ -33,6 +35,7 @@ func TestDetermineRepositoryRootsSanitizesInputs(testInstance *testing.T) {
 		name             string
 		arguments        []string
 		configured       []string
+		flagArgs         []string
 		expectedResolved []string
 	}{
 		{
@@ -47,6 +50,16 @@ func TestDetermineRepositoryRootsSanitizesInputs(testInstance *testing.T) {
 			configured:       []string{"  " + tildeArgument + "  "},
 			expectedResolved: []string{expectedExpanded},
 		},
+		{
+			name:       "flag_values_take_precedence",
+			arguments:  []string{testBooleanLiteralTrueConstant},
+			configured: []string{configuredRoot},
+			flagArgs: []string{
+				"--" + flagutils.DefaultRootFlagName,
+				filepath.Join("~", "flag-root"),
+			},
+			expectedResolved: []string{filepath.Join(homeDirectory, "flag-root")},
+		},
 	}
 
 	for _, testCase := range testCases {
@@ -54,7 +67,14 @@ func TestDetermineRepositoryRootsSanitizesInputs(testInstance *testing.T) {
 		testInstance.Run(testCase.name, func(subTest *testing.T) {
 			subTest.Helper()
 
-			resolved := determineRepositoryRoots(testCase.arguments, testCase.configured)
+			command := &cobra.Command{}
+			flagutils.BindRootFlags(command, flagutils.RootFlagValues{}, flagutils.RootFlagDefinition{Enabled: true})
+			if len(testCase.flagArgs) > 0 {
+				parseError := command.ParseFlags(testCase.flagArgs)
+				require.NoError(subTest, parseError)
+			}
+
+			resolved := determineRepositoryRoots(command, testCase.arguments, testCase.configured)
 			require.Equal(subTest, testCase.expectedResolved, resolved)
 		})
 	}

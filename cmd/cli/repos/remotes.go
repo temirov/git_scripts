@@ -9,17 +9,13 @@ import (
 	"github.com/temirov/gix/internal/repos/dependencies"
 	"github.com/temirov/gix/internal/repos/remotes"
 	"github.com/temirov/gix/internal/repos/shared"
+	flagutils "github.com/temirov/gix/internal/utils/flags"
 )
 
 const (
-	remotesUseConstant          = "repo-remote-update [root ...]"
-	remotesShortDescription     = "Update origin URLs to match canonical GitHub repositories"
-	remotesLongDescription      = "repo-remote-update adjusts origin remotes to point to canonical GitHub repositories."
-	remotesDryRunFlagName       = "dry-run"
-	remotesDryRunDescription    = "Preview remote updates without making changes"
-	remotesAssumeYesFlagName    = "yes"
-	remotesAssumeYesDescription = "Automatically confirm remote updates"
-	remotesAssumeYesShorthand   = "y"
+	remotesUseConstant      = "repo-remote-update [root ...]"
+	remotesShortDescription = "Update origin URLs to match canonical GitHub repositories"
+	remotesLongDescription  = "repo-remote-update adjusts origin remotes to point to canonical GitHub repositories."
 )
 
 // RemotesCommandBuilder assembles the repo-remote-update command.
@@ -43,23 +39,21 @@ func (builder *RemotesCommandBuilder) Build() (*cobra.Command, error) {
 		RunE:  builder.run,
 	}
 
-	command.Flags().Bool(remotesDryRunFlagName, false, remotesDryRunDescription)
-	command.Flags().BoolP(remotesAssumeYesFlagName, remotesAssumeYesShorthand, false, remotesAssumeYesDescription)
-
 	return command, nil
 }
 
 func (builder *RemotesCommandBuilder) run(command *cobra.Command, arguments []string) error {
 	configuration := builder.resolveConfiguration()
+	executionFlags, executionFlagsAvailable := flagutils.ResolveExecutionFlags(command)
 
 	dryRun := configuration.DryRun
-	if command != nil && command.Flags().Changed(remotesDryRunFlagName) {
-		dryRun, _ = command.Flags().GetBool(remotesDryRunFlagName)
+	if executionFlagsAvailable && executionFlags.DryRunSet {
+		dryRun = executionFlags.DryRun
 	}
 
 	assumeYes := configuration.AssumeYes
-	if command != nil && command.Flags().Changed(remotesAssumeYesFlagName) {
-		assumeYes, _ = command.Flags().GetBool(remotesAssumeYesFlagName)
+	if executionFlagsAvailable && executionFlags.AssumeYesSet {
+		assumeYes = executionFlags.AssumeYes
 	}
 
 	roots, rootsError := requireRepositoryRoots(command, arguments, configuration.RepositoryRoots)

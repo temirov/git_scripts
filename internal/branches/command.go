@@ -11,18 +11,16 @@ import (
 
 	"github.com/temirov/gix/internal/execshell"
 	"github.com/temirov/gix/internal/repos/discovery"
+	flagutils "github.com/temirov/gix/internal/utils/flags"
 )
 
 const (
 	commandUseConstant                          = "repo-prs-purge [root ...]"
 	commandShortDescriptionConstant             = "Remove remote and local branches for closed pull requests"
 	commandLongDescriptionConstant              = "repo-prs-purge removes remote and local Git branches whose pull requests are already closed."
-	flagRemoteNameConstant                      = "remote"
 	flagRemoteDescriptionConstant               = "Name of the remote containing pull request branches"
 	flagLimitNameConstant                       = "limit"
 	flagLimitDescriptionConstant                = "Maximum number of closed pull requests to examine"
-	flagDryRunNameConstant                      = "dry-run"
-	flagDryRunDescriptionConstant               = "Preview deletions without making changes"
 	missingRepositoryRootsErrorMessageConstant  = "no repository roots provided; specify --root or configure defaults"
 	invalidRemoteNameErrorMessageConstant       = "remote name must not be empty or whitespace"
 	invalidPullRequestLimitErrorMessageConstant = "limit must be greater than zero"
@@ -60,9 +58,8 @@ func (builder *CommandBuilder) Build() (*cobra.Command, error) {
 		RunE:  builder.run,
 	}
 
-	command.Flags().String(flagRemoteNameConstant, defaultRemoteNameConstant, flagRemoteDescriptionConstant)
 	command.Flags().Int(flagLimitNameConstant, defaultPullRequestLimitConstant, flagLimitDescriptionConstant)
-	command.Flags().Bool(flagDryRunNameConstant, false, flagDryRunDescriptionConstant)
+	flagutils.EnsureRemoteFlag(command, defaultRemoteNameConstant, flagRemoteDescriptionConstant)
 
 	return command, nil
 }
@@ -122,15 +119,21 @@ type commandOptions struct {
 
 func (builder *CommandBuilder) parseOptions(command *cobra.Command, arguments []string) (commandOptions, error) {
 	configuration := builder.resolveConfiguration()
+	executionFlags, executionFlagsAvailable := flagutils.ResolveExecutionFlags(command)
 
 	trimmedRemoteName := strings.TrimSpace(configuration.RemoteName)
-	if command != nil {
-		flagRemoteValue, _ := command.Flags().GetString(flagRemoteNameConstant)
-		if command.Flags().Changed(flagRemoteNameConstant) {
-			trimmedRemoteName = strings.TrimSpace(flagRemoteValue)
-		} else if len(trimmedRemoteName) == 0 && builder.ConfigurationProvider == nil {
-			trimmedRemoteName = strings.TrimSpace(flagRemoteValue)
+	if executionFlagsAvailable && executionFlags.RemoteSet {
+		overrideRemote := strings.TrimSpace(executionFlags.Remote)
+		if len(overrideRemote) == 0 {
+			if command != nil {
+				_ = command.Help()
+			}
+			return commandOptions{}, errors.New(invalidRemoteNameErrorMessageConstant)
 		}
+		trimmedRemoteName = overrideRemote
+	}
+	if len(trimmedRemoteName) == 0 && builder.ConfigurationProvider == nil {
+		trimmedRemoteName = defaultRemoteNameConstant
 	}
 	if len(trimmedRemoteName) == 0 {
 		if command != nil {
@@ -156,8 +159,8 @@ func (builder *CommandBuilder) parseOptions(command *cobra.Command, arguments []
 	}
 
 	dryRunValue := configuration.DryRun
-	if command != nil && command.Flags().Changed(flagDryRunNameConstant) {
-		dryRunValue, _ = command.Flags().GetBool(flagDryRunNameConstant)
+	if executionFlagsAvailable && executionFlags.DryRunSet {
+		dryRunValue = executionFlags.DryRun
 	}
 
 	cleanupOptions := CleanupOptions{
@@ -166,7 +169,7 @@ func (builder *CommandBuilder) parseOptions(command *cobra.Command, arguments []
 		DryRun:           dryRunValue,
 	}
 
-	repositoryRoots := builder.determineRepositoryRoots(arguments, configuration.RepositoryRoots)
+	repositoryRoots := builder.determineRepositoryRoots(command, arguments, configuration.RepositoryRoots)
 	if len(repositoryRoots) == 0 {
 		if command != nil {
 			_ = command.Help()
@@ -216,7 +219,17 @@ func (builder *CommandBuilder) resolveRepositoryDiscoverer() RepositoryDiscovere
 	return discovery.NewFilesystemRepositoryDiscoverer()
 }
 
-func (builder *CommandBuilder) determineRepositoryRoots(arguments []string, configuredRoots []string) []string {
+func (builder *CommandBuilder) determineRepositoryRoots(command *cobra.Command, arguments []string, configuredRoots []string) []string {
+	if command != nil {
+		flagRoots, flagError := command.Flags().GetStringSlice(flagutils.DefaultRootFlagName)
+		if flagError == nil {
+			sanitizedFlagRoots := branchConfigurationRepositoryPathSanitizer.Sanitize(flagRoots)
+			if len(sanitizedFlagRoots) > 0 {
+				return sanitizedFlagRoots
+			}
+		}
+	}
+
 	sanitizedArgumentRoots := branchConfigurationRepositoryPathSanitizer.Sanitize(arguments)
 	if len(sanitizedArgumentRoots) > 0 {
 		return sanitizedArgumentRoots

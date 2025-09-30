@@ -9,17 +9,13 @@ import (
 	"github.com/temirov/gix/internal/repos/dependencies"
 	"github.com/temirov/gix/internal/repos/rename"
 	"github.com/temirov/gix/internal/repos/shared"
+	flagutils "github.com/temirov/gix/internal/utils/flags"
 )
 
 const (
 	renameUseConstant             = "repo-folders-rename [root ...]"
 	renameShortDescription        = "Rename repository directories to match canonical GitHub names"
 	renameLongDescription         = "repo-folders-rename normalizes repository directory names to match canonical GitHub repositories."
-	renameDryRunFlagName          = "dry-run"
-	renameDryRunFlagDescription   = "Preview rename actions without making changes"
-	renameAssumeYesFlagName       = "yes"
-	renameAssumeYesFlagShorthand  = "y"
-	renameAssumeYesDescription    = "Automatically confirm rename prompts"
 	renameRequireCleanFlagName    = "require-clean"
 	renameRequireCleanDescription = "Require clean worktrees before applying renames"
 )
@@ -46,8 +42,6 @@ func (builder *RenameCommandBuilder) Build() (*cobra.Command, error) {
 		RunE:  builder.run,
 	}
 
-	command.Flags().Bool(renameDryRunFlagName, false, renameDryRunFlagDescription)
-	command.Flags().BoolP(renameAssumeYesFlagName, renameAssumeYesFlagShorthand, false, renameAssumeYesDescription)
 	command.Flags().Bool(renameRequireCleanFlagName, false, renameRequireCleanDescription)
 
 	return command, nil
@@ -55,15 +49,16 @@ func (builder *RenameCommandBuilder) Build() (*cobra.Command, error) {
 
 func (builder *RenameCommandBuilder) run(command *cobra.Command, arguments []string) error {
 	configuration := builder.resolveConfiguration()
+	executionFlags, executionFlagsAvailable := flagutils.ResolveExecutionFlags(command)
 
 	dryRun := configuration.DryRun
-	if command != nil && command.Flags().Changed(renameDryRunFlagName) {
-		dryRun, _ = command.Flags().GetBool(renameDryRunFlagName)
+	if executionFlagsAvailable && executionFlags.DryRunSet {
+		dryRun = executionFlags.DryRun
 	}
 
 	assumeYes := configuration.AssumeYes
-	if command != nil && command.Flags().Changed(renameAssumeYesFlagName) {
-		assumeYes, _ = command.Flags().GetBool(renameAssumeYesFlagName)
+	if executionFlagsAvailable && executionFlags.AssumeYesSet {
+		assumeYes = executionFlags.AssumeYes
 	}
 
 	requireClean := configuration.RequireCleanWorktree

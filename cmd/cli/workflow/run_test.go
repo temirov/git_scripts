@@ -5,13 +5,17 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
 	workflowcmd "github.com/temirov/gix/cmd/cli/workflow"
 	"github.com/temirov/gix/internal/execshell"
+	"github.com/temirov/gix/internal/utils"
+	flagutils "github.com/temirov/gix/internal/utils/flags"
 )
 
 const (
@@ -21,10 +25,10 @@ const (
 	workflowCliRootConstant                  = "/tmp/workflow-cli-root"
 	workflowPlanMessageSnippet               = "WORKFLOW-PLAN: audit report"
 	workflowCSVHeaderSnippet                 = "final_github_repo,folder_name"
-	workflowRootsFlagConstant                = "--roots"
+	workflowRootsFlagConstant                = "--" + flagutils.DefaultRootFlagName
 	workflowDryRunFlagConstant               = "--dry-run"
 	workflowUsageSnippet                     = "Usage:"
-	workflowMissingRootsErrorMessageConstant = "workflow roots required; specify --roots flag or configuration"
+	workflowMissingRootsErrorMessageConstant = "workflow roots required; specify --root flag or configuration"
 )
 
 func TestWorkflowCommandConfigurationPrecedence(testInstance *testing.T) {
@@ -96,6 +100,8 @@ func TestWorkflowCommandConfigurationPrecedence(testInstance *testing.T) {
 
 			command, buildError := builder.Build()
 			require.NoError(subtest, buildError)
+			bindGlobalWorkflowFlags(command)
+			flagutils.BindRootFlags(command, flagutils.RootFlagValues{}, flagutils.RootFlagDefinition{Enabled: true})
 
 			var outputBuffer bytes.Buffer
 			var errorBuffer bytes.Buffer
@@ -129,6 +135,34 @@ func TestWorkflowCommandConfigurationPrecedence(testInstance *testing.T) {
 				require.Contains(subtest, outputText, workflowCSVHeaderSnippet)
 			}
 		})
+	}
+}
+
+func bindGlobalWorkflowFlags(command *cobra.Command) {
+	flagutils.BindRootFlags(command, flagutils.RootFlagValues{}, flagutils.RootFlagDefinition{Enabled: true})
+	flagutils.BindExecutionFlags(command, flagutils.ExecutionDefaults{}, flagutils.ExecutionFlagDefinitions{
+		DryRun:    flagutils.ExecutionFlagDefinition{Name: flagutils.DryRunFlagName, Usage: flagutils.DryRunFlagUsage, Enabled: true},
+		AssumeYes: flagutils.ExecutionFlagDefinition{Name: flagutils.AssumeYesFlagName, Usage: flagutils.AssumeYesFlagUsage, Shorthand: flagutils.AssumeYesFlagShorthand, Enabled: true},
+	})
+	command.PersistentFlags().String(flagutils.RemoteFlagName, "", flagutils.RemoteFlagUsage)
+	command.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		contextAccessor := utils.NewCommandContextAccessor()
+		executionFlags := utils.ExecutionFlags{}
+		if dryRunValue, dryRunChanged, dryRunError := flagutils.BoolFlag(cmd, flagutils.DryRunFlagName); dryRunError == nil {
+			executionFlags.DryRun = dryRunValue
+			executionFlags.DryRunSet = dryRunChanged
+		}
+		if assumeYesValue, assumeYesChanged, assumeYesError := flagutils.BoolFlag(cmd, flagutils.AssumeYesFlagName); assumeYesError == nil {
+			executionFlags.AssumeYes = assumeYesValue
+			executionFlags.AssumeYesSet = assumeYesChanged
+		}
+		if remoteValue, remoteChanged, remoteError := flagutils.StringFlag(cmd, flagutils.RemoteFlagName); remoteError == nil {
+			executionFlags.Remote = strings.TrimSpace(remoteValue)
+			executionFlags.RemoteSet = remoteChanged && len(strings.TrimSpace(remoteValue)) > 0
+		}
+		updatedContext := contextAccessor.WithExecutionFlags(cmd.Context(), executionFlags)
+		cmd.SetContext(updatedContext)
+		return nil
 	}
 }
 

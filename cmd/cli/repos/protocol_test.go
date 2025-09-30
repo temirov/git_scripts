@@ -15,13 +15,15 @@ import (
 	repos "github.com/temirov/gix/cmd/cli/repos"
 	"github.com/temirov/gix/internal/githubcli"
 	"github.com/temirov/gix/internal/repos/shared"
+	"github.com/temirov/gix/internal/utils"
+	flagutils "github.com/temirov/gix/internal/utils/flags"
 )
 
 const (
 	protocolFromFlagConstant       = "--from"
 	protocolToFlagConstant         = "--to"
-	protocolYesFlagConstant        = "--yes"
-	protocolDryRunFlagConstant     = "--dry-run"
+	protocolYesFlagConstant        = "--" + flagutils.AssumeYesFlagName
+	protocolDryRunFlagConstant     = "--" + flagutils.DryRunFlagName
 	protocolConfiguredRootConstant = "/tmp/protocol-config-root"
 	protocolSSHRemoteURL           = "ssh://git@github.com/origin/example.git"
 	protocolHTTPSRemoteURL         = "https://github.com/origin/example.git"
@@ -188,6 +190,7 @@ func TestProtocolCommandConfigurationPrecedence(testInstance *testing.T) {
 
 			command, buildError := builder.Build()
 			require.NoError(subtest, buildError)
+			bindGlobalProtocolFlags(command)
 
 			command.SetContext(context.Background())
 			stdoutBuffer := &bytes.Buffer{}
@@ -222,6 +225,34 @@ func TestProtocolCommandConfigurationPrecedence(testInstance *testing.T) {
 				require.Equal(subtest, string(shared.RemoteProtocolSSH), detectProtocol(manager.setCalls[len(manager.setCalls)-1].remoteURL))
 			}
 		})
+	}
+}
+
+func bindGlobalProtocolFlags(command *cobra.Command) {
+	flagutils.BindRootFlags(command, flagutils.RootFlagValues{}, flagutils.RootFlagDefinition{Enabled: true})
+	flagutils.BindExecutionFlags(command, flagutils.ExecutionDefaults{}, flagutils.ExecutionFlagDefinitions{
+		DryRun:    flagutils.ExecutionFlagDefinition{Name: flagutils.DryRunFlagName, Usage: flagutils.DryRunFlagUsage, Enabled: true},
+		AssumeYes: flagutils.ExecutionFlagDefinition{Name: flagutils.AssumeYesFlagName, Usage: flagutils.AssumeYesFlagUsage, Shorthand: flagutils.AssumeYesFlagShorthand, Enabled: true},
+	})
+	command.PersistentFlags().String(flagutils.RemoteFlagName, "", flagutils.RemoteFlagUsage)
+	command.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		contextAccessor := utils.NewCommandContextAccessor()
+		executionFlags := utils.ExecutionFlags{}
+		if dryRunValue, dryRunChanged, dryRunError := flagutils.BoolFlag(cmd, flagutils.DryRunFlagName); dryRunError == nil {
+			executionFlags.DryRun = dryRunValue
+			executionFlags.DryRunSet = dryRunChanged
+		}
+		if assumeYesValue, assumeYesChanged, assumeYesError := flagutils.BoolFlag(cmd, flagutils.AssumeYesFlagName); assumeYesError == nil {
+			executionFlags.AssumeYes = assumeYesValue
+			executionFlags.AssumeYesSet = assumeYesChanged
+		}
+		if remoteValue, remoteChanged, remoteError := flagutils.StringFlag(cmd, flagutils.RemoteFlagName); remoteError == nil {
+			executionFlags.Remote = strings.TrimSpace(remoteValue)
+			executionFlags.RemoteSet = remoteChanged && len(strings.TrimSpace(remoteValue)) > 0
+		}
+		updatedContext := contextAccessor.WithExecutionFlags(cmd.Context(), executionFlags)
+		cmd.SetContext(updatedContext)
+		return nil
 	}
 }
 

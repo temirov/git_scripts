@@ -32,3 +32,19 @@ type Environment struct {
 	Logger            *zap.Logger
 	DryRun            bool
 }
+
+// OperationDefaults captures fallback behaviors shared across operations.
+type OperationDefaults struct {
+	RequireClean bool
+}
+
+// ApplyDefaults configures operations with shared fallback options when not explicitly set.
+func ApplyDefaults(operations []Operation, defaults OperationDefaults) {
+	for operationIndex := range operations {
+		renameOperation, isRename := operations[operationIndex].(*RenameOperation)
+		if !isRename {
+			continue
+		}
+		renameOperation.ApplyRequireCleanDefault(defaults.RequireClean)
+	}
+}

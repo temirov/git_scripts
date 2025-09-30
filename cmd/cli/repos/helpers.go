@@ -8,6 +8,7 @@ import (
 
 	"github.com/temirov/gix/internal/repos/prompt"
 	"github.com/temirov/gix/internal/repos/shared"
+	flagutils "github.com/temirov/gix/internal/utils/flags"
 	pathutils "github.com/temirov/gix/internal/utils/path"
 )
 
@@ -23,10 +24,15 @@ type LoggerProvider func() *zap.Logger
 // PrompterFactory creates confirmation prompters scoped to a Cobra command.
 type PrompterFactory func(*cobra.Command) shared.ConfirmationPrompter
 
-func determineRepositoryRoots(arguments []string, configuredRoots []string) []string {
-	roots := repositoryPathSanitizer.Sanitize(arguments)
-	if len(roots) > 0 {
-		return roots
+func determineRepositoryRoots(command *cobra.Command, arguments []string, configuredRoots []string) []string {
+	flagRoots := resolveRootFlagValues(command)
+	if len(flagRoots) > 0 {
+		return flagRoots
+	}
+
+	argumentRoots := repositoryPathSanitizer.Sanitize(arguments)
+	if len(argumentRoots) > 0 {
+		return argumentRoots
 	}
 
 	configured := repositoryPathSanitizer.Sanitize(configuredRoots)
@@ -38,7 +44,7 @@ func determineRepositoryRoots(arguments []string, configuredRoots []string) []st
 }
 
 func requireRepositoryRoots(command *cobra.Command, arguments []string, configuredRoots []string) ([]string, error) {
-	resolvedRoots := determineRepositoryRoots(arguments, configuredRoots)
+	resolvedRoots := determineRepositoryRoots(command, arguments, configuredRoots)
 	if len(resolvedRoots) > 0 {
 		return resolvedRoots, nil
 	}
@@ -104,4 +110,15 @@ func displayCommandHelp(command *cobra.Command) error {
 		return nil
 	}
 	return command.Help()
+}
+
+func resolveRootFlagValues(command *cobra.Command) []string {
+	if command == nil {
+		return nil
+	}
+	roots, rootsError := command.Flags().GetStringSlice(flagutils.DefaultRootFlagName)
+	if rootsError != nil {
+		return nil
+	}
+	return repositoryPathSanitizer.Sanitize(roots)
 }

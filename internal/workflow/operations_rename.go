@@ -18,6 +18,7 @@ const (
 // RenameOperation normalizes repository directory names to match canonical GitHub names.
 type RenameOperation struct {
 	RequireCleanWorktree bool
+	requireCleanExplicit bool
 }
 
 // Name identifies the operation type.
@@ -83,6 +84,17 @@ func (operation *RenameOperation) Execute(executionContext context.Context, envi
 	}
 
 	return nil
+}
+
+// ApplyRequireCleanDefault enables clean-worktree enforcement when no explicit preference was configured.
+func (operation *RenameOperation) ApplyRequireCleanDefault(requireClean bool) {
+	if operation == nil {
+		return
+	}
+	if operation.requireCleanExplicit {
+		return
+	}
+	operation.RequireCleanWorktree = requireClean
 }
 
 func renameCompleted(fileSystem shared.FileSystem, originalPath string, newPath string) bool {

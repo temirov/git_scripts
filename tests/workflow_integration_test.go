@@ -22,7 +22,7 @@ const (
 	workflowIntegrationConfigFlag              = "--config"
 	workflowIntegrationErrorLevel              = "error"
 	workflowIntegrationCommand                 = "workflow"
-	workflowIntegrationRootsFlag               = "--roots"
+	workflowIntegrationRootsFlag               = "--root"
 	workflowIntegrationYesFlag                 = "--yes"
 	workflowIntegrationGitExecutable           = "git"
 	workflowIntegrationInitFlag                = "init"
