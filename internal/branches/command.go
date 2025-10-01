@@ -12,16 +12,16 @@ import (
 	"github.com/temirov/gix/internal/execshell"
 	"github.com/temirov/gix/internal/repos/discovery"
 	flagutils "github.com/temirov/gix/internal/utils/flags"
+	rootutils "github.com/temirov/gix/internal/utils/roots"
 )
 
 const (
-	commandUseConstant                          = "repo-prs-purge [root ...]"
+	commandUseConstant                          = "repo-prs-purge"
 	commandShortDescriptionConstant             = "Remove remote and local branches for closed pull requests"
 	commandLongDescriptionConstant              = "repo-prs-purge removes remote and local Git branches whose pull requests are already closed."
 	flagRemoteDescriptionConstant               = "Name of the remote containing pull request branches"
 	flagLimitNameConstant                       = "limit"
 	flagLimitDescriptionConstant                = "Maximum number of closed pull requests to examine"
-	missingRepositoryRootsErrorMessageConstant  = "no repository roots provided; specify --root or configure defaults"
 	invalidRemoteNameErrorMessageConstant       = "remote name must not be empty or whitespace"
 	invalidPullRequestLimitErrorMessageConstant = "limit must be greater than zero"
 	repositoryDiscoveryErrorTemplateConstant    = "repository discovery failed: %w"
@@ -169,12 +169,9 @@ func (builder *CommandBuilder) parseOptions(command *cobra.Command, arguments []
 		DryRun:           dryRunValue,
 	}
 
-	repositoryRoots := builder.determineRepositoryRoots(command, arguments, configuration.RepositoryRoots)
-	if len(repositoryRoots) == 0 {
-		if command != nil {
-			_ = command.Help()
-		}
-		return commandOptions{}, errors.New(missingRepositoryRootsErrorMessageConstant)
+	repositoryRoots, rootsError := rootutils.Resolve(command, arguments, configuration.RepositoryRoots)
+	if rootsError != nil {
+		return commandOptions{}, rootsError
 	}
 
 	return commandOptions{CleanupOptions: cleanupOptions, RepositoryRoots: repositoryRoots}, nil
@@ -217,35 +214,6 @@ func (builder *CommandBuilder) resolveRepositoryDiscoverer() RepositoryDiscovere
 	}
 
 	return discovery.NewFilesystemRepositoryDiscoverer()
-}
-
-func (builder *CommandBuilder) determineRepositoryRoots(command *cobra.Command, arguments []string, configuredRoots []string) []string {
-	if command != nil {
-		flagRoots, flagError := command.Flags().GetStringSlice(flagutils.DefaultRootFlagName)
-		if flagError == nil {
-			sanitizedFlagRoots := branchConfigurationRepositoryPathSanitizer.Sanitize(flagRoots)
-			if len(sanitizedFlagRoots) > 0 {
-				return sanitizedFlagRoots
-			}
-		}
-	}
-
-	sanitizedArgumentRoots := branchConfigurationRepositoryPathSanitizer.Sanitize(arguments)
-	if len(sanitizedArgumentRoots) > 0 {
-		return sanitizedArgumentRoots
-	}
-
-	sanitizedConfiguredRoots := branchConfigurationRepositoryPathSanitizer.Sanitize(configuredRoots)
-	if len(sanitizedConfiguredRoots) > 0 {
-		return sanitizedConfiguredRoots
-	}
-
-	trimmedWorkingDirectory := strings.TrimSpace(builder.WorkingDirectory)
-	if len(trimmedWorkingDirectory) > 0 {
-		return []string{trimmedWorkingDirectory}
-	}
-
-	return nil
 }
 
 func (builder *CommandBuilder) resolveConfiguration() CommandConfiguration {

@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	remotesUseConstant      = "repo-remote-update [root ...]"
+	remotesUseConstant      = "repo-remote-update"
 	remotesShortDescription = "Update origin URLs to match canonical GitHub repositories"
 	remotesLongDescription  = "repo-remote-update adjusts origin remotes to point to canonical GitHub repositories."
 )
@@ -36,6 +36,7 @@ func (builder *RemotesCommandBuilder) Build() (*cobra.Command, error) {
 		Use:   remotesUseConstant,
 		Short: remotesShortDescription,
 		Long:  remotesLongDescription,
+		Args:  cobra.NoArgs,
 		RunE:  builder.run,
 	}
 

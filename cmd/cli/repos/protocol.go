@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	protocolUseConstant         = "repo-protocol-convert [root ...]"
+	protocolUseConstant         = "repo-protocol-convert"
 	protocolShortDescription    = "Convert repository origin URLs between git/ssh/https"
 	protocolLongDescription     = "repo-protocol-convert converts origin URLs to a desired protocol."
 	protocolFromFlagName        = "from"
@@ -45,6 +45,7 @@ func (builder *ProtocolCommandBuilder) Build() (*cobra.Command, error) {
 		Use:   protocolUseConstant,
 		Short: protocolShortDescription,
 		Long:  protocolLongDescription,
+		Args:  cobra.NoArgs,
 		RunE:  builder.run,
 	}
 

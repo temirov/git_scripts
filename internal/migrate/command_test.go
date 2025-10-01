@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -18,9 +19,11 @@ import (
 	migrate "github.com/temirov/gix/internal/migrate"
 	"github.com/temirov/gix/internal/migrate/testsupport"
 	"github.com/temirov/gix/internal/utils"
+	flagutils "github.com/temirov/gix/internal/utils/flags"
 )
 
 const (
+	rootFlagArgumentConstant               = "--root"
 	multiRootFirstArgumentConstant         = "root-one"
 	multiRootSecondArgumentConstant        = "root-two"
 	repositoryOnePathConstant              = "/tmp/repository-one"
@@ -73,7 +76,7 @@ func TestMigrateCommandRunScenarios(testInstance *testing.T) {
 	}{
 		{
 			name:                   "processes_multiple_repositories",
-			arguments:              []string{multiRootFirstArgumentConstant, multiRootSecondArgumentConstant},
+			arguments:              []string{rootFlagArgumentConstant, multiRootFirstArgumentConstant, rootFlagArgumentConstant, multiRootSecondArgumentConstant},
 			discoveredRepositories: []string{repositoryOnePathConstant, repositoryTwoPathConstant},
 			repositoryRemotes: map[string]string{
 				repositoryOnePathConstant: repositoryOneRemoteConstant,
@@ -110,7 +113,7 @@ func TestMigrateCommandRunScenarios(testInstance *testing.T) {
 		},
 		{
 			name:                   "continues_on_migration_failure",
-			arguments:              []string{multiRootFirstArgumentConstant},
+			arguments:              []string{rootFlagArgumentConstant, multiRootFirstArgumentConstant},
 			discoveredRepositories: []string{repositoryOnePathConstant, repositoryTwoPathConstant},
 			repositoryRemotes: map[string]string{
 				repositoryOnePathConstant: repositoryOneRemoteConstant,
@@ -140,7 +143,7 @@ func TestMigrateCommandRunScenarios(testInstance *testing.T) {
 		},
 		{
 			name:                         "reports_discovery_error",
-			arguments:                    []string{multiRootFirstArgumentConstant},
+			arguments:                    []string{rootFlagArgumentConstant, multiRootFirstArgumentConstant},
 			discoveredRepositories:       nil,
 			discoveryError:               errors.New("walk failure"),
 			repositoryRemotes:            map[string]string{},
@@ -157,8 +160,10 @@ func TestMigrateCommandRunScenarios(testInstance *testing.T) {
 			expectedTargetBranch:         migrate.BranchMaster,
 		},
 		{
-			name:                   "uses_working_directory_when_arguments_missing",
-			arguments:              []string{},
+			name: "uses_working_directory_when_arguments_missing",
+			arguments: []string{
+				rootFlagArgumentConstant, workingDirectoryFallbackConstant,
+			},
 			workingDirectory:       workingDirectoryFallbackConstant,
 			discoveredRepositories: []string{defaultRootRepositoryPathConstant},
 			repositoryRemotes: map[string]string{
@@ -217,6 +222,7 @@ func TestMigrateCommandRunScenarios(testInstance *testing.T) {
 
 			command, buildError := builder.Build()
 			require.NoError(subtest, buildError)
+			registerRootFlag(command)
 
 			commandContext := context.Background()
 			if len(strings.TrimSpace(testCase.logLevel)) > 0 {
@@ -290,6 +296,7 @@ func TestMigrateCommandDisplaysHelpWhenRootsMissing(testInstance *testing.T) {
 
 	command, buildError := builder.Build()
 	require.NoError(testInstance, buildError)
+	registerRootFlag(command)
 
 	outputBuffer := &strings.Builder{}
 	command.SetOut(outputBuffer)
@@ -324,7 +331,7 @@ func TestMigrateCommandConfigurationPrecedence(testInstance *testing.T) {
 				SourceBranch:       "  develop  ",
 				TargetBranch:       "  release  ",
 			},
-			arguments:              []string{},
+			arguments:              []string{rootFlagArgumentConstant, configurationRootValueConstant},
 			workingDirectory:       workingDirectoryFallbackConstant,
 			discoveredRepositories: []string{repositoryOnePathConstant},
 			repositoryRemotes: map[string]string{
@@ -342,7 +349,7 @@ func TestMigrateCommandConfigurationPrecedence(testInstance *testing.T) {
 				RepositoryRoots:    []string{configurationRootValueConstant},
 			},
 			arguments: []string{
-				cliRootOverrideConstant,
+				rootFlagArgumentConstant, cliRootOverrideConstant,
 				fromFlagArgumentConstant + "=" + customSourceBranchNameConstant,
 				toFlagArgumentConstant + "=" + customTargetBranchNameConstant,
 			},
@@ -360,7 +367,7 @@ func TestMigrateCommandConfigurationPrecedence(testInstance *testing.T) {
 		{
 			name:                   "defaults_fill_missing_configuration",
 			configuration:          migrate.CommandConfiguration{},
-			arguments:              []string{},
+			arguments:              []string{rootFlagArgumentConstant, workingDirectoryFallbackConstant},
 			workingDirectory:       workingDirectoryFallbackConstant,
 			discoveredRepositories: []string{defaultRootRepositoryPathConstant},
 			repositoryRemotes: map[string]string{
@@ -403,6 +410,7 @@ func TestMigrateCommandConfigurationPrecedence(testInstance *testing.T) {
 
 			command, buildError := builder.Build()
 			require.NoError(subtest, buildError)
+			registerRootFlag(command)
 
 			executionContext := context.Background()
 			if len(strings.TrimSpace(testCase.logLevel)) > 0 {
@@ -449,13 +457,18 @@ func TestMigrateCommandRejectsIdenticalBranches(testInstance *testing.T) {
 
 	command, buildError := builder.Build()
 	require.NoError(testInstance, buildError)
+	registerRootFlag(command)
 
 	command.SetContext(context.Background())
-	command.SetArgs([]string{fromFlagArgumentConstant, "main", toFlagArgumentConstant, "main", workingDirectoryFallbackConstant})
+	command.SetArgs([]string{rootFlagArgumentConstant, workingDirectoryFallbackConstant, fromFlagArgumentConstant, "main", toFlagArgumentConstant, "main"})
 
 	executionError := command.Execute()
 	require.Error(testInstance, executionError)
 	require.Equal(testInstance, "--from and --to must differ", executionError.Error())
+}
+
+func registerRootFlag(command *cobra.Command) {
+	flagutils.BindRootFlags(command, flagutils.RootFlagValues{}, flagutils.RootFlagDefinition{Name: flagutils.DefaultRootFlagName, Enabled: true})
 }
 
 func collectExecutedRepositories(options []migrate.MigrationOptions) []string {
@@ -599,9 +612,10 @@ func TestMigrateCommandExpandsTildeArguments(testInstance *testing.T) {
 
 	command, buildError := builder.Build()
 	require.NoError(testInstance, buildError)
+	registerRootFlag(command)
 
 	command.SetContext(context.Background())
-	command.SetArgs([]string{tildeArgument})
+	command.SetArgs([]string{rootFlagArgumentConstant, tildeArgument})
 
 	executionError := command.Execute()
 	require.NoError(testInstance, executionError)

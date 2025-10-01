@@ -22,6 +22,7 @@ import (
 const (
 	remotesAssumeYesFlagConstant     = "--" + flagutils.AssumeYesFlagName
 	remotesDryRunFlagConstant        = "--" + flagutils.DryRunFlagName
+	remotesRootFlagConstant          = "--" + flagutils.DefaultRootFlagName
 	remotesConfiguredRootConstant    = "/tmp/remotes-config-root"
 	remotesCLIRepositoryRootConstant = "/tmp/remotes-cli-root"
 	remotesDiscoveredRepository      = "/tmp/remotes-repo"
@@ -67,7 +68,7 @@ func TestRemotesCommandConfigurationPrecedence(testInstance *testing.T) {
 			arguments: []string{
 				remotesAssumeYesFlagConstant,
 				remotesDryRunFlagConstant,
-				remotesCLIRepositoryRootConstant,
+				remotesRootFlagConstant, remotesCLIRepositoryRootConstant,
 			},
 			expectedRoots:           []string{remotesCLIRepositoryRootConstant},
 			expectRemoteUpdates:     0,
@@ -107,7 +108,7 @@ func TestRemotesCommandConfigurationPrecedence(testInstance *testing.T) {
 			arguments: []string{
 				remotesAssumeYesFlagConstant,
 				remotesDryRunFlagConstant,
-				remotesRelativeRootConstant,
+				remotesRootFlagConstant, remotesRelativeRootConstant,
 			},
 			expectedRoots:           []string{remotesRelativeRootConstant},
 			expectRemoteUpdates:     0,
@@ -119,7 +120,7 @@ func TestRemotesCommandConfigurationPrecedence(testInstance *testing.T) {
 			arguments: []string{
 				remotesAssumeYesFlagConstant,
 				remotesDryRunFlagConstant,
-				"~/" + remotesHomeRootSuffixConstant,
+				remotesRootFlagConstant, "~/" + remotesHomeRootSuffixConstant,
 			},
 			expectedRootsBuilder: func(testingInstance testing.TB) []string {
 				homeDirectory, homeError := os.UserHomeDir()

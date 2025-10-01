@@ -15,6 +15,7 @@ import (
 	"github.com/temirov/gix/internal/execshell"
 	migrate "github.com/temirov/gix/internal/migrate"
 	"github.com/temirov/gix/internal/migrate/testsupport"
+	flagutils "github.com/temirov/gix/internal/utils/flags"
 )
 
 const (
@@ -138,9 +139,10 @@ func TestBranchMigrateCommandIntegration(testInstance *testing.T) {
 
 			command, buildError := builder.Build()
 			require.NoError(subtest, buildError)
+			flagutils.BindRootFlags(command, flagutils.RootFlagValues{}, flagutils.RootFlagDefinition{Name: flagutils.DefaultRootFlagName, Enabled: true})
 
 			command.SetContext(context.Background())
-			command.SetArgs(nil)
+			command.SetArgs([]string{"--" + flagutils.DefaultRootFlagName, workingDirectory})
 
 			executionError := command.Execute()
 			if testCase.expectError {

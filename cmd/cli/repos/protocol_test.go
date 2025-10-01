@@ -24,6 +24,7 @@ const (
 	protocolToFlagConstant         = "--to"
 	protocolYesFlagConstant        = "--" + flagutils.AssumeYesFlagName
 	protocolDryRunFlagConstant     = "--" + flagutils.DryRunFlagName
+	protocolRootFlagConstant       = "--" + flagutils.DefaultRootFlagName
 	protocolConfiguredRootConstant = "/tmp/protocol-config-root"
 	protocolSSHRemoteURL           = "ssh://git@github.com/origin/example.git"
 	protocolHTTPSRemoteURL         = "https://github.com/origin/example.git"
@@ -87,7 +88,7 @@ func TestProtocolCommandConfigurationPrecedence(testInstance *testing.T) {
 				string(shared.RemoteProtocolSSH),
 				protocolYesFlagConstant,
 				protocolDryRunFlagConstant,
-				remotesCLIRepositoryRootConstant,
+				protocolRootFlagConstant, remotesCLIRepositoryRootConstant,
 			},
 			initialRemoteURL:        protocolHTTPSRemoteURL,
 			expectedRoots:           []string{remotesCLIRepositoryRootConstant},
@@ -136,7 +137,7 @@ func TestProtocolCommandConfigurationPrecedence(testInstance *testing.T) {
 				string(shared.RemoteProtocolSSH),
 				protocolYesFlagConstant,
 				protocolDryRunFlagConstant,
-				protocolRelativeRootConstant,
+				protocolRootFlagConstant, protocolRelativeRootConstant,
 			},
 			initialRemoteURL:        protocolHTTPSRemoteURL,
 			expectedRoots:           []string{protocolRelativeRootConstant},
@@ -156,7 +157,7 @@ func TestProtocolCommandConfigurationPrecedence(testInstance *testing.T) {
 				string(shared.RemoteProtocolSSH),
 				protocolYesFlagConstant,
 				protocolDryRunFlagConstant,
-				"~/" + protocolHomeRootSuffixConstant,
+				protocolRootFlagConstant, "~/" + protocolHomeRootSuffixConstant,
 			},
 			initialRemoteURL:        protocolHTTPSRemoteURL,
 			expectedRootsBuilder:    protocolHomeRootBuilder,

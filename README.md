@@ -91,11 +91,11 @@ with the registered command names and flags.
 | Command                 | Summary                                                       | Key flags / example                                                                                                                |
 |-------------------------|---------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------|
 | `audit`                 | Audit and reconcile local GitHub repositories                 | Flags: `--root`, `--log-level`. Example: `go run . audit --log-level=debug --root ~/Development`                                    |
-| `repo-folders-rename`   | Rename repository directories to match canonical GitHub names | Flags: `--dry-run`, `--yes`, `--require-clean`. Example: `go run . repo-folders-rename --yes --require-clean ~/Development`        |
-| `repo-remote-update`    | Update origin URLs to match canonical GitHub repositories     | Flags: `--dry-run`, `--yes`. Example: `go run . repo-remote-update --dry-run ~/Development`                                        |
-| `repo-protocol-convert` | Convert repository origin remotes between protocols           | Flags: `--from`, `--to`, `--dry-run`, `--yes`. Example: `go run . repo-protocol-convert --from https --to ssh --yes ~/Development` |
-| `repo-prs-purge`        | Remove remote and local branches for closed pull requests     | Flags: `--remote`, `--limit`, `--dry-run`. Example: `go run . repo-prs-purge --remote origin --limit 100 ~/Development`            |
-| `branch-migrate`        | Migrate repository defaults from main to master               | Flags: `--from`, `--to`. Example: `go run . branch-migrate --from main --to master ~/Development/project-repo`                     |
+| `repo-folders-rename`   | Rename repository directories to match canonical GitHub names | Flags: `--dry-run`, `--yes`, `--require-clean`. Example: `go run . repo-folders-rename --yes --require-clean --root ~/Development`        |
+| `repo-remote-update`    | Update origin URLs to match canonical GitHub repositories     | Flags: `--dry-run`, `--yes`. Example: `go run . repo-remote-update --dry-run --root ~/Development`                                        |
+| `repo-protocol-convert` | Convert repository origin remotes between protocols           | Flags: `--from`, `--to`, `--dry-run`, `--yes`. Example: `go run . repo-protocol-convert --from https --to ssh --yes --root ~/Development` |
+| `repo-prs-purge`        | Remove remote and local branches for closed pull requests     | Flags: `--remote`, `--limit`, `--dry-run`. Example: `go run . repo-prs-purge --remote origin --limit 100 --root ~/Development`            |
+| `branch-migrate`        | Migrate repository defaults from main to master               | Flags: `--from`, `--to`. Example: `go run . branch-migrate --from main --to master --root ~/Development/project-repo`                     |
 | `repo-packages-purge`   | Delete untagged GHCR versions                                 | Flags: `--package` (override), `--dry-run`, `--root`. Example: `go run . repo-packages-purge --dry-run --root ~/Development`       |
 | `workflow`              | Run a workflow configuration file                             | Flags: `--root`, `--dry-run`, `--yes`. Example: `go run . workflow config.yaml --root ~/Development --dry-run`                     |
 
@@ -274,9 +274,7 @@ export GITHUB_PACKAGES_TOKEN=ghp_XXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
 ## Repository roots and bulk execution tips
 
-- Provide explicit repository roots to operate on multiple directories in one invocation. When omitted, commands default
-  to the
-  current working directory.
+- Provide explicit repository roots (or configure defaults) to operate on multiple directories; commands return an error when no roots are supplied.
 - Use `--dry-run` to preview changes. Combine with `--yes` once you are comfortable executing the plan without prompts.
 - Workflow configurations let you mix and match operations (for example, convert protocols, migrate branches, and audit)
   while

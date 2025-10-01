@@ -1,6 +1,10 @@
 package repos
 
-import "strings"
+import (
+	"strings"
+
+	rootutils "github.com/temirov/gix/internal/utils/roots"
+)
 
 // ToolsConfiguration captures repository command configuration sections.
 type ToolsConfiguration struct {
@@ -60,14 +64,14 @@ func DefaultToolsConfiguration() ToolsConfiguration {
 // sanitize normalizes repository configuration values.
 func (configuration RemotesConfiguration) sanitize() RemotesConfiguration {
 	sanitized := configuration
-	sanitized.RepositoryRoots = repositoryPathSanitizer.Sanitize(configuration.RepositoryRoots)
+	sanitized.RepositoryRoots = rootutils.SanitizeConfigured(configuration.RepositoryRoots)
 	return sanitized
 }
 
 // sanitize normalizes protocol configuration values.
 func (configuration ProtocolConfiguration) sanitize() ProtocolConfiguration {
 	sanitized := configuration
-	sanitized.RepositoryRoots = repositoryPathSanitizer.Sanitize(configuration.RepositoryRoots)
+	sanitized.RepositoryRoots = rootutils.SanitizeConfigured(configuration.RepositoryRoots)
 	sanitized.FromProtocol = strings.TrimSpace(configuration.FromProtocol)
 	sanitized.ToProtocol = strings.TrimSpace(configuration.ToProtocol)
 	return sanitized
@@ -76,6 +80,6 @@ func (configuration ProtocolConfiguration) sanitize() ProtocolConfiguration {
 // sanitize normalizes rename configuration values.
 func (configuration RenameConfiguration) sanitize() RenameConfiguration {
 	sanitized := configuration
-	sanitized.RepositoryRoots = repositoryPathSanitizer.Sanitize(configuration.RepositoryRoots)
+	sanitized.RepositoryRoots = rootutils.SanitizeConfigured(configuration.RepositoryRoots)
 	return sanitized
 }

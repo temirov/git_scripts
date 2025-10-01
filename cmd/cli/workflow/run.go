@@ -13,6 +13,7 @@ import (
 	"github.com/temirov/gix/internal/repos/shared"
 	"github.com/temirov/gix/internal/utils"
 	flagutils "github.com/temirov/gix/internal/utils/flags"
+	rootutils "github.com/temirov/gix/internal/utils/roots"
 	"github.com/temirov/gix/internal/workflow"
 )
 
@@ -27,7 +28,6 @@ const (
 	buildOperationsErrorTemplateConstant      = "unable to build workflow operations: %w"
 	gitRepositoryManagerErrorTemplateConstant = "unable to construct repository manager: %w"
 	gitHubClientErrorTemplateConstant         = "unable to construct GitHub client: %w"
-	missingRootsErrorMessageConstant          = "workflow roots required; specify --root flag or configuration"
 )
 
 // CommandBuilder assembles the workflow command.
@@ -60,8 +60,12 @@ func (builder *CommandBuilder) run(command *cobra.Command, arguments []string) e
 	contextAccessor := utils.NewCommandContextAccessor()
 
 	configurationPathCandidate := ""
+	remainingArguments := []string{}
 	if len(arguments) > 0 {
 		configurationPathCandidate = strings.TrimSpace(arguments[0])
+		if len(arguments) > 1 {
+			remainingArguments = append(remainingArguments, arguments[1:]...)
+		}
 	} else {
 		configurationPathFromContext, configurationPathAvailable := contextAccessor.ConfigurationFilePath(command.Context())
 		if configurationPathAvailable {
@@ -135,20 +139,9 @@ func (builder *CommandBuilder) run(command *cobra.Command, arguments []string) e
 
 	workflow.ApplyDefaults(operations, workflow.OperationDefaults{RequireClean: requireCleanDefault})
 
-	rootValues := []string{}
-	preferFlagRoots := false
-	if command != nil {
-		if resolvedRoots, flagChanged, flagError := flagutils.StringSliceFlag(command, flagutils.DefaultRootFlagName); flagError == nil {
-			rootValues = resolvedRoots
-			preferFlagRoots = flagChanged
-		}
-	}
-	roots := DetermineRoots(rootValues, commandConfiguration.Roots, preferFlagRoots)
-	if len(roots) == 0 {
-		if helpError := displayCommandHelp(command); helpError != nil {
-			return helpError
-		}
-		return errors.New(missingRootsErrorMessageConstant)
+	roots, rootsError := rootutils.Resolve(command, remainingArguments, commandConfiguration.Roots)
+	if rootsError != nil {
+		return rootsError
 	}
 
 	dryRun := commandConfiguration.DryRun

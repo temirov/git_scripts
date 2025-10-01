@@ -1,22 +1,13 @@
 package repos
 
 import (
-	"errors"
-
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 
 	"github.com/temirov/gix/internal/repos/prompt"
 	"github.com/temirov/gix/internal/repos/shared"
-	flagutils "github.com/temirov/gix/internal/utils/flags"
-	pathutils "github.com/temirov/gix/internal/utils/path"
+	rootutils "github.com/temirov/gix/internal/utils/roots"
 )
-
-const (
-	missingRepositoryRootsErrorMessageConstant = "no repository roots provided; specify --root or configure defaults"
-)
-
-var repositoryPathSanitizer = pathutils.NewRepositoryPathSanitizerWithConfiguration(nil, pathutils.RepositoryPathSanitizerConfiguration{ExcludeBooleanLiteralCandidates: true})
 
 // LoggerProvider yields a zap logger for command execution.
 type LoggerProvider func() *zap.Logger
@@ -24,36 +15,12 @@ type LoggerProvider func() *zap.Logger
 // PrompterFactory creates confirmation prompters scoped to a Cobra command.
 type PrompterFactory func(*cobra.Command) shared.ConfirmationPrompter
 
-func determineRepositoryRoots(command *cobra.Command, arguments []string, configuredRoots []string) []string {
-	flagRoots := resolveRootFlagValues(command)
-	if len(flagRoots) > 0 {
-		return flagRoots
-	}
-
-	argumentRoots := repositoryPathSanitizer.Sanitize(arguments)
-	if len(argumentRoots) > 0 {
-		return argumentRoots
-	}
-
-	configured := repositoryPathSanitizer.Sanitize(configuredRoots)
-	if len(configured) > 0 {
-		return configured
-	}
-
-	return nil
-}
-
 func requireRepositoryRoots(command *cobra.Command, arguments []string, configuredRoots []string) ([]string, error) {
-	resolvedRoots := determineRepositoryRoots(command, arguments, configuredRoots)
-	if len(resolvedRoots) > 0 {
-		return resolvedRoots, nil
+	roots, resolveError := rootutils.Resolve(command, arguments, configuredRoots)
+	if resolveError != nil {
+		return nil, resolveError
 	}
-
-	if command != nil {
-		_ = command.Help()
-	}
-
-	return nil, errors.New(missingRepositoryRootsErrorMessageConstant)
+	return roots, nil
 }
 
 func resolveLogger(provider LoggerProvider) *zap.Logger {
@@ -113,12 +80,6 @@ func displayCommandHelp(command *cobra.Command) error {
 }
 
 func resolveRootFlagValues(command *cobra.Command) []string {
-	if command == nil {
-		return nil
-	}
-	roots, rootsError := command.Flags().GetStringSlice(flagutils.DefaultRootFlagName)
-	if rootsError != nil {
-		return nil
-	}
-	return repositoryPathSanitizer.Sanitize(roots)
+	values, _ := rootutils.FlagValues(command)
+	return values
 }

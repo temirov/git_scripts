@@ -25,6 +25,7 @@ const (
 	renameDryRunFlagConstant            = "--" + flagutils.DryRunFlagName
 	renameAssumeYesFlagConstant         = "--" + flagutils.AssumeYesFlagName
 	renameRequireCleanFlagConstant      = "--require-clean"
+	renameRootFlagConstant              = "--" + flagutils.DefaultRootFlagName
 	renameConfiguredRootConstant        = "/tmp/rename-config-root"
 	renameCLIRepositoryRootConstant     = "/tmp/rename-cli-root"
 	renameDiscoveredRepositoryPath      = "/tmp/rename-repo"
@@ -77,7 +78,7 @@ func TestRenameCommandConfigurationPrecedence(testInstance *testing.T) {
 				renameDryRunFlagConstant,
 				renameAssumeYesFlagConstant,
 				renameRequireCleanFlagConstant,
-				renameCLIRepositoryRootConstant,
+				renameRootFlagConstant, renameCLIRepositoryRootConstant,
 			},
 			expectedRoots:       []string{renameCLIRepositoryRootConstant},
 			expectedPromptCalls: 0,
@@ -117,7 +118,7 @@ func TestRenameCommandConfigurationPrecedence(testInstance *testing.T) {
 				renameDryRunFlagConstant,
 				renameAssumeYesFlagConstant,
 				renameRequireCleanFlagConstant,
-				renameRelativeRootConstant,
+				renameRootFlagConstant, renameRelativeRootConstant,
 			},
 			expectedRoots:       []string{renameRelativeRootConstant},
 			expectedPromptCalls: 0,
@@ -135,7 +136,7 @@ func TestRenameCommandConfigurationPrecedence(testInstance *testing.T) {
 				renameDryRunFlagConstant,
 				renameAssumeYesFlagConstant,
 				renameRequireCleanFlagConstant,
-				"~/" + renameHomeRootSuffixConstant,
+				renameRootFlagConstant, "~/" + renameHomeRootSuffixConstant,
 			},
 			expectedRootsBuilder: func(testingInstance testing.TB) []string {
 				homeDirectory, homeError := os.UserHomeDir()

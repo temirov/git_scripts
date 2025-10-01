@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	renameUseConstant             = "repo-folders-rename [root ...]"
+	renameUseConstant             = "repo-folders-rename"
 	renameShortDescription        = "Rename repository directories to match canonical GitHub names"
 	renameLongDescription         = "repo-folders-rename normalizes repository directory names to match canonical GitHub repositories."
 	renameRequireCleanFlagName    = "require-clean"
@@ -39,6 +39,7 @@ func (builder *RenameCommandBuilder) Build() (*cobra.Command, error) {
 		Use:   renameUseConstant,
 		Short: renameShortDescription,
 		Long:  renameLongDescription,
+		Args:  cobra.NoArgs,
 		RunE:  builder.run,
 	}
 

@@ -16,20 +16,22 @@ import (
 	"github.com/temirov/gix/internal/execshell"
 	"github.com/temirov/gix/internal/utils"
 	flagutils "github.com/temirov/gix/internal/utils/flags"
+	rootutils "github.com/temirov/gix/internal/utils/roots"
 )
 
 const (
-	workflowConfigFileNameConstant           = "config.yaml"
-	workflowConfigContentConstant            = "operations:\n  - operation: workflow\n    with:\n      roots:\n        - .\nworkflow:\n  - step:\n      operation: audit-report\n"
-	workflowConfiguredRootConstant           = "/tmp/workflow-config-root"
-	workflowCliRootConstant                  = "/tmp/workflow-cli-root"
-	workflowPlanMessageSnippet               = "WORKFLOW-PLAN: audit report"
-	workflowCSVHeaderSnippet                 = "final_github_repo,folder_name"
-	workflowRootsFlagConstant                = "--" + flagutils.DefaultRootFlagName
-	workflowDryRunFlagConstant               = "--dry-run"
-	workflowUsageSnippet                     = "Usage:"
-	workflowMissingRootsErrorMessageConstant = "workflow roots required; specify --root flag or configuration"
+	workflowConfigFileNameConstant = "config.yaml"
+	workflowConfigContentConstant  = "operations:\n  - operation: workflow\n    with:\n      roots:\n        - .\nworkflow:\n  - step:\n      operation: audit-report\n"
+	workflowConfiguredRootConstant = "/tmp/workflow-config-root"
+	workflowCliRootConstant        = "/tmp/workflow-cli-root"
+	workflowPlanMessageSnippet     = "WORKFLOW-PLAN: audit report"
+	workflowCSVHeaderSnippet       = "final_github_repo,folder_name"
+	workflowRootsFlagConstant      = "--" + flagutils.DefaultRootFlagName
+	workflowDryRunFlagConstant     = "--dry-run"
+	workflowUsageSnippet           = "Usage:"
 )
+
+var workflowMissingRootsErrorMessage = rootutils.MissingRootsMessage()
 
 func TestWorkflowCommandConfigurationPrecedence(testInstance *testing.T) {
 	testCases := []struct {
@@ -74,7 +76,7 @@ func TestWorkflowCommandConfigurationPrecedence(testInstance *testing.T) {
 			expectedRoots:        nil,
 			expectPlanMessage:    false,
 			expectExecutionError: true,
-			expectedErrorMessage: workflowMissingRootsErrorMessageConstant,
+			expectedErrorMessage: workflowMissingRootsErrorMessage,
 		},
 	}
 

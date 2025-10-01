@@ -16,11 +16,11 @@ import (
 	"github.com/temirov/gix/internal/gitrepo"
 	"github.com/temirov/gix/internal/repos/discovery"
 	"github.com/temirov/gix/internal/utils"
-	flagutils "github.com/temirov/gix/internal/utils/flags"
+	rootutils "github.com/temirov/gix/internal/utils/roots"
 )
 
 const (
-	commandUseConstant                           = "branch-migrate [root ...]"
+	commandUseConstant                           = "branch-migrate"
 	commandShortDescriptionConstant              = "Migrate repository defaults from main to master"
 	commandLongDescriptionConstant               = "branch-migrate retargets workflows, updates GitHub configuration, and evaluates safety gates before switching the default branch."
 	migrateCommandExecutionErrorTemplateConstant = "branch migration failed: %w"
@@ -48,7 +48,6 @@ const (
 	logMessageRepositoryMigrationFailedConstant  = "Repository migration failed"
 	logFieldRepositoryRootsConstant              = "roots"
 	logFieldRepositoryPathConstant               = "repository"
-	missingRepositoryRootsErrorMessageConstant   = "no repository roots provided; specify --root or configure defaults"
 )
 
 // RepositoryDiscoverer locates Git repositories beneath provided roots.
@@ -88,6 +87,7 @@ func (builder *CommandBuilder) Build() (*cobra.Command, error) {
 		Long:          commandLongDescriptionConstant,
 		SilenceErrors: true,
 		SilenceUsage:  true,
+		Args:          cobra.NoArgs,
 		RunE:          builder.runMigrate,
 	}
 
@@ -212,12 +212,9 @@ func (builder *CommandBuilder) parseOptions(command *cobra.Command, arguments []
 		}
 	}
 
-	repositoryRoots := builder.determineRepositoryRoots(command, arguments, configuration.RepositoryRoots)
-	if len(repositoryRoots) == 0 {
-		if command != nil {
-			_ = command.Help()
-		}
-		return commandOptions{}, errors.New(missingRepositoryRootsErrorMessageConstant)
+	repositoryRoots, resolveRootsError := rootutils.Resolve(command, arguments, configuration.RepositoryRoots)
+	if resolveRootsError != nil {
+		return commandOptions{}, resolveRootsError
 	}
 
 	sourceBranchName := strings.TrimSpace(configuration.SourceBranch)
@@ -253,36 +250,12 @@ func (builder *CommandBuilder) parseOptions(command *cobra.Command, arguments []
 		return commandOptions{}, errors.New(identicalBranchesErrorMessageConstant)
 	}
 
-	return commandOptions{debugLoggingEnabled: debugEnabled, repositoryRoots: repositoryRoots, sourceBranch: sourceBranch, targetBranch: targetBranch}, nil
-}
-
-func (builder *CommandBuilder) determineRepositoryRoots(command *cobra.Command, arguments []string, configuredRoots []string) []string {
-	if command != nil {
-		flagRoots, flagError := command.Flags().GetStringSlice(flagutils.DefaultRootFlagName)
-		if flagError == nil {
-			sanitizedFlagRoots := migrateConfigurationRepositoryPathSanitizer.Sanitize(flagRoots)
-			if len(sanitizedFlagRoots) > 0 {
-				return sanitizedFlagRoots
-			}
-		}
-	}
-
-	argumentRoots := migrateConfigurationRepositoryPathSanitizer.Sanitize(arguments)
-	if len(argumentRoots) > 0 {
-		return argumentRoots
-	}
-
-	sanitizedConfiguredRoots := migrateConfigurationRepositoryPathSanitizer.Sanitize(configuredRoots)
-	if len(sanitizedConfiguredRoots) > 0 {
-		return sanitizedConfiguredRoots
-	}
-
-	trimmedWorkingDirectory := strings.TrimSpace(builder.WorkingDirectory)
-	if len(trimmedWorkingDirectory) > 0 {
-		return []string{trimmedWorkingDirectory}
-	}
-
-	return nil
+	return commandOptions{
+		debugLoggingEnabled: debugEnabled,
+		repositoryRoots:     repositoryRoots,
+		sourceBranch:        sourceBranch,
+		targetBranch:        targetBranch,
+	}, nil
 }
 
 func (builder *CommandBuilder) resolveLogger(enableDebug bool) *zap.Logger {

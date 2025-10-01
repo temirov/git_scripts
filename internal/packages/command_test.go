@@ -17,29 +17,29 @@ import (
 	packages "github.com/temirov/gix/internal/packages"
 	"github.com/temirov/gix/internal/utils"
 	flagutils "github.com/temirov/gix/internal/utils/flags"
+	rootutils "github.com/temirov/gix/internal/utils/roots"
 )
 
 const (
-	configurationRootOnePathConstant           = "/config/root"
-	configurationRootTwoPathConstant           = "/config/alternate"
-	flagRootPathConstant                       = "/flag/root"
-	workingDirectoryPathConstant               = "/working/directory"
-	discoveredRepositoryOnePathConstant        = "/repositories/one"
-	discoveredRepositoryTwoPathConstant        = "/repositories/two"
-	discoveredRepositoryThreePathConstant      = "/repositories/three"
-	repositoryOneIdentifierConstant            = "source/example"
-	repositoryTwoIdentifierConstant            = "source/example-two"
-	repositoryThreeIdentifierConstant          = "source/example-three"
-	repositoryOneRemoteURLConstant             = "https://github.com/source/example.git"
-	repositoryTwoRemoteURLConstant             = "https://github.com/source/example-two.git"
-	repositoryThreeRemoteURLConstant           = "https://github.com/source/example-three.git"
-	repositoryOnePackageNameConstant           = "example"
-	repositoryTwoPackageNameConstant           = "example-two"
-	repositoryThreePackageNameConstant         = "example-three"
-	repositoryOneOwnerConstant                 = "canonical"
-	repositoryTwoOwnerConstant                 = "second-owner"
-	repositoryThreeOwnerConstant               = "third-owner"
-	missingRepositoryRootsErrorMessageConstant = "no repository roots provided; specify --root or configure defaults"
+	configurationRootOnePathConstant      = "/config/root"
+	configurationRootTwoPathConstant      = "/config/alternate"
+	flagRootPathConstant                  = "/flag/root"
+	workingDirectoryPathConstant          = "/working/directory"
+	discoveredRepositoryOnePathConstant   = "/repositories/one"
+	discoveredRepositoryTwoPathConstant   = "/repositories/two"
+	discoveredRepositoryThreePathConstant = "/repositories/three"
+	repositoryOneIdentifierConstant       = "source/example"
+	repositoryTwoIdentifierConstant       = "source/example-two"
+	repositoryThreeIdentifierConstant     = "source/example-three"
+	repositoryOneRemoteURLConstant        = "https://github.com/source/example.git"
+	repositoryTwoRemoteURLConstant        = "https://github.com/source/example-two.git"
+	repositoryThreeRemoteURLConstant      = "https://github.com/source/example-three.git"
+	repositoryOnePackageNameConstant      = "example"
+	repositoryTwoPackageNameConstant      = "example-two"
+	repositoryThreePackageNameConstant    = "example-three"
+	repositoryOneOwnerConstant            = "canonical"
+	repositoryTwoOwnerConstant            = "second-owner"
+	repositoryThreeOwnerConstant          = "third-owner"
 )
 
 func TestCommandBuilderExecutesAcrossRepositories(testInstance *testing.T) {
@@ -296,7 +296,7 @@ func TestCommandBuilderDisplaysHelpWhenRootsMissing(testInstance *testing.T) {
 
 			executionError := command.Execute()
 			require.Error(subTest, executionError)
-			require.Equal(subTest, missingRepositoryRootsErrorMessageConstant, executionError.Error())
+			require.Equal(subTest, rootutils.MissingRootsMessage(), executionError.Error())
 			require.Contains(subTest, outputBuffer.String(), command.UseLine())
 			require.Empty(subTest, discoverer.recordedRoots)
 		})
