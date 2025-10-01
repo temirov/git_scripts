@@ -14,6 +14,9 @@ import (
 	"github.com/temirov/gix/internal/ghcr"
 	"github.com/temirov/gix/internal/repos/dependencies"
 	"github.com/temirov/gix/internal/repos/shared"
+	"github.com/temirov/gix/internal/utils"
+	flagutils "github.com/temirov/gix/internal/utils/flags"
+	rootutils "github.com/temirov/gix/internal/utils/roots"
 )
 
 const (
@@ -24,11 +27,6 @@ const (
 	commandExecutionErrorTemplateConstant                     = "repo-packages-purge failed: %w"
 	packageFlagNameConstant                                   = "package"
 	packageFlagDescriptionConstant                            = "Container package name in GHCR"
-	dryRunFlagNameConstant                                    = "dry-run"
-	dryRunFlagDescriptionConstant                             = "Preview deletions without modifying GHCR"
-	repositoryRootsFlagNameConstant                           = "roots"
-	repositoryRootsFlagDescriptionConstant                    = "Directories that contain repositories for package purging"
-	missingRepositoryRootsErrorMessageConstant                = "no repository roots provided; specify --root or configure defaults"
 	tokenSourceParseErrorTemplateConstant                     = "invalid token source: %w"
 	workingDirectoryResolutionErrorTemplateConstant           = "unable to determine working directory: %w"
 	workingDirectoryEmptyErrorMessageConstant                 = "working directory not provided"
@@ -93,8 +91,6 @@ func (builder *CommandBuilder) Build() (*cobra.Command, error) {
 	}
 
 	purgeCommand.Flags().String(packageFlagNameConstant, "", packageFlagDescriptionConstant)
-	purgeCommand.Flags().Bool(dryRunFlagNameConstant, false, dryRunFlagDescriptionConstant)
-	purgeCommand.Flags().StringSlice(repositoryRootsFlagNameConstant, nil, repositoryRootsFlagDescriptionConstant)
 
 	return purgeCommand, nil
 }
@@ -105,8 +101,9 @@ func (builder *CommandBuilder) runPurge(command *cobra.Command, arguments []stri
 	}
 
 	logger := builder.resolveLogger()
+	executionFlags, executionFlagsAvailable := flagutils.ResolveExecutionFlags(command)
 
-	executionOptions, optionsError := builder.parseCommandOptions(command)
+	executionOptions, optionsError := builder.parseCommandOptions(command, arguments, executionFlags, executionFlagsAvailable)
 	if optionsError != nil {
 		return optionsError
 	}
@@ -192,7 +189,7 @@ func (builder *CommandBuilder) runPurge(command *cobra.Command, arguments []stri
 	return nil
 }
 
-func (builder *CommandBuilder) parseCommandOptions(command *cobra.Command) (commandExecutionOptions, error) {
+func (builder *CommandBuilder) parseCommandOptions(command *cobra.Command, arguments []string, executionFlags utils.ExecutionFlags, executionFlagsAvailable bool) (commandExecutionOptions, error) {
 	configuration := builder.resolveConfiguration()
 
 	packageFlagValue, packageFlagError := command.Flags().GetString(packageFlagNameConstant)
@@ -207,15 +204,11 @@ func (builder *CommandBuilder) parseCommandOptions(command *cobra.Command) (comm
 	}
 
 	dryRunValue := configuration.Purge.DryRun
-	if command.Flags().Changed(dryRunFlagNameConstant) {
-		flagDryRunValue, dryRunFlagError := command.Flags().GetBool(dryRunFlagNameConstant)
-		if dryRunFlagError != nil {
-			return commandExecutionOptions{}, dryRunFlagError
-		}
-		dryRunValue = flagDryRunValue
+	if executionFlagsAvailable && executionFlags.DryRunSet {
+		dryRunValue = executionFlags.DryRun
 	}
 
-	repositoryRoots, rootsError := builder.determineRepositoryRoots(command, configuration)
+	repositoryRoots, rootsError := rootutils.Resolve(command, arguments, configuration.Purge.RepositoryRoots)
 	if rootsError != nil {
 		return commandExecutionOptions{}, rootsError
 	}
@@ -274,36 +267,6 @@ func selectOptionalStringValue(flagValue string, configurationValue string) stri
 	}
 
 	return strings.TrimSpace(configurationValue)
-}
-
-func (builder *CommandBuilder) determineRepositoryRoots(command *cobra.Command, configuration Configuration) ([]string, error) {
-	if command != nil && command.Flags().Changed(repositoryRootsFlagNameConstant) {
-		flagRoots, flagError := command.Flags().GetStringSlice(repositoryRootsFlagNameConstant)
-		if flagError != nil {
-			return nil, flagError
-		}
-
-		sanitizedFlagRoots := packagesConfigurationRepositoryPathSanitizer.Sanitize(flagRoots)
-		if len(sanitizedFlagRoots) > 0 {
-			return sanitizedFlagRoots, nil
-		}
-		if command != nil {
-			_ = command.Help()
-		}
-		return nil, errors.New(missingRepositoryRootsErrorMessageConstant)
-	}
-
-	if len(configuration.Purge.RepositoryRoots) > 0 {
-		rootsCopy := make([]string, len(configuration.Purge.RepositoryRoots))
-		copy(rootsCopy, configuration.Purge.RepositoryRoots)
-		return rootsCopy, nil
-	}
-
-	if command != nil {
-		_ = command.Help()
-	}
-
-	return nil, errors.New(missingRepositoryRootsErrorMessageConstant)
 }
 
 func (builder *CommandBuilder) resolveRepositoryMetadataResolver(logger *zap.Logger) (RepositoryMetadataResolver, error) {

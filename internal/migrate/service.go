@@ -11,6 +11,7 @@ import (
 	"github.com/temirov/gix/internal/execshell"
 	"github.com/temirov/gix/internal/githubcli"
 	"github.com/temirov/gix/internal/gitrepo"
+	"github.com/temirov/gix/internal/utils"
 )
 
 const (
@@ -153,12 +154,20 @@ func (service *Service) Execute(executionContext context.Context, options Migrat
 		return MigrationResult{}, validationError
 	}
 
-	cleanWorktree, cleanError := service.repositoryManager.CheckCleanWorktree(executionContext, options.RepositoryPath)
-	if cleanError != nil {
-		return MigrationResult{}, cleanError
+	requireClean := true
+	contextAccessor := utils.NewCommandContextAccessor()
+	if branchContext, exists := contextAccessor.BranchContext(executionContext); exists {
+		requireClean = branchContext.RequireClean
 	}
-	if !cleanWorktree {
-		return MigrationResult{}, errCleanWorktreeRequired
+
+	if requireClean {
+		cleanWorktree, cleanError := service.repositoryManager.CheckCleanWorktree(executionContext, options.RepositoryPath)
+		if cleanError != nil {
+			return MigrationResult{}, cleanError
+		}
+		if !cleanWorktree {
+			return MigrationResult{}, errCleanWorktreeRequired
+		}
 	}
 
 	workflowOutcome, rewriteError := service.workflowRewriter.Rewrite(executionContext, WorkflowRewriteConfig{

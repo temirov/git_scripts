@@ -8,18 +8,24 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest/observer"
 
 	branches "github.com/temirov/gix/internal/branches"
 	"github.com/temirov/gix/internal/execshell"
+	flagutils "github.com/temirov/gix/internal/utils/flags"
+	rootutils "github.com/temirov/gix/internal/utils/roots"
 )
 
 const (
-	commandRemoteFlagConstant            = "--remote"
+	commandRemoteFlagConstant            = "--" + flagutils.RemoteFlagName
 	commandLimitFlagConstant             = "--limit"
-	commandDryRunFlagConstant            = "--dry-run"
+	commandRootFlagConstant              = "--" + flagutils.DefaultRootFlagName
+	commandDryRunFlagConstant            = "--" + flagutils.DryRunFlagName
+	testDefaultRemoteNameConstant        = "origin"
+	testRemoteDescriptionConstant        = "Name of the remote containing pull request branches"
 	commandLimitValueConstant            = "5"
 	multiRootFirstArgumentConstant       = "root-one"
 	multiRootSecondArgumentConstant      = "root-two"
@@ -32,7 +38,6 @@ const (
 	configurationRootConstant            = "/tmp/config-root"
 	flagOverrideRemoteConstant           = "override-remote"
 	flagOverrideLimitValueConstant       = 7
-	missingRootsErrorMessageConstant     = "no repository roots provided; specify --root or configure defaults"
 	invalidRemoteErrorMessageConstant    = "remote name must not be empty or whitespace"
 	invalidLimitErrorMessageConstant     = "limit must be greater than zero"
 	defaultPullRequestLimitValueConstant = 100
@@ -90,7 +95,9 @@ func TestCommandRunScenarios(testInstance *testing.T) {
 				testRemoteNameConstant,
 				commandLimitFlagConstant,
 				commandLimitValueConstant,
+				commandRootFlagConstant,
 				multiRootFirstArgumentConstant,
+				commandRootFlagConstant,
 				multiRootSecondArgumentConstant,
 			},
 			discoveredRepositories: []string{repositoryOnePathConstant, repositoryTwoPathConstant},
@@ -113,6 +120,7 @@ func TestCommandRunScenarios(testInstance *testing.T) {
 				testRemoteNameConstant,
 				commandLimitFlagConstant,
 				commandLimitValueConstant,
+				commandRootFlagConstant,
 				defaultRootArgumentConstant,
 			},
 			discoveredRepositories: []string{repositoryOnePathConstant},
@@ -137,6 +145,7 @@ func TestCommandRunScenarios(testInstance *testing.T) {
 				testRemoteNameConstant,
 				commandLimitFlagConstant,
 				commandLimitValueConstant,
+				commandRootFlagConstant,
 				multiRootFirstArgumentConstant,
 			},
 			discoveredRepositories: []string{repositoryOnePathConstant, repositoryTwoPathConstant},
@@ -196,6 +205,7 @@ func TestCommandRunScenarios(testInstance *testing.T) {
 
 			command, buildError := builder.Build()
 			require.NoError(subTest, buildError)
+			bindGlobalBranchFlags(command)
 
 			command.SetContext(context.Background())
 			command.SetArgs(testCase.arguments)
@@ -232,6 +242,7 @@ func TestCommandRunDisplaysHelpWhenRootsMissing(testInstance *testing.T) {
 
 	command, buildError := builder.Build()
 	require.NoError(testInstance, buildError)
+	bindGlobalBranchFlags(command)
 
 	outputBuffer := &strings.Builder{}
 	command.SetOut(outputBuffer)
@@ -240,8 +251,17 @@ func TestCommandRunDisplaysHelpWhenRootsMissing(testInstance *testing.T) {
 
 	executionError := command.Execute()
 	require.Error(testInstance, executionError)
-	require.Equal(testInstance, missingRootsErrorMessageConstant, executionError.Error())
+	require.Equal(testInstance, rootutils.MissingRootsMessage(), executionError.Error())
 	require.Contains(testInstance, outputBuffer.String(), command.UseLine())
+}
+
+func bindGlobalBranchFlags(command *cobra.Command) {
+	flagutils.BindRootFlags(command, flagutils.RootFlagValues{}, flagutils.RootFlagDefinition{Enabled: true})
+	flagutils.BindExecutionFlags(command, flagutils.ExecutionDefaults{}, flagutils.ExecutionFlagDefinitions{
+		DryRun:    flagutils.ExecutionFlagDefinition{Name: flagutils.DryRunFlagName, Usage: flagutils.DryRunFlagUsage, Enabled: true},
+		AssumeYes: flagutils.ExecutionFlagDefinition{Name: flagutils.AssumeYesFlagName, Usage: flagutils.AssumeYesFlagUsage, Shorthand: flagutils.AssumeYesFlagShorthand, Enabled: true},
+	})
+	flagutils.EnsureRemoteFlag(command, testDefaultRemoteNameConstant, testRemoteDescriptionConstant)
 }
 
 func TestCommandConfigurationPrecedence(testInstance *testing.T) {
@@ -292,6 +312,7 @@ func TestCommandConfigurationPrecedence(testInstance *testing.T) {
 				commandLimitFlagConstant,
 				strconv.Itoa(flagOverrideLimitValueConstant),
 				commandDryRunFlagConstant,
+				commandRootFlagConstant,
 				repositoryTwoPathConstant,
 			},
 			expectedRoots:  []string{repositoryTwoPathConstant},
@@ -303,6 +324,7 @@ func TestCommandConfigurationPrecedence(testInstance *testing.T) {
 			name:             "cli_defaults_apply_without_configuration",
 			useConfiguration: false,
 			arguments: []string{
+				commandRootFlagConstant,
 				repositoryOnePathConstant,
 			},
 			expectedRoots:  []string{repositoryOnePathConstant},
@@ -341,6 +363,7 @@ func TestCommandConfigurationPrecedence(testInstance *testing.T) {
 				whitespaceRemoteArgumentConstant,
 				commandLimitFlagConstant,
 				commandLimitValueConstant,
+				commandRootFlagConstant,
 				multiRootFirstArgumentConstant,
 			},
 			expectError:          true,
@@ -354,6 +377,7 @@ func TestCommandConfigurationPrecedence(testInstance *testing.T) {
 				testRemoteNameConstant,
 				commandLimitFlagConstant,
 				invalidLimitArgumentValueConstant,
+				commandRootFlagConstant,
 				multiRootFirstArgumentConstant,
 			},
 			expectError:          true,
@@ -404,6 +428,7 @@ func TestCommandConfigurationPrecedence(testInstance *testing.T) {
 
 			command, buildError := builder.Build()
 			require.NoError(subtest, buildError)
+			bindGlobalBranchFlags(command)
 
 			outputBuffer := &strings.Builder{}
 			command.SetOut(outputBuffer)

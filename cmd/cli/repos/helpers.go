@@ -1,21 +1,13 @@
 package repos
 
 import (
-	"errors"
-
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 
 	"github.com/temirov/gix/internal/repos/prompt"
 	"github.com/temirov/gix/internal/repos/shared"
-	pathutils "github.com/temirov/gix/internal/utils/path"
+	rootutils "github.com/temirov/gix/internal/utils/roots"
 )
-
-const (
-	missingRepositoryRootsErrorMessageConstant = "no repository roots provided; specify --root or configure defaults"
-)
-
-var repositoryPathSanitizer = pathutils.NewRepositoryPathSanitizerWithConfiguration(nil, pathutils.RepositoryPathSanitizerConfiguration{ExcludeBooleanLiteralCandidates: true})
 
 // LoggerProvider yields a zap logger for command execution.
 type LoggerProvider func() *zap.Logger
@@ -23,31 +15,12 @@ type LoggerProvider func() *zap.Logger
 // PrompterFactory creates confirmation prompters scoped to a Cobra command.
 type PrompterFactory func(*cobra.Command) shared.ConfirmationPrompter
 
-func determineRepositoryRoots(arguments []string, configuredRoots []string) []string {
-	roots := repositoryPathSanitizer.Sanitize(arguments)
-	if len(roots) > 0 {
-		return roots
-	}
-
-	configured := repositoryPathSanitizer.Sanitize(configuredRoots)
-	if len(configured) > 0 {
-		return configured
-	}
-
-	return nil
-}
-
 func requireRepositoryRoots(command *cobra.Command, arguments []string, configuredRoots []string) ([]string, error) {
-	resolvedRoots := determineRepositoryRoots(arguments, configuredRoots)
-	if len(resolvedRoots) > 0 {
-		return resolvedRoots, nil
+	roots, resolveError := rootutils.Resolve(command, arguments, configuredRoots)
+	if resolveError != nil {
+		return nil, resolveError
 	}
-
-	if command != nil {
-		_ = command.Help()
-	}
-
-	return nil, errors.New(missingRepositoryRootsErrorMessageConstant)
+	return roots, nil
 }
 
 func resolveLogger(provider LoggerProvider) *zap.Logger {
@@ -104,4 +77,9 @@ func displayCommandHelp(command *cobra.Command) error {
 		return nil
 	}
 	return command.Help()
+}
+
+func resolveRootFlagValues(command *cobra.Command) []string {
+	values, _ := rootutils.FlagValues(command)
+	return values
 }

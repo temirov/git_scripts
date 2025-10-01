@@ -1,6 +1,9 @@
 common:
   log_level: info
   log_format: console
+  dry_run: false
+  assume_yes: false
+  require_clean: false
 
 operations:
   - operation: audit

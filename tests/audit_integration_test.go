@@ -16,11 +16,11 @@ const (
 	auditIntegrationTimeout                    = 10 * time.Second
 	auditIntegrationLogLevelFlag               = "--log-level"
 	auditIntegrationErrorLevel                 = "error"
+	auditIntegrationDebugLevel                 = "debug"
 	auditIntegrationRunSubcommand              = "run"
 	auditIntegrationModulePathConstant         = "."
 	auditIntegrationAuditCommandName           = "audit"
 	auditIntegrationRootFlag                   = "--root"
-	auditIntegrationDebugFlag                  = "--debug"
 	auditIntegrationGitExecutable              = "git"
 	auditIntegrationInitFlag                   = "init"
 	auditIntegrationInitialBranchFlag          = "--initial-branch=main"
@@ -35,7 +35,6 @@ const (
 	auditIntegrationCSVHeaderConstant          = "final_github_repo,folder_name,name_matches,remote_default_branch,local_branch,in_sync,remote_protocol,origin_matches_canonical\n"
 	auditIntegrationCSVRowTemplate             = "canonical/example,%[1]s,no,main,,n/a,https,no\n"
 	auditIntegrationCSVTemplate                = auditIntegrationCSVHeaderConstant + auditIntegrationCSVRowTemplate
-	auditIntegrationDebugPrefixTemplate        = "DEBUG: discovered 1 candidate repos under: %[1]s\nDEBUG: checking %[2]s\n"
 	auditIntegrationCSVCaseNameConstant        = "audit_csv"
 	auditIntegrationDebugCaseNameConstant      = "audit_debug"
 	auditIntegrationTildeCaseNameConstant      = "audit_tilde"
@@ -81,39 +80,31 @@ func TestAuditRunCommandIntegration(testInstance *testing.T) {
 
 	repositoryFolderName := filepath.Base(repositoryPath)
 	expectedCSVOutput := fmt.Sprintf(auditIntegrationCSVTemplate, repositoryFolderName)
-	expectedDebugOutput := fmt.Sprintf(auditIntegrationDebugPrefixTemplate, repositoryPath, repositoryPath) + expectedCSVOutput
-
 	relativeRepositoryPath := strings.TrimPrefix(repositoryPath, homeDirectory)
 	relativeRepositoryPath = strings.TrimPrefix(relativeRepositoryPath, string(os.PathSeparator))
 	tildeRootArgument := auditIntegrationHomeShortcutPrefixConstant + filepath.ToSlash(relativeRepositoryPath)
 
-	rootFlagArguments := []string{
-		auditIntegrationRunSubcommand,
-		auditIntegrationModulePathConstant,
-		auditIntegrationLogLevelFlag,
-		auditIntegrationErrorLevel,
-		auditIntegrationAuditCommandName,
-		auditIntegrationRootFlag,
-		repositoryPath,
+	buildArguments := func(logLevel string, root string) []string {
+		return []string{
+			auditIntegrationRunSubcommand,
+			auditIntegrationModulePathConstant,
+			auditIntegrationLogLevelFlag,
+			logLevel,
+			auditIntegrationAuditCommandName,
+			auditIntegrationRootFlag,
+			root,
+		}
 	}
 
-	debugFlagArguments := append([]string{}, rootFlagArguments...)
-	debugFlagArguments = append(debugFlagArguments, auditIntegrationDebugFlag)
-
-	tildeRootArguments := []string{
-		auditIntegrationRunSubcommand,
-		auditIntegrationModulePathConstant,
-		auditIntegrationLogLevelFlag,
-		auditIntegrationErrorLevel,
-		auditIntegrationAuditCommandName,
-		auditIntegrationRootFlag,
-		tildeRootArgument,
-	}
+	rootFlagArguments := buildArguments(auditIntegrationErrorLevel, repositoryPath)
+	debugLogLevelArguments := buildArguments(auditIntegrationDebugLevel, repositoryPath)
+	tildeRootArguments := buildArguments(auditIntegrationErrorLevel, tildeRootArgument)
 
 	testCases := []struct {
-		name           string
-		arguments      []string
-		expectedOutput string
+		name              string
+		arguments         []string
+		expectedOutput    string
+		expectedFragments []string
 	}{
 		{
 			name:           auditIntegrationCSVCaseNameConstant,
@@ -121,9 +112,14 @@ func TestAuditRunCommandIntegration(testInstance *testing.T) {
 			expectedOutput: expectedCSVOutput,
 		},
 		{
-			name:           auditIntegrationDebugCaseNameConstant,
-			arguments:      debugFlagArguments,
-			expectedOutput: expectedDebugOutput,
+			name:      auditIntegrationDebugCaseNameConstant,
+			arguments: debugLogLevelArguments,
+			expectedFragments: []string{
+				fmt.Sprintf("DEBUG: discovered 1 candidate repos under: %s", repositoryPath),
+				fmt.Sprintf("DEBUG: checking %s", repositoryPath),
+				auditIntegrationCSVHeaderConstant,
+				fmt.Sprintf(auditIntegrationCSVRowTemplate, repositoryFolderName),
+			},
 		},
 		{
 			name:           auditIntegrationTildeCaseNameConstant,
@@ -136,7 +132,13 @@ func TestAuditRunCommandIntegration(testInstance *testing.T) {
 		testInstance.Run(fmt.Sprintf(auditIntegrationSubtestNameTemplate, testCaseIndex, testCase.name), func(subtest *testing.T) {
 			commandOptions := integrationCommandOptions{PathVariable: extendedPath}
 			subtestOutput := runIntegrationCommand(subtest, repositoryRoot, commandOptions, auditIntegrationTimeout, testCase.arguments)
-			require.Equal(subtest, testCase.expectedOutput, filterStructuredOutput(subtestOutput))
+			filteredOutput := filterStructuredOutput(subtestOutput)
+			if len(testCase.expectedOutput) > 0 {
+				require.Equal(subtest, testCase.expectedOutput, filteredOutput)
+			}
+			for _, fragment := range testCase.expectedFragments {
+				require.Contains(subtest, filteredOutput, fragment)
+			}
 		})
 	}
 }

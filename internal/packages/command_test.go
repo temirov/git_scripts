@@ -8,35 +8,38 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
 	"github.com/temirov/gix/internal/ghcr"
 	"github.com/temirov/gix/internal/githubcli"
 	packages "github.com/temirov/gix/internal/packages"
+	"github.com/temirov/gix/internal/utils"
+	flagutils "github.com/temirov/gix/internal/utils/flags"
+	rootutils "github.com/temirov/gix/internal/utils/roots"
 )
 
 const (
-	configurationRootOnePathConstant           = "/config/root"
-	configurationRootTwoPathConstant           = "/config/alternate"
-	flagRootPathConstant                       = "/flag/root"
-	workingDirectoryPathConstant               = "/working/directory"
-	discoveredRepositoryOnePathConstant        = "/repositories/one"
-	discoveredRepositoryTwoPathConstant        = "/repositories/two"
-	discoveredRepositoryThreePathConstant      = "/repositories/three"
-	repositoryOneIdentifierConstant            = "source/example"
-	repositoryTwoIdentifierConstant            = "source/example-two"
-	repositoryThreeIdentifierConstant          = "source/example-three"
-	repositoryOneRemoteURLConstant             = "https://github.com/source/example.git"
-	repositoryTwoRemoteURLConstant             = "https://github.com/source/example-two.git"
-	repositoryThreeRemoteURLConstant           = "https://github.com/source/example-three.git"
-	repositoryOnePackageNameConstant           = "example"
-	repositoryTwoPackageNameConstant           = "example-two"
-	repositoryThreePackageNameConstant         = "example-three"
-	repositoryOneOwnerConstant                 = "canonical"
-	repositoryTwoOwnerConstant                 = "second-owner"
-	repositoryThreeOwnerConstant               = "third-owner"
-	missingRepositoryRootsErrorMessageConstant = "no repository roots provided; specify --root or configure defaults"
+	configurationRootOnePathConstant      = "/config/root"
+	configurationRootTwoPathConstant      = "/config/alternate"
+	flagRootPathConstant                  = "/flag/root"
+	workingDirectoryPathConstant          = "/working/directory"
+	discoveredRepositoryOnePathConstant   = "/repositories/one"
+	discoveredRepositoryTwoPathConstant   = "/repositories/two"
+	discoveredRepositoryThreePathConstant = "/repositories/three"
+	repositoryOneIdentifierConstant       = "source/example"
+	repositoryTwoIdentifierConstant       = "source/example-two"
+	repositoryThreeIdentifierConstant     = "source/example-three"
+	repositoryOneRemoteURLConstant        = "https://github.com/source/example.git"
+	repositoryTwoRemoteURLConstant        = "https://github.com/source/example-two.git"
+	repositoryThreeRemoteURLConstant      = "https://github.com/source/example-three.git"
+	repositoryOnePackageNameConstant      = "example"
+	repositoryTwoPackageNameConstant      = "example-two"
+	repositoryThreePackageNameConstant    = "example-three"
+	repositoryOneOwnerConstant            = "canonical"
+	repositoryTwoOwnerConstant            = "second-owner"
+	repositoryThreeOwnerConstant          = "third-owner"
 )
 
 func TestCommandBuilderExecutesAcrossRepositories(testInstance *testing.T) {
@@ -91,7 +94,7 @@ func TestCommandBuilderExecutesAcrossRepositories(testInstance *testing.T) {
 			arguments: []string{
 				"--package", "flag-package",
 				"--dry-run",
-				"--roots", flagRootPathConstant,
+				"--" + flagutils.DefaultRootFlagName, flagRootPathConstant,
 			},
 			discoveredRepositories: []string{
 				discoveredRepositoryThreePathConstant,
@@ -132,6 +135,7 @@ func TestCommandBuilderExecutesAcrossRepositories(testInstance *testing.T) {
 
 			command, buildError := builder.Build()
 			require.NoError(subTest, buildError)
+			bindGlobalPackagesFlags(command)
 
 			command.SetContext(context.Background())
 			command.SetArgs(testCase.arguments)
@@ -195,6 +199,7 @@ func TestCommandBuilderAggregatesErrorsAcrossRepositories(testInstance *testing.
 
 	command, buildError := builder.Build()
 	require.NoError(testInstance, buildError)
+	bindGlobalPackagesFlags(command)
 
 	command.SetContext(context.Background())
 	executionErrorResult := command.Execute()
@@ -235,6 +240,7 @@ func TestCommandBuilderPropagatesContextCancellation(testInstance *testing.T) {
 
 	command, buildError := builder.Build()
 	require.NoError(testInstance, buildError)
+	flagutils.BindRootFlags(command, flagutils.RootFlagValues{}, flagutils.RootFlagDefinition{Enabled: true})
 
 	command.SetContext(context.Background())
 	executionError := command.Execute()
@@ -259,7 +265,7 @@ func TestCommandBuilderDisplaysHelpWhenRootsMissing(testInstance *testing.T) {
 			name:          "flag_provided_without_roots",
 			configuration: packages.Configuration{Purge: packages.PurgeConfiguration{}},
 			arguments: []string{
-				"--roots",
+				"--" + flagutils.DefaultRootFlagName,
 				"   ",
 			},
 		},
@@ -279,6 +285,7 @@ func TestCommandBuilderDisplaysHelpWhenRootsMissing(testInstance *testing.T) {
 
 			command, buildError := builder.Build()
 			require.NoError(subTest, buildError)
+			bindGlobalPackagesFlags(command)
 
 			command.SetContext(context.Background())
 			command.SetArgs(testCase.arguments)
@@ -289,7 +296,7 @@ func TestCommandBuilderDisplaysHelpWhenRootsMissing(testInstance *testing.T) {
 
 			executionError := command.Execute()
 			require.Error(subTest, executionError)
-			require.Equal(subTest, missingRepositoryRootsErrorMessageConstant, executionError.Error())
+			require.Equal(subTest, rootutils.MissingRootsMessage(), executionError.Error())
 			require.Contains(subTest, outputBuffer.String(), command.UseLine())
 			require.Empty(subTest, discoverer.recordedRoots)
 		})
@@ -313,12 +320,41 @@ func TestCommandBuilderValidatesArguments(testInstance *testing.T) {
 
 	command, buildError := builder.Build()
 	require.NoError(testInstance, buildError)
+	bindGlobalPackagesFlags(command)
 
 	command.SetContext(context.Background())
 	command.SetArgs([]string{"unexpected"})
 	executionError := command.Execute()
 	require.Error(testInstance, executionError)
 	require.ErrorContains(testInstance, executionError, "does not accept positional arguments")
+}
+
+func bindGlobalPackagesFlags(command *cobra.Command) {
+	flagutils.BindRootFlags(command, flagutils.RootFlagValues{}, flagutils.RootFlagDefinition{Enabled: true})
+	flagutils.BindExecutionFlags(command, flagutils.ExecutionDefaults{}, flagutils.ExecutionFlagDefinitions{
+		DryRun:    flagutils.ExecutionFlagDefinition{Name: flagutils.DryRunFlagName, Usage: flagutils.DryRunFlagUsage, Enabled: true},
+		AssumeYes: flagutils.ExecutionFlagDefinition{Name: flagutils.AssumeYesFlagName, Usage: flagutils.AssumeYesFlagUsage, Shorthand: flagutils.AssumeYesFlagShorthand, Enabled: true},
+	})
+	command.PersistentFlags().String(flagutils.RemoteFlagName, "", flagutils.RemoteFlagUsage)
+	command.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		contextAccessor := utils.NewCommandContextAccessor()
+		executionFlags := utils.ExecutionFlags{}
+		if dryRunValue, dryRunChanged, dryRunError := flagutils.BoolFlag(cmd, flagutils.DryRunFlagName); dryRunError == nil {
+			executionFlags.DryRun = dryRunValue
+			executionFlags.DryRunSet = dryRunChanged
+		}
+		if assumeYesValue, assumeYesChanged, assumeYesError := flagutils.BoolFlag(cmd, flagutils.AssumeYesFlagName); assumeYesError == nil {
+			executionFlags.AssumeYes = assumeYesValue
+			executionFlags.AssumeYesSet = assumeYesChanged
+		}
+		if remoteValue, remoteChanged, remoteError := flagutils.StringFlag(cmd, flagutils.RemoteFlagName); remoteError == nil {
+			executionFlags.Remote = strings.TrimSpace(remoteValue)
+			executionFlags.RemoteSet = remoteChanged && len(strings.TrimSpace(remoteValue)) > 0
+		}
+		updatedContext := contextAccessor.WithExecutionFlags(cmd.Context(), executionFlags)
+		cmd.SetContext(updatedContext)
+		return nil
+	}
 }
 
 type stubServiceResolver struct {
@@ -448,9 +484,10 @@ func TestCommandBuilderExpandsTildeFlagRoots(testInstance *testing.T) {
 
 	command, buildError := builder.Build()
 	require.NoError(testInstance, buildError)
+	bindGlobalPackagesFlags(command)
 
 	command.SetContext(context.Background())
-	command.SetArgs([]string{"--roots", "~/packages/roots"})
+	command.SetArgs([]string{"--" + flagutils.DefaultRootFlagName, "~/packages/roots"})
 	executionError := command.Execute()
 	require.NoError(testInstance, executionError)
 

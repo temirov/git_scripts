@@ -90,11 +90,11 @@ func buildProtocolConversionOperation(options map[string]any) (Operation, error)
 
 func buildRenameOperation(options map[string]any) (Operation, error) {
 	reader := newOptionReader(options)
-	requireClean, _, requireCleanError := reader.boolValue(optionRequireCleanKeyConstant)
+	requireClean, requireCleanExplicit, requireCleanError := reader.boolValue(optionRequireCleanKeyConstant)
 	if requireCleanError != nil {
 		return nil, requireCleanError
 	}
-	return &RenameOperation{RequireCleanWorktree: requireClean}, nil
+	return &RenameOperation{RequireCleanWorktree: requireClean, requireCleanExplicit: requireCleanExplicit}, nil
 }
 
 func buildBranchMigrationOperation(options map[string]any) (Operation, error) {

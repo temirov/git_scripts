@@ -6,56 +6,79 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
 	"github.com/temirov/gix/internal/repos/shared"
+	flagutils "github.com/temirov/gix/internal/utils/flags"
 )
 
-const (
-	testBooleanLiteralTrueConstant          = "true"
-	testBooleanLiteralFalseConstant         = "FALSE"
-	testRepositoryRelativePathConstant      = "projects/example"
-	testDetermineRootsArgumentsCaseConstant = "arguments_preferred"
-	testDetermineRootsConfigurationCase     = "configuration_used_when_arguments_filtered"
-)
-
-func TestDetermineRepositoryRootsSanitizesInputs(testInstance *testing.T) {
-	testInstance.Helper()
+func TestRequireRepositoryRoots(t *testing.T) {
+	t.Helper()
 
 	homeDirectory, homeDirectoryError := os.UserHomeDir()
-	require.NoError(testInstance, homeDirectoryError)
+	require.NoError(t, homeDirectoryError)
 
-	tildeArgument := filepath.Join("~", testRepositoryRelativePathConstant)
-	expectedExpanded := filepath.Join(homeDirectory, testRepositoryRelativePathConstant)
-	configuredRoot := filepath.Join(homeDirectory, "configured")
+	flagRoot := filepath.Join("~", "flag-root")
+	flagRootExpanded := filepath.Join(homeDirectory, "flag-root")
+	configuredRoot := filepath.Join("~", "configured-root")
+	configuredExpanded := filepath.Join(homeDirectory, "configured-root")
 
 	testCases := []struct {
-		name             string
-		arguments        []string
-		configured       []string
-		expectedResolved []string
+		name          string
+		arguments     []string
+		configured    []string
+		flagArgs      []string
+		expectError   bool
+		expectedError string
+		expectedRoots []string
 	}{
 		{
-			name:             testDetermineRootsArgumentsCaseConstant,
-			arguments:        []string{"  " + tildeArgument + "\t"},
-			configured:       []string{configuredRoot},
-			expectedResolved: []string{expectedExpanded},
+			name:          "positional_arguments_rejected",
+			arguments:     []string{"/tmp/positional"},
+			configured:    nil,
+			expectError:   true,
+			expectedError: "repository roots must be provided using --root",
 		},
 		{
-			name:             testDetermineRootsConfigurationCase,
-			arguments:        []string{"", testBooleanLiteralTrueConstant, testBooleanLiteralFalseConstant},
-			configured:       []string{"  " + tildeArgument + "  "},
-			expectedResolved: []string{expectedExpanded},
+			name:          "flag_values_take_precedence",
+			flagArgs:      []string{"--" + flagutils.DefaultRootFlagName, flagRoot},
+			configured:    []string{configuredRoot},
+			expectedRoots: []string{flagRootExpanded},
+		},
+		{
+			name:          "configuration_used_when_flag_missing",
+			configured:    []string{configuredRoot},
+			expectedRoots: []string{configuredExpanded},
+		},
+		{
+			name:          "missing_roots_error",
+			configured:    nil,
+			expectError:   true,
+			expectedError: "no repository roots provided; specify --root or configure defaults",
 		},
 	}
 
 	for _, testCase := range testCases {
 		testCase := testCase
-		testInstance.Run(testCase.name, func(subTest *testing.T) {
+		t.Run(testCase.name, func(subTest *testing.T) {
 			subTest.Helper()
 
-			resolved := determineRepositoryRoots(testCase.arguments, testCase.configured)
-			require.Equal(subTest, testCase.expectedResolved, resolved)
+			command := &cobra.Command{}
+			flagutils.BindRootFlags(command, flagutils.RootFlagValues{}, flagutils.RootFlagDefinition{Enabled: true})
+			if len(testCase.flagArgs) > 0 {
+				require.NoError(subTest, command.ParseFlags(testCase.flagArgs))
+			}
+
+			resolvedRoots, resolveError := requireRepositoryRoots(command, testCase.arguments, testCase.configured)
+			if testCase.expectError {
+				require.Error(subTest, resolveError)
+				require.Equal(subTest, testCase.expectedError, resolveError.Error())
+				return
+			}
+
+			require.NoError(subTest, resolveError)
+			require.Equal(subTest, testCase.expectedRoots, resolvedRoots)
 		})
 	}
 }

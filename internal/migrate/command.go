@@ -15,16 +15,21 @@ import (
 	"github.com/temirov/gix/internal/githubcli"
 	"github.com/temirov/gix/internal/gitrepo"
 	"github.com/temirov/gix/internal/repos/discovery"
+	"github.com/temirov/gix/internal/utils"
+	rootutils "github.com/temirov/gix/internal/utils/roots"
 )
 
 const (
-	commandUseConstant                           = "branch-migrate [root ...]"
+	commandUseConstant                           = "branch-migrate"
 	commandShortDescriptionConstant              = "Migrate repository defaults from main to master"
 	commandLongDescriptionConstant               = "branch-migrate retargets workflows, updates GitHub configuration, and evaluates safety gates before switching the default branch."
 	migrateCommandExecutionErrorTemplateConstant = "branch migration failed: %w"
-	debugFlagNameConstant                        = "debug"
-	debugFlagDescriptionConstant                 = "Enable verbose debug logging for migration diagnostics"
 	defaultRemoteNameConstant                    = "origin"
+	sourceBranchFlagNameConstant                 = "from"
+	sourceBranchFlagUsageConstant                = "Source branch to migrate from"
+	targetBranchFlagNameConstant                 = "to"
+	targetBranchFlagUsageConstant                = "Target branch to migrate to"
+	identicalBranchesErrorMessageConstant        = "--from and --to must differ"
 	workflowsDirectoryConstant                   = ".github/workflows"
 	repositoryDiscoveryErrorTemplateConstant     = "repository discovery failed: %w"
 	repositoryResolutionErrorTemplateConstant    = "unable to resolve repository identifier: %w"
@@ -43,7 +48,6 @@ const (
 	logMessageRepositoryMigrationFailedConstant  = "Repository migration failed"
 	logFieldRepositoryRootsConstant              = "roots"
 	logFieldRepositoryPathConstant               = "repository"
-	missingRepositoryRootsErrorMessageConstant   = "no repository roots provided; specify --root or configure defaults"
 )
 
 // RepositoryDiscoverer locates Git repositories beneath provided roots.
@@ -57,6 +61,8 @@ type ServiceProvider func(dependencies ServiceDependencies) (MigrationExecutor, 
 type commandOptions struct {
 	debugLoggingEnabled bool
 	repositoryRoots     []string
+	sourceBranch        BranchName
+	targetBranch        BranchName
 }
 
 // LoggerProvider supplies a zap logger instance.
@@ -81,10 +87,12 @@ func (builder *CommandBuilder) Build() (*cobra.Command, error) {
 		Long:          commandLongDescriptionConstant,
 		SilenceErrors: true,
 		SilenceUsage:  true,
+		Args:          cobra.NoArgs,
 		RunE:          builder.runMigrate,
 	}
 
-	command.Flags().Bool(debugFlagNameConstant, DefaultCommandConfiguration().EnableDebugLogging, debugFlagDescriptionConstant)
+	command.Flags().String(sourceBranchFlagNameConstant, string(BranchMain), sourceBranchFlagUsageConstant)
+	command.Flags().String(targetBranchFlagNameConstant, string(BranchMaster), targetBranchFlagUsageConstant)
 
 	return command, nil
 }
@@ -164,8 +172,8 @@ func (builder *CommandBuilder) runMigrate(command *cobra.Command, arguments []st
 			RepositoryRemoteName: defaultRemoteNameConstant,
 			RepositoryIdentifier: repositoryIdentifier,
 			WorkflowsDirectory:   workflowsDirectoryConstant,
-			SourceBranch:         BranchMain,
-			TargetBranch:         BranchMaster,
+			SourceBranch:         options.sourceBranch,
+			TargetBranch:         options.targetBranch,
 			PushUpdates:          true,
 			EnableDebugLogging:   options.debugLoggingEnabled,
 		}
@@ -195,38 +203,59 @@ func (builder *CommandBuilder) parseOptions(command *cobra.Command, arguments []
 	configuration := builder.resolveConfiguration()
 
 	debugEnabled := configuration.EnableDebugLogging
-	if command != nil && command.Flags().Changed(debugFlagNameConstant) {
-		debugEnabled, _ = command.Flags().GetBool(debugFlagNameConstant)
-	}
-
-	repositoryRoots := builder.determineRepositoryRoots(arguments, configuration.RepositoryRoots)
-	if len(repositoryRoots) == 0 {
-		if command != nil {
-			_ = command.Help()
+	if command != nil {
+		contextAccessor := utils.NewCommandContextAccessor()
+		if logLevel, available := contextAccessor.LogLevel(command.Context()); available {
+			if strings.EqualFold(logLevel, string(utils.LogLevelDebug)) {
+				debugEnabled = true
+			}
 		}
-		return commandOptions{}, errors.New(missingRepositoryRootsErrorMessageConstant)
 	}
 
-	return commandOptions{debugLoggingEnabled: debugEnabled, repositoryRoots: repositoryRoots}, nil
-}
-
-func (builder *CommandBuilder) determineRepositoryRoots(arguments []string, configuredRoots []string) []string {
-	argumentRoots := migrateConfigurationRepositoryPathSanitizer.Sanitize(arguments)
-	if len(argumentRoots) > 0 {
-		return argumentRoots
+	repositoryRoots, resolveRootsError := rootutils.Resolve(command, arguments, configuration.RepositoryRoots)
+	if resolveRootsError != nil {
+		return commandOptions{}, resolveRootsError
 	}
 
-	sanitizedConfiguredRoots := migrateConfigurationRepositoryPathSanitizer.Sanitize(configuredRoots)
-	if len(sanitizedConfiguredRoots) > 0 {
-		return sanitizedConfiguredRoots
+	sourceBranchName := strings.TrimSpace(configuration.SourceBranch)
+	if len(sourceBranchName) == 0 {
+		sourceBranchName = string(BranchMain)
+	}
+	targetBranchName := strings.TrimSpace(configuration.TargetBranch)
+	if len(targetBranchName) == 0 {
+		targetBranchName = string(BranchMaster)
 	}
 
-	trimmedWorkingDirectory := strings.TrimSpace(builder.WorkingDirectory)
-	if len(trimmedWorkingDirectory) > 0 {
-		return []string{trimmedWorkingDirectory}
+	if command != nil {
+		if command.Flags().Changed(sourceBranchFlagNameConstant) {
+			flagValue, _ := command.Flags().GetString(sourceBranchFlagNameConstant)
+			sourceBranchName = strings.TrimSpace(flagValue)
+		}
+		if command.Flags().Changed(targetBranchFlagNameConstant) {
+			flagValue, _ := command.Flags().GetString(targetBranchFlagNameConstant)
+			targetBranchName = strings.TrimSpace(flagValue)
+		}
 	}
 
-	return nil
+	if len(sourceBranchName) == 0 {
+		sourceBranchName = string(BranchMain)
+	}
+	if len(targetBranchName) == 0 {
+		targetBranchName = string(BranchMaster)
+	}
+
+	sourceBranch := BranchName(sourceBranchName)
+	targetBranch := BranchName(targetBranchName)
+	if sourceBranch == targetBranch {
+		return commandOptions{}, errors.New(identicalBranchesErrorMessageConstant)
+	}
+
+	return commandOptions{
+		debugLoggingEnabled: debugEnabled,
+		repositoryRoots:     repositoryRoots,
+		sourceBranch:        sourceBranch,
+		targetBranch:        targetBranch,
+	}, nil
 }
 
 func (builder *CommandBuilder) resolveLogger(enableDebug bool) *zap.Logger {

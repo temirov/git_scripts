@@ -6,8 +6,6 @@ const (
 	commandLongDescription                      = "Scans git repositories for GitHub remotes and produces audit reports or applies reconciliation actions."
 	flagRootNameConstant                        = "root"
 	flagRootDescriptionConstant                 = "Repository roots to scan (repeatable)"
-	flagDebugNameConstant                       = "debug"
-	flagDebugDescriptionConstant                = "Print debug information while scanning"
 	missingRootsErrorMessageConstant            = "no repository roots provided; specify --root or configure defaults"
 	normalizeRepositoryPathErrorMessageConstant = "failed to normalize repository path"
 	debugDiscoveredTemplate                     = "DEBUG: discovered %d candidate repos under: %s\n"

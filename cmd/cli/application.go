@@ -22,6 +22,7 @@ import (
 	"github.com/temirov/gix/internal/migrate"
 	"github.com/temirov/gix/internal/packages"
 	"github.com/temirov/gix/internal/utils"
+	flagutils "github.com/temirov/gix/internal/utils/flags"
 )
 
 const (
@@ -37,6 +38,9 @@ const (
 	commonConfigurationKeyConstant                      = "common"
 	commonLogLevelConfigKeyConstant                     = commonConfigurationKeyConstant + ".log_level"
 	commonLogFormatConfigKeyConstant                    = commonConfigurationKeyConstant + ".log_format"
+	commonDryRunConfigKeyConstant                       = commonConfigurationKeyConstant + ".dry_run"
+	commonAssumeYesConfigKeyConstant                    = commonConfigurationKeyConstant + ".assume_yes"
+	commonRequireCleanConfigKeyConstant                 = commonConfigurationKeyConstant + ".require_clean"
 	environmentPrefixConstant                           = "GIX"
 	configurationNameConstant                           = "config"
 	configurationTypeConstant                           = "yaml"
@@ -72,6 +76,11 @@ const (
 	missingOperationConfigurationTemplateConstant       = "missing configuration for operation %q"
 	missingOperationConfigurationSkippedMessageConstant = "operation configuration missing; continuing without defaults"
 	unknownCommandNamePlaceholderConstant               = "unknown"
+	dryRunOptionKeyConstant                             = "dry_run"
+	assumeYesOptionKeyConstant                          = "assume_yes"
+	requireCleanOptionKeyConstant                       = "require_clean"
+	branchFlagNameConstant                              = "branch"
+	branchFlagUsageConstant                             = "Branch name for command context"
 )
 
 var commandOperationRequirements = map[string][]string{
@@ -117,10 +126,13 @@ type ApplicationConfiguration struct {
 	Operations []ApplicationOperationConfiguration `mapstructure:"operations"`
 }
 
-// ApplicationCommonConfiguration stores logging configuration shared across commands.
+// ApplicationCommonConfiguration stores logging and execution defaults shared across commands.
 type ApplicationCommonConfiguration struct {
-	LogLevel  string `mapstructure:"log_level"`
-	LogFormat string `mapstructure:"log_format"`
+	LogLevel     string `mapstructure:"log_level"`
+	LogFormat    string `mapstructure:"log_format"`
+	DryRun       bool   `mapstructure:"dry_run"`
+	AssumeYes    bool   `mapstructure:"assume_yes"`
+	RequireClean bool   `mapstructure:"require_clean"`
 }
 
 // ApplicationOperationConfiguration captures reusable operation defaults from the configuration file.
@@ -227,6 +239,8 @@ type Application struct {
 	logFormatFlagValue      string
 	commandContextAccessor  utils.CommandContextAccessor
 	operationConfigurations OperationConfigurations
+	rootFlagValues          *flagutils.RootFlagValues
+	branchFlagValues        *flagutils.BranchFlagValues
 }
 
 // NewApplication assembles a fully wired CLI application instance.
@@ -266,6 +280,29 @@ func NewApplication() *Application {
 	cobraCommand.PersistentFlags().StringVar(&application.configurationFilePath, configFileFlagNameConstant, "", configFileFlagUsageConstant)
 	cobraCommand.PersistentFlags().StringVar(&application.logLevelFlagValue, logLevelFlagNameConstant, "", logLevelFlagUsageConstant)
 	cobraCommand.PersistentFlags().StringVar(&application.logFormatFlagValue, logFormatFlagNameConstant, "", logFormatFlagUsageConstant)
+
+	application.rootFlagValues = flagutils.BindRootFlags(
+		cobraCommand,
+		flagutils.RootFlagValues{},
+		flagutils.RootFlagDefinition{Name: flagutils.DefaultRootFlagName, Usage: flagutils.DefaultRootFlagUsage, Enabled: true, Persistent: true},
+	)
+
+	flagutils.BindExecutionFlags(
+		cobraCommand,
+		flagutils.ExecutionDefaults{},
+		flagutils.ExecutionFlagDefinitions{
+			DryRun:    flagutils.ExecutionFlagDefinition{Name: flagutils.DryRunFlagName, Usage: flagutils.DryRunFlagUsage, Enabled: true},
+			AssumeYes: flagutils.ExecutionFlagDefinition{Name: flagutils.AssumeYesFlagName, Usage: flagutils.AssumeYesFlagUsage, Shorthand: flagutils.AssumeYesFlagShorthand, Enabled: true},
+		},
+	)
+
+	cobraCommand.PersistentFlags().String(flagutils.RemoteFlagName, "", flagutils.RemoteFlagUsage)
+
+	application.branchFlagValues = flagutils.BindBranchFlags(
+		cobraCommand,
+		flagutils.BranchFlagValues{},
+		flagutils.BranchFlagDefinition{Name: branchFlagNameConstant, Usage: branchFlagUsageConstant, Enabled: true},
+	)
 
 	auditBuilder := audit.CommandBuilder{
 		LoggerProvider: func() *zap.Logger {
@@ -437,8 +474,11 @@ func (application *Application) resolveUserConfigurationDirectoryPath() (string,
 
 func (application *Application) initializeConfiguration(command *cobra.Command) error {
 	defaultValues := map[string]any{
-		commonLogLevelConfigKeyConstant:  string(utils.LogLevelInfo),
-		commonLogFormatConfigKeyConstant: string(utils.LogFormatStructured),
+		commonLogLevelConfigKeyConstant:     string(utils.LogLevelInfo),
+		commonLogFormatConfigKeyConstant:    string(utils.LogFormatStructured),
+		commonDryRunConfigKeyConstant:       false,
+		commonAssumeYesConfigKeyConstant:    false,
+		commonRequireCleanConfigKeyConstant: false,
 	}
 
 	loadedConfiguration, loadError := application.configurationLoader.LoadConfiguration(application.configurationFilePath, defaultValues, &application.configuration)
@@ -491,6 +531,17 @@ func (application *Application) initializeConfiguration(command *cobra.Command) 
 			command.Context(),
 			application.configurationMetadata.ConfigFileUsed,
 		)
+
+		executionFlags := application.collectExecutionFlags(command)
+		updatedContext = application.commandContextAccessor.WithExecutionFlags(updatedContext, executionFlags)
+		updatedContext = application.commandContextAccessor.WithLogLevel(updatedContext, application.configuration.Common.LogLevel)
+
+		branchContext := utils.BranchContext{RequireClean: true}
+		if application.branchFlagValues != nil {
+			branchContext.Name = application.branchFlagValues.Name
+		}
+		updatedContext = application.commandContextAccessor.WithBranchContext(updatedContext, branchContext)
+
 		command.SetContext(updatedContext)
 		if rootCommand := command.Root(); rootCommand != nil {
 			rootCommand.SetContext(updatedContext)
@@ -532,51 +583,135 @@ func (application *Application) logConfigurationInitialization() {
 	)
 }
 
+func (application *Application) collectExecutionFlags(command *cobra.Command) utils.ExecutionFlags {
+	executionFlags := utils.ExecutionFlags{}
+	if command == nil {
+		return executionFlags
+	}
+
+	if dryRunValue, dryRunChanged, dryRunError := flagutils.BoolFlag(command, flagutils.DryRunFlagName); dryRunError == nil {
+		executionFlags.DryRun = dryRunValue
+		executionFlags.DryRunSet = dryRunChanged
+	}
+
+	if assumeYesValue, assumeYesChanged, assumeYesError := flagutils.BoolFlag(command, flagutils.AssumeYesFlagName); assumeYesError == nil {
+		executionFlags.AssumeYes = assumeYesValue
+		executionFlags.AssumeYesSet = assumeYesChanged
+	}
+
+	if remoteValue, remoteChanged, remoteError := flagutils.StringFlag(command, flagutils.RemoteFlagName); remoteError == nil {
+		trimmedRemote := strings.TrimSpace(remoteValue)
+		executionFlags.Remote = trimmedRemote
+		executionFlags.RemoteSet = remoteChanged && len(trimmedRemote) > 0
+	}
+
+	return executionFlags
+}
+
 func (application *Application) auditCommandConfiguration() audit.CommandConfiguration {
 	var configuration audit.CommandConfiguration
 	application.decodeOperationConfiguration(auditOperationNameConstant, &configuration)
+	if strings.EqualFold(application.configuration.Common.LogLevel, string(utils.LogLevelDebug)) {
+		configuration.Debug = true
+	}
 	return configuration
 }
 
 func (application *Application) packagesConfiguration() packages.Configuration {
-	var configuration packages.Configuration
+	configuration := packages.DefaultConfiguration()
 	application.decodeOperationConfiguration(packagesPurgeOperationNameConstant, &configuration.Purge)
+
+	options, optionsExist := application.lookupOperationOptions(packagesPurgeOperationNameConstant)
+	if !optionsExist || !optionExists(options, dryRunOptionKeyConstant) {
+		configuration.Purge.DryRun = application.configuration.Common.DryRun
+	}
 	return configuration
 }
 
 func (application *Application) branchCleanupConfiguration() branches.CommandConfiguration {
-	var configuration branches.CommandConfiguration
+	configuration := branches.DefaultCommandConfiguration()
 	application.decodeOperationConfiguration(branchCleanupOperationNameConstant, &configuration)
+
+	options, optionsExist := application.lookupOperationOptions(branchCleanupOperationNameConstant)
+	if !optionsExist || !optionExists(options, dryRunOptionKeyConstant) {
+		configuration.DryRun = application.configuration.Common.DryRun
+	}
+
 	return configuration
 }
 
 func (application *Application) reposRenameConfiguration() repos.RenameConfiguration {
-	var configuration repos.RenameConfiguration
+	configuration := repos.DefaultToolsConfiguration().Rename
 	application.decodeOperationConfiguration(reposRenameOperationNameConstant, &configuration)
+
+	options, optionsExist := application.lookupOperationOptions(reposRenameOperationNameConstant)
+	if !optionsExist || !optionExists(options, dryRunOptionKeyConstant) {
+		configuration.DryRun = application.configuration.Common.DryRun
+	}
+	if !optionsExist || !optionExists(options, assumeYesOptionKeyConstant) {
+		configuration.AssumeYes = application.configuration.Common.AssumeYes
+	}
+	if !optionsExist || !optionExists(options, requireCleanOptionKeyConstant) {
+		configuration.RequireCleanWorktree = application.configuration.Common.RequireClean
+	}
+
 	return configuration
 }
 
 func (application *Application) reposRemotesConfiguration() repos.RemotesConfiguration {
-	var configuration repos.RemotesConfiguration
+	configuration := repos.DefaultToolsConfiguration().Remotes
 	application.decodeOperationConfiguration(reposRemotesOperationNameConstant, &configuration)
+
+	options, optionsExist := application.lookupOperationOptions(reposRemotesOperationNameConstant)
+	if !optionsExist || !optionExists(options, dryRunOptionKeyConstant) {
+		configuration.DryRun = application.configuration.Common.DryRun
+	}
+	if !optionsExist || !optionExists(options, assumeYesOptionKeyConstant) {
+		configuration.AssumeYes = application.configuration.Common.AssumeYes
+	}
+
 	return configuration
 }
 
 func (application *Application) reposProtocolConfiguration() repos.ProtocolConfiguration {
-	var configuration repos.ProtocolConfiguration
+	configuration := repos.DefaultToolsConfiguration().Protocol
 	application.decodeOperationConfiguration(reposProtocolOperationNameConstant, &configuration)
+
+	options, optionsExist := application.lookupOperationOptions(reposProtocolOperationNameConstant)
+	if !optionsExist || !optionExists(options, dryRunOptionKeyConstant) {
+		configuration.DryRun = application.configuration.Common.DryRun
+	}
+	if !optionsExist || !optionExists(options, assumeYesOptionKeyConstant) {
+		configuration.AssumeYes = application.configuration.Common.AssumeYes
+	}
+
 	return configuration
 }
 
 func (application *Application) workflowCommandConfiguration() workflowcmd.CommandConfiguration {
-	var configuration workflowcmd.CommandConfiguration
+	configuration := workflowcmd.DefaultCommandConfiguration()
 	application.decodeOperationConfiguration(workflowCommandOperationNameConstant, &configuration)
+
+	options, optionsExist := application.lookupOperationOptions(workflowCommandOperationNameConstant)
+	if !optionsExist || !optionExists(options, dryRunOptionKeyConstant) {
+		configuration.DryRun = application.configuration.Common.DryRun
+	}
+	if !optionsExist || !optionExists(options, assumeYesOptionKeyConstant) {
+		configuration.AssumeYes = application.configuration.Common.AssumeYes
+	}
+	if !optionsExist || !optionExists(options, requireCleanOptionKeyConstant) {
+		configuration.RequireClean = application.configuration.Common.RequireClean
+	}
+
 	return configuration
 }
 
 func (application *Application) branchMigrateConfiguration() migrate.CommandConfiguration {
-	var configuration migrate.CommandConfiguration
+	configuration := migrate.DefaultCommandConfiguration()
 	application.decodeOperationConfiguration(branchMigrateOperationNameConstant, &configuration)
+	if strings.EqualFold(application.configuration.Common.LogLevel, string(utils.LogLevelDebug)) {
+		configuration.EnableDebugLogging = true
+	}
 	return configuration
 }
 
@@ -591,6 +726,38 @@ func (application *Application) decodeOperationConfiguration(operationName strin
 			zap.Error(decodeError),
 		)
 	}
+}
+
+func (application *Application) lookupOperationOptions(operationName string) (map[string]any, bool) {
+	options, lookupError := application.operationConfigurations.Lookup(operationName)
+	if lookupError != nil {
+		return nil, false
+	}
+	return options, true
+}
+
+func optionExists(options map[string]any, optionKey string) bool {
+	if len(options) == 0 {
+		return false
+	}
+
+	normalizedOptionKey := strings.ToLower(strings.TrimSpace(optionKey))
+	for candidateKey := range options {
+		if strings.ToLower(strings.TrimSpace(candidateKey)) == normalizedOptionKey {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (application *Application) operationOptionExists(operationName string, optionKey string) bool {
+	options, exists := application.lookupOperationOptions(operationName)
+	if !exists {
+		return false
+	}
+
+	return optionExists(options, optionKey)
 }
 
 func (application *Application) validateOperationConfigurations(command *cobra.Command) error {

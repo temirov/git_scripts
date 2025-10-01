@@ -11,24 +11,20 @@ import (
 	"github.com/temirov/gix/internal/repos/dependencies"
 	conversion "github.com/temirov/gix/internal/repos/protocol"
 	"github.com/temirov/gix/internal/repos/shared"
+	flagutils "github.com/temirov/gix/internal/utils/flags"
 )
 
 const (
-	protocolUseConstant            = "repo-protocol-convert [root ...]"
-	protocolShortDescription       = "Convert repository origin URLs between git/ssh/https"
-	protocolLongDescription        = "repo-protocol-convert converts origin URLs to a desired protocol."
-	protocolDryRunFlagName         = "dry-run"
-	protocolDryRunFlagDescription  = "Preview protocol conversions without making changes"
-	protocolAssumeYesFlagName      = "yes"
-	protocolAssumeYesFlagShorthand = "y"
-	protocolAssumeYesDescription   = "Automatically confirm protocol conversions"
-	protocolFromFlagName           = "from"
-	protocolFromFlagDescription    = "Current protocol to convert from (git, ssh, https)"
-	protocolToFlagName             = "to"
-	protocolToFlagDescription      = "Target protocol to convert to (git, ssh, https)"
-	protocolErrorMissingPair       = "specify both --from and --to"
-	protocolErrorSamePair          = "--from and --to must differ"
-	protocolErrorInvalidValue      = "invalid protocol value: %s"
+	protocolUseConstant         = "repo-protocol-convert"
+	protocolShortDescription    = "Convert repository origin URLs between git/ssh/https"
+	protocolLongDescription     = "repo-protocol-convert converts origin URLs to a desired protocol."
+	protocolFromFlagName        = "from"
+	protocolFromFlagDescription = "Current protocol to convert from (git, ssh, https)"
+	protocolToFlagName          = "to"
+	protocolToFlagDescription   = "Target protocol to convert to (git, ssh, https)"
+	protocolErrorMissingPair    = "specify both --from and --to"
+	protocolErrorSamePair       = "--from and --to must differ"
+	protocolErrorInvalidValue   = "invalid protocol value: %s"
 )
 
 // ProtocolCommandBuilder assembles the repo-protocol-convert command.
@@ -49,11 +45,10 @@ func (builder *ProtocolCommandBuilder) Build() (*cobra.Command, error) {
 		Use:   protocolUseConstant,
 		Short: protocolShortDescription,
 		Long:  protocolLongDescription,
+		Args:  cobra.NoArgs,
 		RunE:  builder.run,
 	}
 
-	command.Flags().Bool(protocolDryRunFlagName, false, protocolDryRunFlagDescription)
-	command.Flags().BoolP(protocolAssumeYesFlagName, protocolAssumeYesFlagShorthand, false, protocolAssumeYesDescription)
 	command.Flags().String(protocolFromFlagName, "", protocolFromFlagDescription)
 	command.Flags().String(protocolToFlagName, "", protocolToFlagDescription)
 
@@ -62,15 +57,16 @@ func (builder *ProtocolCommandBuilder) Build() (*cobra.Command, error) {
 
 func (builder *ProtocolCommandBuilder) run(command *cobra.Command, arguments []string) error {
 	configuration := builder.resolveConfiguration()
+	executionFlags, executionFlagsAvailable := flagutils.ResolveExecutionFlags(command)
 
 	dryRun := configuration.DryRun
-	if command != nil && command.Flags().Changed(protocolDryRunFlagName) {
-		dryRun, _ = command.Flags().GetBool(protocolDryRunFlagName)
+	if executionFlagsAvailable && executionFlags.DryRunSet {
+		dryRun = executionFlags.DryRun
 	}
 
 	assumeYes := configuration.AssumeYes
-	if command != nil && command.Flags().Changed(protocolAssumeYesFlagName) {
-		assumeYes, _ = command.Flags().GetBool(protocolAssumeYesFlagName)
+	if executionFlagsAvailable && executionFlags.AssumeYesSet {
+		assumeYes = executionFlags.AssumeYes
 	}
 
 	fromValue := configuration.FromProtocol

@@ -16,6 +16,7 @@ import (
 
 	"github.com/temirov/gix/internal/branches"
 	"github.com/temirov/gix/internal/execshell"
+	flagutils "github.com/temirov/gix/internal/utils/flags"
 )
 
 const (
@@ -41,6 +42,7 @@ const (
 	prCleanupCommandTimeoutConstant               = 10 * time.Second
 	integrationCommandRemoteFlagConstant          = "--remote"
 	integrationCommandLimitFlagConstant           = "--limit"
+	integrationRootFlagConstant                   = "--" + flagutils.DefaultRootFlagName
 	integrationFakeGHPayloadConstant              = "[{\"headRefName\":\"feature/delete\"},{\"headRefName\":\"feature/missing\"}]"
 	integrationFakeGHScriptTemplateConstant       = "#!/bin/sh\ncat <<'JSON'\n%s\nJSON\n"
 	integrationExpectationMessageTemplateConstant = "expected branch state: %s"
@@ -105,12 +107,15 @@ func TestPullRequestCleanupIntegration(testInstance *testing.T) {
 	cleanupCommand, buildError := cleanupCommandBuilder.Build()
 	require.NoError(testInstance, buildError)
 
+	flagutils.BindRootFlags(cleanupCommand, flagutils.RootFlagValues{}, flagutils.RootFlagDefinition{Enabled: true})
+
 	cleanupCommand.SetContext(context.Background())
 	cleanupCommand.SetArgs([]string{
 		integrationCommandRemoteFlagConstant,
 		integrationRemoteNameConstant,
 		integrationCommandLimitFlagConstant,
 		strconv.Itoa(integrationPullRequestLimitConstant),
+		integrationRootFlagConstant,
 		localRepositoryPath,
 	})
 

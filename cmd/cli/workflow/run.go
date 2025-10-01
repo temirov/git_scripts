@@ -12,6 +12,8 @@ import (
 	"github.com/temirov/gix/internal/repos/dependencies"
 	"github.com/temirov/gix/internal/repos/shared"
 	"github.com/temirov/gix/internal/utils"
+	flagutils "github.com/temirov/gix/internal/utils/flags"
+	rootutils "github.com/temirov/gix/internal/utils/roots"
 	"github.com/temirov/gix/internal/workflow"
 )
 
@@ -19,19 +21,13 @@ const (
 	commandUseConstant                        = "workflow [workflow]"
 	commandShortDescriptionConstant           = "Run a workflow configuration file"
 	commandLongDescriptionConstant            = "workflow executes operations defined in a YAML or JSON configuration file across discovered repositories."
-	rootsFlagNameConstant                     = "roots"
-	rootsFlagDescriptionConstant              = "Root directories containing repositories"
-	dryRunFlagNameConstant                    = "dry-run"
-	dryRunFlagDescriptionConstant             = "Preview workflow operations without making changes"
-	assumeYesFlagNameConstant                 = "yes"
-	assumeYesFlagShorthandConstant            = "y"
-	assumeYesFlagDescriptionConstant          = "Automatically confirm prompts"
+	requireCleanFlagNameConstant              = "require-clean"
+	requireCleanFlagDescriptionConstant       = "Require clean worktrees for rename operations"
 	configurationPathRequiredMessageConstant  = "workflow configuration path required; provide a positional argument or --config flag"
 	loadConfigurationErrorTemplateConstant    = "unable to load workflow configuration: %w"
 	buildOperationsErrorTemplateConstant      = "unable to build workflow operations: %w"
 	gitRepositoryManagerErrorTemplateConstant = "unable to construct repository manager: %w"
 	gitHubClientErrorTemplateConstant         = "unable to construct GitHub client: %w"
-	missingRootsErrorMessageConstant          = "workflow roots required; specify --roots flag or configuration"
 )
 
 // CommandBuilder assembles the workflow command.
@@ -54,19 +50,22 @@ func (builder *CommandBuilder) Build() (*cobra.Command, error) {
 		RunE:  builder.run,
 	}
 
-	command.Flags().StringSlice(rootsFlagNameConstant, nil, rootsFlagDescriptionConstant)
-	command.Flags().Bool(dryRunFlagNameConstant, false, dryRunFlagDescriptionConstant)
-	command.Flags().BoolP(assumeYesFlagNameConstant, assumeYesFlagShorthandConstant, false, assumeYesFlagDescriptionConstant)
+	command.Flags().Bool(requireCleanFlagNameConstant, false, requireCleanFlagDescriptionConstant)
 
 	return command, nil
 }
 
 func (builder *CommandBuilder) run(command *cobra.Command, arguments []string) error {
+	executionFlags, executionFlagsAvailable := flagutils.ResolveExecutionFlags(command)
 	contextAccessor := utils.NewCommandContextAccessor()
 
 	configurationPathCandidate := ""
+	remainingArguments := []string{}
 	if len(arguments) > 0 {
 		configurationPathCandidate = strings.TrimSpace(arguments[0])
+		if len(arguments) > 1 {
+			remainingArguments = append(remainingArguments, arguments[1:]...)
+		}
 	} else {
 		configurationPathFromContext, configurationPathAvailable := contextAccessor.ConfigurationFilePath(command.Context())
 		if configurationPathAvailable {
@@ -132,24 +131,27 @@ func (builder *CommandBuilder) run(command *cobra.Command, arguments []string) e
 
 	commandConfiguration := builder.resolveConfiguration()
 
-	rootValues, _ := command.Flags().GetStringSlice(rootsFlagNameConstant)
-	preferFlagRoots := command != nil && command.Flags().Changed(rootsFlagNameConstant)
-	roots := DetermineRoots(rootValues, commandConfiguration.Roots, preferFlagRoots)
-	if len(roots) == 0 {
-		if helpError := displayCommandHelp(command); helpError != nil {
-			return helpError
-		}
-		return errors.New(missingRootsErrorMessageConstant)
+	requireCleanDefault := commandConfiguration.RequireClean
+	if command != nil && command.Flags().Changed(requireCleanFlagNameConstant) {
+		requireCleanFlagValue, _ := command.Flags().GetBool(requireCleanFlagNameConstant)
+		requireCleanDefault = requireCleanFlagValue
+	}
+
+	workflow.ApplyDefaults(operations, workflow.OperationDefaults{RequireClean: requireCleanDefault})
+
+	roots, rootsError := rootutils.Resolve(command, remainingArguments, commandConfiguration.Roots)
+	if rootsError != nil {
+		return rootsError
 	}
 
 	dryRun := commandConfiguration.DryRun
-	if command != nil && command.Flags().Changed(dryRunFlagNameConstant) {
-		dryRun, _ = command.Flags().GetBool(dryRunFlagNameConstant)
+	if executionFlagsAvailable && executionFlags.DryRunSet {
+		dryRun = executionFlags.DryRun
 	}
 
 	assumeYes := commandConfiguration.AssumeYes
-	if command != nil && command.Flags().Changed(assumeYesFlagNameConstant) {
-		assumeYes, _ = command.Flags().GetBool(assumeYesFlagNameConstant)
+	if executionFlagsAvailable && executionFlags.AssumeYesSet {
+		assumeYes = executionFlags.AssumeYes
 	}
 
 	runtimeOptions := workflow.RuntimeOptions{DryRun: dryRun, AssumeYes: assumeYes}

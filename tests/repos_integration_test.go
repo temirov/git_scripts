@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	flagutils "github.com/temirov/gix/internal/utils/flags"
 )
 
 const (
@@ -21,8 +22,8 @@ const (
 	reposIntegrationRemotesCommand              = "repo-remote-update"
 	reposIntegrationProtocolCommand             = "repo-protocol-convert"
 	reposIntegrationDryRunFlag                  = "--dry-run"
-	reposIntegrationBooleanTrueLiteral          = "true"
 	reposIntegrationYesFlag                     = "--yes"
+	reposIntegrationRootFlag                    = "--" + flagutils.DefaultRootFlagName
 	reposIntegrationFromFlag                    = "--from"
 	reposIntegrationToFlag                      = "--to"
 	reposIntegrationHTTPSProtocol               = "https"
@@ -46,7 +47,7 @@ const (
 	reposIntegrationProtocolConfigCaseName      = "convert_protocol_config"
 	reposIntegrationProtocolConfigDryRunCase    = "convert_protocol_config_dry_run_literal"
 	reposIntegrationProtocolHelpCaseName        = "protocol_help_missing_flags"
-	reposIntegrationProtocolUsageSnippet        = "repo-protocol-convert [root ...]"
+	reposIntegrationProtocolUsageSnippet        = "repo-protocol-convert [flags]"
 	reposIntegrationProtocolMissingFlagsMessage = "specify both --from and --to"
 	reposIntegrationConfigFlagName              = "--config"
 	reposIntegrationConfigFileName              = "config.yaml"
@@ -188,7 +189,7 @@ func TestReposCommandIntegration(testInstance *testing.T) {
 				relativePath, relativeError := filepath.Rel(homeDirectory, repositoryPath)
 				require.NoError(testInstance, relativeError)
 				tildeRoot := reposIntegrationHomeSymbolConstant + string(os.PathSeparator) + relativePath
-				*arguments = append(*arguments, tildeRoot)
+				*arguments = append(*arguments, reposIntegrationRootFlag, tildeRoot)
 			},
 			omitRepositoryArgument: true,
 		},
@@ -264,7 +265,6 @@ func TestReposCommandIntegration(testInstance *testing.T) {
 				reposIntegrationErrorLevel,
 				reposIntegrationProtocolCommand,
 				reposIntegrationDryRunFlag,
-				reposIntegrationBooleanTrueLiteral,
 			},
 			expectedOutput: func(repositoryPath string) string {
 				return fmt.Sprintf("PLAN-CONVERT: %s origin https://github.com/origin/example.git → ssh://git@github.com/canonical/example.git\n", repositoryPath)
@@ -297,7 +297,7 @@ func TestReposCommandIntegration(testInstance *testing.T) {
 				testCase.prepare(subtest, repositoryPath, &commandArguments)
 			}
 			if !testCase.omitRepositoryArgument {
-				commandArguments = append(commandArguments, repositoryPath)
+				commandArguments = append(commandArguments, reposIntegrationRootFlag, repositoryPath)
 			}
 
 			commandOptions := integrationCommandOptions{PathVariable: extendedPath}

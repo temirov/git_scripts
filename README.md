@@ -74,27 +74,36 @@ Configuration keys mirror the flags (`common.log_level`, `common.log_format`) an
 variables prefixed with
 `GIX_` (for example, `GIX_COMMON_LOG_LEVEL=error`).
 
+### Global execution flags
+
+Every command accepts the shared execution flags below in addition to its command-specific options:
+
+- `--root <path>` – add one or more repository roots (repeat the flag to supply multiple roots).
+- `--dry-run` – plan work without performing any side effects.
+- `--yes`/`-y` – automatically confirm interactive prompts.
+- `--remote <name>` – override the Git remote to inspect or mutate (defaults to `origin`).
+
 ## Command catalog
 
 The commands below share repository discovery, prompting, and logging helpers. Use the quick-start examples to align
 with the registered command names and flags.
 
-| Command                 | Summary                                                       | Key flags / example                                                                                                                                                                                                         |
-|-------------------------|---------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `audit`                 | Audit and reconcile local GitHub repositories                 | Flags: `--root`, `--debug`. Example: `go run . audit --root ~/Development`                                                                                                                                                  |
-| `repo-folders-rename`   | Rename repository directories to match canonical GitHub names | Flags: `--dry-run`, `--yes`, `--require-clean`. Example: `go run . repo-folders-rename --yes --require-clean ~/Development`                                                                                                 |
-| `repo-remote-update`    | Update origin URLs to match canonical GitHub repositories     | Flags: `--dry-run`, `--yes`. Example: `go run . repo-remote-update --dry-run ~/Development`                                                                                                                                 |
-| `repo-protocol-convert` | Convert repository origin remotes between protocols           | Flags: `--from`, `--to`, `--dry-run`, `--yes`. Example: `go run . repo-protocol-convert --from https --to ssh --yes ~/Development`                                                                                          |
-| `repo-prs-purge`        | Remove remote and local branches for closed pull requests     | Flags: `--remote`, `--limit`, `--dry-run`. Example: `go run . repo-prs-purge --remote origin --limit 100 ~/Development`                                                                                                     |
-| `branch-migrate`        | Migrate repository defaults from main to master               | Flag: `--debug` for verbose diagnostics. Example: `go run . branch-migrate --debug ~/Development/project-repo`                                                                                                              |
-| `repo-packages-purge`   | Delete untagged GHCR versions                                 | Flags: `--package` (override), `--dry-run`, `--roots`. Example: `go run . repo-packages-purge --dry-run --roots ~/Development` |
-| `workflow`              | Run a workflow configuration file                             | Flags: `--roots`, `--dry-run`, `--yes`. Example: `go run . workflow config.yaml --roots ~/Development --dry-run`                                                                                                            |
+| Command                 | Summary                                                       | Key flags / example                                                                                                                |
+|-------------------------|---------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------|
+| `audit`                 | Audit and reconcile local GitHub repositories                 | Flags: `--root`, `--log-level`. Example: `go run . audit --log-level=debug --root ~/Development`                                    |
+| `repo-folders-rename`   | Rename repository directories to match canonical GitHub names | Flags: `--dry-run`, `--yes`, `--require-clean`. Example: `go run . repo-folders-rename --yes --require-clean --root ~/Development`        |
+| `repo-remote-update`    | Update origin URLs to match canonical GitHub repositories     | Flags: `--dry-run`, `--yes`. Example: `go run . repo-remote-update --dry-run --root ~/Development`                                        |
+| `repo-protocol-convert` | Convert repository origin remotes between protocols           | Flags: `--from`, `--to`, `--dry-run`, `--yes`. Example: `go run . repo-protocol-convert --from https --to ssh --yes --root ~/Development` |
+| `repo-prs-purge`        | Remove remote and local branches for closed pull requests     | Flags: `--remote`, `--limit`, `--dry-run`. Example: `go run . repo-prs-purge --remote origin --limit 100 --root ~/Development`            |
+| `branch-migrate`        | Migrate repository defaults from main to master               | Flags: `--from`, `--to`. Example: `go run . branch-migrate --from main --to master --root ~/Development/project-repo`                     |
+| `repo-packages-purge`   | Delete untagged GHCR versions                                 | Flags: `--package` (override), `--dry-run`, `--root`. Example: `go run . repo-packages-purge --dry-run --root ~/Development`       |
+| `workflow`              | Run a workflow configuration file                             | Flags: `--root`, `--dry-run`, `--yes`. Example: `go run . workflow config.yaml --root ~/Development --dry-run`                     |
 
 Persist defaults and workflow plans in a single configuration file to avoid long flag lists and keep the runner in sync:
 
 The purge command derives the GHCR owner, owner type, and default package name from each repository's `origin` remote
 and the canonical metadata returned by the GitHub CLI. Ensure the remotes point at the desired GitHub repositories
-before running the command. Provide one or more roots with `--roots` or in configuration to run the purge across
+before running the command. Provide one or more roots with `--root` or in configuration to run the purge across
 multiple repositories; the command discovers Git repositories beneath every root and executes the purge workflow for
 each repository, continuing after non-fatal errors. Specify `--package` only when the container name in GHCR differs
 from the repository name.
@@ -216,9 +225,9 @@ Specify `--config path/to/override.yaml` when you need to load an alternate conf
 Define ordered steps in YAML or JSON and execute them with `workflow`:
 
 ```shell
-go run . workflow --roots ~/Development --dry-run
+go run . workflow --root ~/Development --dry-run
 # Execute with confirmations suppressed
-go run . workflow --roots ~/Development --yes
+go run . workflow --root ~/Development --yes
 ```
 
 `workflow` reads the `workflow` array from `config.yaml`, reusing the same repository discovery, prompting, and logging
@@ -226,8 +235,10 @@ infrastructure as the standalone commands. Pass additional roots on the command 
 and
 combine `--dry-run`/`--yes` for non-interactive execution.
 
-Each entry in the `workflow` array is a full step definition. Reuse the option maps defined for CLI commands (for example,
-`*repo_protocol_defaults`) to keep workflow steps and direct invocations in sync. Inline overrides remain possible: apply
+Each entry in the `workflow` array is a full step definition. Reuse the option maps defined for CLI commands (for
+example,
+`*repo_protocol_defaults`) to keep workflow steps and direct invocations in sync. Inline overrides remain possible:
+apply
 another merge inside the `with` map or specify the final values directly alongside the alias.
 
 ## Development and testing
@@ -263,9 +274,7 @@ export GITHUB_PACKAGES_TOKEN=ghp_XXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
 ## Repository roots and bulk execution tips
 
-- Provide explicit repository roots to operate on multiple directories in one invocation. When omitted, commands default
-  to the
-  current working directory.
+- Provide explicit repository roots (or configure defaults) to operate on multiple directories; commands return an error when no roots are supplied.
 - Use `--dry-run` to preview changes. Combine with `--yes` once you are comfortable executing the plan without prompts.
 - Workflow configurations let you mix and match operations (for example, convert protocols, migrate branches, and audit)
   while

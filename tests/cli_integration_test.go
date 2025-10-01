@@ -73,6 +73,7 @@ func TestCLIIntegrationLogLevels(testInstance *testing.T) {
 		name                 string
 		configurationLevel   string
 		environmentLevel     string
+		extraArguments       []string
 		expectedInfoVisible  bool
 		expectedDebugVisible bool
 	}{
@@ -80,6 +81,7 @@ func TestCLIIntegrationLogLevels(testInstance *testing.T) {
 			name:                 integrationDefaultCaseNameConstant,
 			configurationLevel:   "",
 			environmentLevel:     "",
+			extraArguments:       nil,
 			expectedInfoVisible:  true,
 			expectedDebugVisible: false,
 		},
@@ -87,6 +89,7 @@ func TestCLIIntegrationLogLevels(testInstance *testing.T) {
 			name:                 integrationConfigCaseNameConstant,
 			configurationLevel:   integrationDebugLevelConstant,
 			environmentLevel:     "",
+			extraArguments:       nil,
 			expectedInfoVisible:  true,
 			expectedDebugVisible: true,
 		},
@@ -94,8 +97,17 @@ func TestCLIIntegrationLogLevels(testInstance *testing.T) {
 			name:                 integrationEnvironmentCaseNameConstant,
 			configurationLevel:   "",
 			environmentLevel:     integrationErrorLevelConstant,
+			extraArguments:       nil,
 			expectedInfoVisible:  false,
 			expectedDebugVisible: false,
+		},
+		{
+			name:                 "flag_log_level",
+			configurationLevel:   "",
+			environmentLevel:     "",
+			extraArguments:       []string{"--log-level=debug"},
+			expectedInfoVisible:  true,
+			expectedDebugVisible: true,
 		},
 	}
 
@@ -111,6 +123,9 @@ func TestCLIIntegrationLogLevels(testInstance *testing.T) {
 
 			configurationPath := writeIntegrationConfiguration(testInstance, tempDirectory, testCase.configurationLevel)
 			arguments = append(arguments, fmt.Sprintf(integrationConfigFlagTemplateConstant, configurationPath))
+			if len(testCase.extraArguments) > 0 {
+				arguments = append(arguments, testCase.extraArguments...)
+			}
 
 			if len(testCase.environmentLevel) > 0 {
 				environment = append(environment, fmt.Sprintf(integrationEnvironmentAssignmentTemplateConstant, integrationLogLevelEnvKeyConstant, testCase.environmentLevel))
