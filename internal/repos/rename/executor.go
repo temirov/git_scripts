@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"io/fs"
 	"path/filepath"
 	"strings"
 
@@ -11,31 +12,35 @@ import (
 )
 
 const (
-	planSkipAlreadyMessage       = "PLAN-SKIP (already named): %s\n"
-	planSkipDirtyMessage         = "PLAN-SKIP (dirty worktree): %s\n"
-	planSkipParentMissingMessage = "PLAN-SKIP (target parent missing): %s\n"
-	planSkipExistsMessage        = "PLAN-SKIP (target exists): %s\n"
-	planCaseOnlyMessage          = "PLAN-CASE-ONLY: %s → %s (two-step move required)\n"
-	planReadyMessage             = "PLAN-OK: %s → %s\n"
-	errorAlreadyNamedMessage     = "ERROR: already named: %s\n"
-	errorParentMissingMessage    = "ERROR: target parent missing: %s\n"
-	errorTargetExistsMessage     = "ERROR: target exists: %s\n"
-	promptTemplate               = "Rename '%s' → '%s'? [y/N] "
-	skipMessage                  = "SKIP: %s\n"
-	skipDirtyMessage             = "SKIP (dirty worktree): %s\n"
-	successMessage               = "Renamed %s → %s\n"
-	failureMessage               = "ERROR: rename failed for %s → %s\n"
-	intermediateRenameTemplate   = "%s.rename.%d"
+	planSkipAlreadyMessage            = "PLAN-SKIP (already named): %s\n"
+	planSkipDirtyMessage              = "PLAN-SKIP (dirty worktree): %s\n"
+	planSkipParentMissingMessage      = "PLAN-SKIP (target parent missing): %s\n"
+	planSkipParentNotDirectoryMessage = "PLAN-SKIP (target parent not directory): %s\n"
+	planSkipExistsMessage             = "PLAN-SKIP (target exists): %s\n"
+	planCaseOnlyMessage               = "PLAN-CASE-ONLY: %s → %s (two-step move required)\n"
+	planReadyMessage                  = "PLAN-OK: %s → %s\n"
+	errorAlreadyNamedMessage          = "ERROR: already named: %s\n"
+	errorParentMissingMessage         = "ERROR: target parent missing: %s\n"
+	errorParentNotDirectoryMessage    = "ERROR: target parent is not a directory: %s\n"
+	errorTargetExistsMessage          = "ERROR: target exists: %s\n"
+	promptTemplate                    = "Rename '%s' → '%s'? [y/N] "
+	skipMessage                       = "SKIP: %s\n"
+	skipDirtyMessage                  = "SKIP (dirty worktree): %s\n"
+	successMessage                    = "Renamed %s → %s\n"
+	failureMessage                    = "ERROR: rename failed for %s → %s\n"
+	intermediateRenameTemplate        = "%s.rename.%d"
+	parentDirectoryPermissionConstant = fs.FileMode(0o755)
 )
 
 // Options configures a rename execution.
 type Options struct {
-	RepositoryPath       string
-	DesiredFolderName    string
-	DryRun               bool
-	RequireCleanWorktree bool
-	AssumeYes            bool
-	IncludeOwner         bool
+	RepositoryPath          string
+	DesiredFolderName       string
+	DryRun                  bool
+	RequireCleanWorktree    bool
+	AssumeYes               bool
+	IncludeOwner            bool
+	EnsureParentDirectories bool
 }
 
 // Dependencies supplies collaborators required to evaluate rename operations.
@@ -83,11 +88,11 @@ func (executor *Executor) Execute(executionContext context.Context, options Opti
 	newAbsolutePath := filepath.Join(parentDirectory, desiredName)
 
 	if options.DryRun {
-		executor.printPlan(executionContext, oldAbsolutePath, newAbsolutePath, options.RequireCleanWorktree)
+		executor.printPlan(executionContext, oldAbsolutePath, newAbsolutePath, options.RequireCleanWorktree, options.EnsureParentDirectories)
 		return
 	}
 
-	if !executor.validatePrerequisites(executionContext, oldAbsolutePath, newAbsolutePath, options.RequireCleanWorktree) {
+	if !executor.validatePrerequisites(executionContext, oldAbsolutePath, newAbsolutePath, options.RequireCleanWorktree, options.EnsureParentDirectories) {
 		return
 	}
 
@@ -104,6 +109,11 @@ func (executor *Executor) Execute(executionContext context.Context, options Opti
 		}
 	}
 
+	if !executor.ensureParentDirectory(newAbsolutePath, options.EnsureParentDirectories) {
+		executor.printfError(failureMessage, oldAbsolutePath, newAbsolutePath)
+		return
+	}
+
 	if executor.performRename(oldAbsolutePath, newAbsolutePath) {
 		executor.printfOutput(successMessage, oldAbsolutePath, newAbsolutePath)
 	} else {
@@ -116,8 +126,9 @@ func Execute(executionContext context.Context, dependencies Dependencies, option
 	NewExecutor(dependencies).Execute(executionContext, options)
 }
 
-func (executor *Executor) printPlan(executionContext context.Context, oldAbsolutePath string, newAbsolutePath string, requireClean bool) {
+func (executor *Executor) printPlan(executionContext context.Context, oldAbsolutePath string, newAbsolutePath string, requireClean bool, ensureParentDirectories bool) {
 	caseOnlyRename := isCaseOnlyRename(oldAbsolutePath, newAbsolutePath)
+	parentDetails := executor.parentDirectoryDetails(newAbsolutePath)
 
 	switch {
 	case oldAbsolutePath == newAbsolutePath:
@@ -126,8 +137,11 @@ func (executor *Executor) printPlan(executionContext context.Context, oldAbsolut
 	case requireClean && !executor.isClean(executionContext, oldAbsolutePath):
 		executor.printfOutput(planSkipDirtyMessage, oldAbsolutePath)
 		return
-	case !executor.parentExists(newAbsolutePath):
-		executor.printfOutput(planSkipParentMissingMessage, filepath.Dir(newAbsolutePath))
+	case parentDetails.exists && !parentDetails.isDirectory:
+		executor.printfOutput(planSkipParentNotDirectoryMessage, parentDetails.path)
+		return
+	case !ensureParentDirectories && !parentDetails.exists:
+		executor.printfOutput(planSkipParentMissingMessage, parentDetails.path)
 		return
 	case executor.targetExists(newAbsolutePath) && !caseOnlyRename:
 		executor.printfOutput(planSkipExistsMessage, newAbsolutePath)
@@ -142,8 +156,9 @@ func (executor *Executor) printPlan(executionContext context.Context, oldAbsolut
 	executor.printfOutput(planReadyMessage, oldAbsolutePath, newAbsolutePath)
 }
 
-func (executor *Executor) validatePrerequisites(executionContext context.Context, oldAbsolutePath string, newAbsolutePath string, requireClean bool) bool {
+func (executor *Executor) validatePrerequisites(executionContext context.Context, oldAbsolutePath string, newAbsolutePath string, requireClean bool, ensureParentDirectories bool) bool {
 	caseOnlyRename := isCaseOnlyRename(oldAbsolutePath, newAbsolutePath)
+	parentDetails := executor.parentDirectoryDetails(newAbsolutePath)
 
 	if oldAbsolutePath == newAbsolutePath {
 		executor.printfError(errorAlreadyNamedMessage, oldAbsolutePath)
@@ -155,8 +170,13 @@ func (executor *Executor) validatePrerequisites(executionContext context.Context
 		return false
 	}
 
-	if !executor.parentExists(newAbsolutePath) {
-		executor.printfError(errorParentMissingMessage, filepath.Dir(newAbsolutePath))
+	if parentDetails.exists && !parentDetails.isDirectory {
+		executor.printfError(errorParentNotDirectoryMessage, parentDetails.path)
+		return false
+	}
+
+	if !ensureParentDirectories && !parentDetails.exists {
+		executor.printfError(errorParentMissingMessage, parentDetails.path)
 		return false
 	}
 
@@ -180,12 +200,22 @@ func (executor *Executor) isClean(executionContext context.Context, repositoryPa
 	return clean
 }
 
-func (executor *Executor) parentExists(path string) bool {
+func (executor *Executor) parentDirectoryDetails(path string) parentDirectoryInformation {
+	parentPath := filepath.Dir(path)
+	details := parentDirectoryInformation{path: parentPath}
+
 	if executor.dependencies.FileSystem == nil {
-		return false
+		return details
 	}
-	_, statError := executor.dependencies.FileSystem.Stat(filepath.Dir(path))
-	return statError == nil
+
+	info, statError := executor.dependencies.FileSystem.Stat(parentPath)
+	if statError != nil {
+		return details
+	}
+
+	details.exists = true
+	details.isDirectory = info.IsDir()
+	return details
 }
 
 func (executor *Executor) targetExists(path string) bool {
@@ -194,6 +224,24 @@ func (executor *Executor) targetExists(path string) bool {
 	}
 	_, statError := executor.dependencies.FileSystem.Stat(path)
 	return statError == nil
+}
+
+func (executor *Executor) ensureParentDirectory(newAbsolutePath string, ensureParentDirectories bool) bool {
+	if !ensureParentDirectories {
+		return true
+	}
+
+	parentDetails := executor.parentDirectoryDetails(newAbsolutePath)
+	if parentDetails.exists {
+		return parentDetails.isDirectory
+	}
+
+	if executor.dependencies.FileSystem == nil {
+		return false
+	}
+
+	creationError := executor.dependencies.FileSystem.MkdirAll(parentDetails.path, parentDirectoryPermissionConstant)
+	return creationError == nil
 }
 
 func (executor *Executor) performRename(oldAbsolutePath string, newAbsolutePath string) bool {
@@ -243,4 +291,11 @@ func (executor *Executor) printfError(format string, arguments ...any) {
 
 func isCaseOnlyRename(oldPath string, newPath string) bool {
 	return strings.EqualFold(oldPath, newPath) && oldPath != newPath
+}
+
+// parentDirectoryInformation describes the state of a parent directory for rename planning.
+type parentDirectoryInformation struct {
+	path        string
+	exists      bool
+	isDirectory bool
 }

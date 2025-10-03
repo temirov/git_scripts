@@ -133,12 +133,13 @@ func (builder *RenameCommandBuilder) run(command *cobra.Command, arguments []str
 		}
 
 		renameOptions := rename.Options{
-			RepositoryPath:       inspection.Path,
-			DesiredFolderName:    plan.FolderName,
-			DryRun:               dryRun,
-			RequireCleanWorktree: requireClean,
-			AssumeYes:            trackingPrompter.AssumeYes(),
-			IncludeOwner:         plan.IncludeOwner,
+			RepositoryPath:          inspection.Path,
+			DesiredFolderName:       plan.FolderName,
+			DryRun:                  dryRun,
+			RequireCleanWorktree:    requireClean,
+			AssumeYes:               trackingPrompter.AssumeYes(),
+			IncludeOwner:            plan.IncludeOwner,
+			EnsureParentDirectories: plan.IncludeOwner,
 		}
 
 		rename.Execute(command.Context(), renameDependencies, renameOptions)
