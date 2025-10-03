@@ -44,17 +44,18 @@ const (
 
 func TestRenameCommandConfigurationPrecedence(testInstance *testing.T) {
 	testCases := []struct {
-		name                  string
-		configuration         *repos.RenameConfiguration
-		arguments             []string
-		expectedRoots         []string
-		expectedRootsBuilder  func(testing.TB) []string
-		expectError           bool
-		expectedErrorMessage  string
-		expectedPromptCalls   int
-		expectedRenameCalls   int
-		expectedCleanChecks   int
-		expectedRenameTargets []renameOperation
+		name                       string
+		configuration              *repos.RenameConfiguration
+		arguments                  []string
+		expectedRoots              []string
+		expectedRootsBuilder       func(testing.TB) []string
+		expectError                bool
+		expectedErrorMessage       string
+		expectedPromptCalls        int
+		expectedRenameCalls        int
+		expectedCleanChecks        int
+		expectedRenameTargets      []renameOperation
+		expectedCreatedDirectories []string
 	}{
 		{
 			name: "configuration_supplies_defaults",
@@ -172,6 +173,7 @@ func TestRenameCommandConfigurationPrecedence(testInstance *testing.T) {
 					newPath: filepath.Join(renameParentDirectoryPathConstant, renameOwnerSegmentConstant, renameRepositorySegmentConstant),
 				},
 			},
+			expectedCreatedDirectories: []string{filepath.Join(renameParentDirectoryPathConstant, renameOwnerSegmentConstant)},
 		},
 		{
 			name: "flag_enables_include_owner",
@@ -196,6 +198,7 @@ func TestRenameCommandConfigurationPrecedence(testInstance *testing.T) {
 					newPath: filepath.Join(renameParentDirectoryPathConstant, renameOwnerSegmentConstant, renameRepositorySegmentConstant),
 				},
 			},
+			expectedCreatedDirectories: []string{filepath.Join(renameParentDirectoryPathConstant, renameOwnerSegmentConstant)},
 		},
 		{
 			name: "flag_disables_include_owner",
@@ -220,6 +223,7 @@ func TestRenameCommandConfigurationPrecedence(testInstance *testing.T) {
 					newPath: filepath.Join(renameParentDirectoryPathConstant, renameRepositorySegmentConstant),
 				},
 			},
+			expectedCreatedDirectories: nil,
 		},
 	}
 
@@ -240,7 +244,6 @@ func TestRenameCommandConfigurationPrecedence(testInstance *testing.T) {
 			fileSystem := newRecordingFileSystem([]string{
 				renameParentDirectoryPathConstant,
 				renameDiscoveredRepositoryPath,
-				filepath.Join(renameParentDirectoryPathConstant, renameOwnerSegmentConstant),
 			})
 
 			var configurationProvider func() repos.RenameConfiguration
@@ -286,6 +289,7 @@ func TestRenameCommandConfigurationPrecedence(testInstance *testing.T) {
 				require.Zero(subtest, prompter.calls)
 				require.Empty(subtest, fileSystem.renameOperations)
 				require.Zero(subtest, manager.checkCleanCalls)
+				require.Empty(subtest, fileSystem.createdDirectories)
 				return
 			}
 
@@ -302,6 +306,7 @@ func TestRenameCommandConfigurationPrecedence(testInstance *testing.T) {
 			if len(testCase.expectedRenameTargets) > 0 {
 				require.Equal(subtest, testCase.expectedRenameTargets, fileSystem.renameOperations)
 			}
+			require.Equal(subtest, testCase.expectedCreatedDirectories, fileSystem.createdDirectories)
 		})
 	}
 }
@@ -340,8 +345,9 @@ type renameOperation struct {
 }
 
 type recordingFileSystem struct {
-	renameOperations []renameOperation
-	existingPaths    map[string]struct{}
+	renameOperations   []renameOperation
+	existingPaths      map[string]struct{}
+	createdDirectories []string
 }
 
 func newRecordingFileSystem(existingPaths []string) *recordingFileSystem {
@@ -361,18 +367,33 @@ func (fileSystem *recordingFileSystem) Stat(path string) (fs.FileInfo, error) {
 
 func (fileSystem *recordingFileSystem) Rename(oldPath string, newPath string) error {
 	fileSystem.renameOperations = append(fileSystem.renameOperations, renameOperation{oldPath: oldPath, newPath: newPath})
+	fileSystem.ensurePathSet()
 	fileSystem.existingPaths[newPath] = struct{}{}
 	delete(fileSystem.existingPaths, oldPath)
 	return nil
 }
 
+func (fileSystem *recordingFileSystem) MkdirAll(path string, permissions fs.FileMode) error {
+	fileSystem.ensurePathSet()
+	fileSystem.createdDirectories = append(fileSystem.createdDirectories, path)
+	fileSystem.existingPaths[path] = struct{}{}
+	return nil
+}
+
 func (fileSystem *recordingFileSystem) Exists(path string) bool {
+	fileSystem.ensurePathSet()
 	_, exists := fileSystem.existingPaths[path]
 	return exists
 }
 
 func (fileSystem *recordingFileSystem) Abs(path string) (string, error) {
 	return filepath.Clean(path), nil
+}
+
+func (fileSystem *recordingFileSystem) ensurePathSet() {
+	if fileSystem.existingPaths == nil {
+		fileSystem.existingPaths = map[string]struct{}{}
+	}
 }
 
 type fakeFileInfo struct {

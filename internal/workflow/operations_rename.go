@@ -61,12 +61,13 @@ func (operation *RenameOperation) Execute(executionContext context.Context, envi
 		originalPath := repository.Path
 
 		options := rename.Options{
-			RepositoryPath:       originalPath,
-			DesiredFolderName:    plan.FolderName,
-			DryRun:               environment.DryRun,
-			RequireCleanWorktree: operation.RequireCleanWorktree,
-			AssumeYes:            assumeYes,
-			IncludeOwner:         plan.IncludeOwner,
+			RepositoryPath:          originalPath,
+			DesiredFolderName:       plan.FolderName,
+			DryRun:                  environment.DryRun,
+			RequireCleanWorktree:    operation.RequireCleanWorktree,
+			AssumeYes:               assumeYes,
+			IncludeOwner:            plan.IncludeOwner,
+			EnsureParentDirectories: plan.IncludeOwner,
 		}
 
 		rename.Execute(executionContext, dependencies, options)

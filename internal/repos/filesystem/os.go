@@ -23,3 +23,8 @@ func (OSFileSystem) Rename(oldPath string, newPath string) error {
 func (OSFileSystem) Abs(path string) (string, error) {
 	return filepath.Abs(path)
 }
+
+// MkdirAll ensures a directory hierarchy exists with the provided permissions.
+func (OSFileSystem) MkdirAll(path string, permissions fs.FileMode) error {
+	return os.MkdirAll(path, permissions)
+}
