@@ -94,7 +94,15 @@ func buildRenameOperation(options map[string]any) (Operation, error) {
 	if requireCleanError != nil {
 		return nil, requireCleanError
 	}
-	return &RenameOperation{RequireCleanWorktree: requireClean, requireCleanExplicit: requireCleanExplicit}, nil
+	includeOwner, _, includeOwnerError := reader.boolValue(optionIncludeOwnerKeyConstant)
+	if includeOwnerError != nil {
+		return nil, includeOwnerError
+	}
+	return &RenameOperation{
+		RequireCleanWorktree: requireClean,
+		requireCleanExplicit: requireCleanExplicit,
+		IncludeOwner:         includeOwner,
+	}, nil
 }
 
 func buildBranchMigrationOperation(options map[string]any) (Operation, error) {

@@ -32,6 +32,7 @@ operations:
     with:
       roots:
         - .
+      include_owner: false
   - operation: workflow
     with:
       roots:

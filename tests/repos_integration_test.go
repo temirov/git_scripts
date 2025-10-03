@@ -23,6 +23,7 @@ const (
 	reposIntegrationProtocolCommand             = "repo-protocol-convert"
 	reposIntegrationDryRunFlag                  = "--dry-run"
 	reposIntegrationYesFlag                     = "--yes"
+	reposIntegrationOwnerFlag                   = "--owner"
 	reposIntegrationRootFlag                    = "--" + flagutils.DefaultRootFlagName
 	reposIntegrationFromFlag                    = "--from"
 	reposIntegrationToFlag                      = "--to"
@@ -40,6 +41,8 @@ const (
 	reposIntegrationStubScript                  = "#!/bin/sh\nif [ \"$1\" = \"repo\" ] && [ \"$2\" = \"view\" ]; then\n  cat <<'EOF'\n{\"nameWithOwner\":\"canonical/example\",\"defaultBranchRef\":{\"name\":\"main\"},\"description\":\"\"}\nEOF\n  exit 0\nfi\nexit 0\n"
 	reposIntegrationSubtestNameTemplate         = "%d_%s"
 	reposIntegrationRenameCaseName              = "rename_plan"
+	reposIntegrationRenameOwnerPlanCaseName     = "rename_plan_with_owner"
+	reposIntegrationRenameOwnerExecuteCaseName  = "rename_execute_with_owner"
 	reposIntegrationRemoteCaseName              = "update_canonical_remote"
 	reposIntegrationRemoteConfigCaseName        = "update_canonical_remote_config"
 	reposIntegrationRemoteTildeCaseName         = "update_canonical_remote_tilde_flag"
@@ -55,6 +58,8 @@ const (
 	reposIntegrationConfigSearchEnvName         = "GIX_CONFIG_SEARCH_PATH"
 	reposIntegrationHomeSymbolConstant          = "~"
 	reposIntegrationHomeRootPatternConstant     = "gix-home-root-*"
+	reposIntegrationOwnerDirectoryName          = "canonical"
+	reposIntegrationRepositoryName              = "example"
 )
 
 func TestReposCommandIntegration(testInstance *testing.T) {
@@ -92,6 +97,70 @@ func TestReposCommandIntegration(testInstance *testing.T) {
 				return fmt.Sprintf("PLAN-OK: %s → %s\n", absolutePath, target)
 			},
 			verify: func(testInstance *testing.T, repositoryPath string) {},
+		},
+		{
+			name: reposIntegrationRenameOwnerPlanCaseName,
+			setup: func(testInstance *testing.T) (string, string) {
+				return initializeRepositoryWithStub(testInstance)
+			},
+			arguments: []string{
+				reposIntegrationRunSubcommand,
+				reposIntegrationModulePathConstant,
+				reposIntegrationLogLevelFlag,
+				reposIntegrationErrorLevel,
+				reposIntegrationRenameCommand,
+				reposIntegrationDryRunFlag,
+				reposIntegrationOwnerFlag,
+			},
+			expectedOutput: func(repositoryPath string) string {
+				absolutePath, absError := filepath.Abs(repositoryPath)
+				require.NoError(testInstance, absError)
+				parent := filepath.Dir(absolutePath)
+				target := filepath.Join(parent, reposIntegrationOwnerDirectoryName, reposIntegrationRepositoryName)
+				return fmt.Sprintf("PLAN-OK: %s → %s\n", absolutePath, target)
+			},
+			verify: func(testInstance *testing.T, repositoryPath string) {
+				_, statError := os.Stat(repositoryPath)
+				require.NoError(testInstance, statError)
+			},
+			prepare: func(testInstance *testing.T, repositoryPath string, arguments *[]string) {
+				ownerDirectory := filepath.Join(filepath.Dir(repositoryPath), reposIntegrationOwnerDirectoryName)
+				require.NoError(testInstance, os.MkdirAll(ownerDirectory, 0o755))
+			},
+		},
+		{
+			name: reposIntegrationRenameOwnerExecuteCaseName,
+			setup: func(testInstance *testing.T) (string, string) {
+				return initializeRepositoryWithStub(testInstance)
+			},
+			arguments: []string{
+				reposIntegrationRunSubcommand,
+				reposIntegrationModulePathConstant,
+				reposIntegrationLogLevelFlag,
+				reposIntegrationErrorLevel,
+				reposIntegrationRenameCommand,
+				reposIntegrationYesFlag,
+				reposIntegrationOwnerFlag,
+			},
+			expectedOutput: func(repositoryPath string) string {
+				absolutePath, absError := filepath.Abs(repositoryPath)
+				require.NoError(testInstance, absError)
+				parent := filepath.Dir(absolutePath)
+				target := filepath.Join(parent, reposIntegrationOwnerDirectoryName, reposIntegrationRepositoryName)
+				return fmt.Sprintf("Renamed %s → %s\n", absolutePath, target)
+			},
+			verify: func(testInstance *testing.T, repositoryPath string) {
+				parent := filepath.Dir(repositoryPath)
+				target := filepath.Join(parent, reposIntegrationOwnerDirectoryName, reposIntegrationRepositoryName)
+				_, targetError := os.Stat(target)
+				require.NoError(testInstance, targetError)
+				_, originalError := os.Stat(repositoryPath)
+				require.Error(testInstance, originalError)
+			},
+			prepare: func(testInstance *testing.T, repositoryPath string, arguments *[]string) {
+				ownerDirectory := filepath.Join(filepath.Dir(repositoryPath), reposIntegrationOwnerDirectoryName)
+				require.NoError(testInstance, os.MkdirAll(ownerDirectory, 0o755))
+			},
 		},
 		{
 			name: reposIntegrationRemoteCaseName,

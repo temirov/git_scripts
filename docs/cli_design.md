@@ -73,7 +73,7 @@ The table below maps current script switches to Cobra equivalents and documents 
 | Script behavior | Cobra command | Flags & arguments | `gh` usage strategy |
 | --- | --- | --- | --- |
 | CSV audit (read-only) | `git-maintenance audit` | `--root` (repeatable; defaults to `.`), `--debug`, `--format csv` (defaults to CSV; future extensibility), `--output` (optional file). Command is read-only. | Use `exec.CommandContext` to run `gh repo view` and `gh api repos/{owner}/{repo}` exactly once per repo. Results cached per repo to minimize API calls. |
-| Directory rename (`--rename`) | `git-maintenance repo-folders-rename` | `--root`, `--dry-run`, `--require-clean`, `--yes`. | Same metadata resolution as audit. No extra `gh` commands beyond canonical lookup. |
+| Directory rename (`--rename`) | `git-maintenance repo-folders-rename` | `--root`, `--dry-run`, `--require-clean`, `--yes`, `--owner`. | Same metadata resolution as audit. No extra `gh` commands beyond canonical lookup. |
 | Update remote to canonical (`--update-remote`) | `git-maintenance repo-remote-update` | `--root`, `--dry-run`, `--yes`. | Requires canonical owner/repo from `gh api repos/{owner}/{repo}`. |
 | Protocol conversion (`--protocol-from`, `--protocol-to`) | `git-maintenance repo-protocol-convert` | `--root`, `--from {https\|git\|ssh}`, `--to {https\|git\|ssh}`, `--dry-run`, `--yes`. | Canonical resolution via `gh api`; no other `gh` usage. |
 | Delete merged branches | `git-maintenance repo-prs-purge` | `--root`, `--remote origin` (default), `--pr-state closed` (default). No positional args. | Invoke `gh pr list --state <state>` via `exec`. The command will stream JSON once, then process locally. |

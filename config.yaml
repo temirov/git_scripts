@@ -45,6 +45,7 @@ operations:
       dry_run: false
       assume_yes: true
       require_clean: true
+      include_owner: false
       roots:
         - ~/Development
 

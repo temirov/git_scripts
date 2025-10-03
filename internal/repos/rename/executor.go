@@ -35,6 +35,7 @@ type Options struct {
 	DryRun               bool
 	RequireCleanWorktree bool
 	AssumeYes            bool
+	IncludeOwner         bool
 }
 
 // Dependencies supplies collaborators required to evaluate rename operations.

@@ -35,6 +35,7 @@ type RenameConfiguration struct {
 	AssumeYes            bool     `mapstructure:"assume_yes"`
 	RequireCleanWorktree bool     `mapstructure:"require_clean"`
 	RepositoryRoots      []string `mapstructure:"roots"`
+	IncludeOwner         bool     `mapstructure:"include_owner"`
 }
 
 // DefaultToolsConfiguration returns baseline configuration values for repository commands.
@@ -57,6 +58,7 @@ func DefaultToolsConfiguration() ToolsConfiguration {
 			AssumeYes:            false,
 			RequireCleanWorktree: false,
 			RepositoryRoots:      nil,
+			IncludeOwner:         false,
 		},
 	}
 }

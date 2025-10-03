@@ -19,6 +19,7 @@ const (
 type RenameOperation struct {
 	RequireCleanWorktree bool
 	requireCleanExplicit bool
+	IncludeOwner         bool
 }
 
 // Name identifies the operation type.
@@ -32,6 +33,7 @@ func (operation *RenameOperation) Execute(executionContext context.Context, envi
 		return nil
 	}
 
+	directoryPlanner := rename.NewDirectoryPlanner()
 	dependencies := rename.Dependencies{
 		FileSystem: environment.FileSystem,
 		GitManager: environment.RepositoryManager,
@@ -43,8 +45,11 @@ func (operation *RenameOperation) Execute(executionContext context.Context, envi
 
 	for repositoryIndex := range state.Repositories {
 		repository := state.Repositories[repositoryIndex]
-		desiredName := strings.TrimSpace(repository.Inspection.DesiredFolderName)
-		if len(desiredName) == 0 {
+		plan := directoryPlanner.Plan(operation.IncludeOwner, repository.Inspection.FinalOwnerRepo, repository.Inspection.DesiredFolderName)
+		if plan.IsNoop(repository.Path, repository.Inspection.FolderName) {
+			continue
+		}
+		if len(strings.TrimSpace(plan.FolderName)) == 0 {
 			continue
 		}
 
@@ -57,10 +62,11 @@ func (operation *RenameOperation) Execute(executionContext context.Context, envi
 
 		options := rename.Options{
 			RepositoryPath:       originalPath,
-			DesiredFolderName:    desiredName,
+			DesiredFolderName:    plan.FolderName,
 			DryRun:               environment.DryRun,
 			RequireCleanWorktree: operation.RequireCleanWorktree,
 			AssumeYes:            assumeYes,
+			IncludeOwner:         plan.IncludeOwner,
 		}
 
 		rename.Execute(executionContext, dependencies, options)
@@ -69,7 +75,7 @@ func (operation *RenameOperation) Execute(executionContext context.Context, envi
 			continue
 		}
 
-		newPath := filepath.Join(filepath.Dir(originalPath), desiredName)
+		newPath := filepath.Join(filepath.Dir(originalPath), plan.FolderName)
 		if !renameCompleted(environment.FileSystem, originalPath, newPath) {
 			continue
 		}

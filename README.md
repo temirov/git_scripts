@@ -91,7 +91,7 @@ with the registered command names and flags.
 | Command                 | Summary                                                       | Key flags / example                                                                                                                |
 |-------------------------|---------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------|
 | `audit`                 | Audit and reconcile local GitHub repositories                 | Flags: `--root`, `--log-level`. Example: `go run . audit --log-level=debug --root ~/Development`                                    |
-| `repo-folders-rename`   | Rename repository directories to match canonical GitHub names | Flags: `--dry-run`, `--yes`, `--require-clean`. Example: `go run . repo-folders-rename --yes --require-clean --root ~/Development`        |
+| `repo-folders-rename`   | Rename repository directories to match canonical GitHub names | Flags: `--dry-run`, `--yes`, `--require-clean`, `--owner`. Example: `go run . repo-folders-rename --yes --require-clean --owner --root ~/Development`        |
 | `repo-remote-update`    | Update origin URLs to match canonical GitHub repositories     | Flags: `--dry-run`, `--yes`. Example: `go run . repo-remote-update --dry-run --root ~/Development`                                        |
 | `repo-protocol-convert` | Convert repository origin remotes between protocols           | Flags: `--from`, `--to`, `--dry-run`, `--yes`. Example: `go run . repo-protocol-convert --from https --to ssh --yes --root ~/Development` |
 | `repo-prs-purge`        | Remove remote and local branches for closed pull requests     | Flags: `--remote`, `--limit`, `--dry-run`. Example: `go run . repo-prs-purge --remote origin --limit 100 --root ~/Development`            |
@@ -156,6 +156,7 @@ operations:
       dry_run: false
       assume_yes: true
       require_clean: true
+      include_owner: false
       roots:
         - ~/Development
 

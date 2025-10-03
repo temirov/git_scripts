@@ -18,6 +18,8 @@ const (
 	configurationInvalidWorkflowMappingCase = "workflow mapping is rejected"
 	configurationOptionFromKey              = "from"
 	configurationOptionToKey                = "to"
+	configurationOptionRequireClean         = "require_clean"
+	configurationOptionIncludeOwnerKey      = "include_owner"
 	anchoredWorkflowConfigurationTemplate   = `operations:
   - &protocol_conversion_step
     operation: convert-protocol
@@ -75,6 +77,42 @@ func TestBuildOperations(testInstance *testing.T) {
 			assertFunc: func(testingInstance *testing.T, operation workflow.Operation) {
 				_, castSucceeded := operation.(*workflow.CanonicalRemoteOperation)
 				require.True(testingInstance, castSucceeded)
+			},
+		},
+		{
+			name: "builds rename operation with defaults",
+			configuration: workflow.Configuration{
+				Steps: []workflow.StepConfiguration{
+					{Operation: workflow.OperationTypeRenameDirectories},
+				},
+			},
+			expectedOperationType: workflow.OperationTypeRenameDirectories,
+			assertFunc: func(testingInstance *testing.T, operation workflow.Operation) {
+				renameOperation, castSucceeded := operation.(*workflow.RenameOperation)
+				require.True(testingInstance, castSucceeded)
+				require.False(testingInstance, renameOperation.RequireCleanWorktree)
+				require.False(testingInstance, renameOperation.IncludeOwner)
+			},
+		},
+		{
+			name: "builds rename operation with include owner",
+			configuration: workflow.Configuration{
+				Steps: []workflow.StepConfiguration{
+					{
+						Operation: workflow.OperationTypeRenameDirectories,
+						Options: map[string]any{
+							configurationOptionRequireClean:    true,
+							configurationOptionIncludeOwnerKey: true,
+						},
+					},
+				},
+			},
+			expectedOperationType: workflow.OperationTypeRenameDirectories,
+			assertFunc: func(testingInstance *testing.T, operation workflow.Operation) {
+				renameOperation, castSucceeded := operation.(*workflow.RenameOperation)
+				require.True(testingInstance, castSucceeded)
+				require.True(testingInstance, renameOperation.RequireCleanWorktree)
+				require.True(testingInstance, renameOperation.IncludeOwner)
 			},
 		},
 	}

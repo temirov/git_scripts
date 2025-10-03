@@ -9,6 +9,7 @@ const (
 	optionFromKeyConstant               = "from"
 	optionToKeyConstant                 = "to"
 	optionRequireCleanKeyConstant       = "require_clean"
+	optionIncludeOwnerKeyConstant       = "include_owner"
 	optionTargetsKeyConstant            = "targets"
 	optionRemoteNameKeyConstant         = "remote_name"
 	optionSourceBranchKeyConstant       = "source_branch"
