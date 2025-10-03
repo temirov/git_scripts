@@ -25,37 +25,57 @@ import (
 )
 
 const (
-	testConfigurationFileNameConstant               = "config.yaml"
-	testConfigurationHeaderConstant                 = "common:\n  log_level: info\n  log_format: structured\noperations:\n"
-	testConsoleConfigurationHeaderConstant          = "common:\n  log_level: info\n  log_format: console\noperations:\n"
-	testOperationBlockTemplateConstant              = "  - operation: %s\n    with:\n%s"
-	testOperationRootsTemplateConstant              = "      roots:\n        - %s\n"
-	testOperationRootDirectoryConstant              = "/tmp/config-root"
-	testConfigurationSearchPathEnvironmentName      = "GIX_CONFIG_SEARCH_PATH"
-	testPackagesCommandNameConstant                 = "repo-packages-purge"
-	testBranchMigrateCommandNameConstant            = "branch-migrate"
-	testBranchCleanupCommandNameConstant            = "repo-prs-purge"
-	testReposRemotesCommandNameConstant             = "repo-remote-update"
-	testReposProtocolCommandNameConstant            = "repo-protocol-convert"
-	testReposRenameCommandNameConstant              = "repo-folders-rename"
-	testAuditCommandNameConstant                    = "audit"
-	testWorkflowCommandNameConstant                 = "workflow"
-	embeddedDefaultsBranchCleanupTestNameConstant   = "BranchCleanupDefaults"
-	embeddedDefaultsPackagesTestNameConstant        = "PackagesDefaults"
-	embeddedDefaultsReposRemotesTestNameConstant    = "ReposRemotesDefaults"
-	embeddedDefaultsReposProtocolTestNameConstant   = "ReposProtocolDefaults"
-	embeddedDefaultsReposRenameTestNameConstant     = "ReposRenameDefaults"
-	embeddedDefaultsWorkflowTestNameConstant        = "WorkflowDefaults"
-	embeddedDefaultsBranchMigrateTestNameConstant   = "BranchMigrateDefaults"
-	embeddedDefaultsAuditTestNameConstant           = "AuditDefaults"
-	embeddedDefaultRootPathConstant                 = "."
-	embeddedDefaultRemoteNameConstant               = "origin"
-	embeddedDefaultPullRequestLimitConstant         = 100
-	configurationInitializedMessageTextConstant     = "configuration initialized"
-	configurationInitializedConsoleTemplateConstant = "%s | log level=%s | log format=%s | config file=%s"
-	configurationLogLevelFieldNameConstant          = "log_level"
-	configurationLogFormatFieldNameConstant         = "log_format"
-	configurationFileFieldNameConstant              = "config_file"
+	testConfigurationFileNameConstant                        = "config.yaml"
+	testConfigurationHeaderConstant                          = "common:\n  log_level: info\n  log_format: structured\noperations:\n"
+	testConsoleConfigurationHeaderConstant                   = "common:\n  log_level: info\n  log_format: console\noperations:\n"
+	testOperationBlockTemplateConstant                       = "  - operation: %s\n    with:\n%s"
+	testOperationRootsTemplateConstant                       = "      roots:\n        - %s\n"
+	testOperationRootDirectoryConstant                       = "/tmp/config-root"
+	testConfigurationSearchPathEnvironmentName               = "GIX_CONFIG_SEARCH_PATH"
+	testPackagesCommandNameConstant                          = "repo-packages-purge"
+	testBranchMigrateCommandNameConstant                     = "branch-migrate"
+	testBranchCleanupCommandNameConstant                     = "repo-prs-purge"
+	testReposRemotesCommandNameConstant                      = "repo-remote-update"
+	testReposProtocolCommandNameConstant                     = "repo-protocol-convert"
+	testReposRenameCommandNameConstant                       = "repo-folders-rename"
+	testAuditCommandNameConstant                             = "audit"
+	testWorkflowCommandNameConstant                          = "workflow"
+	embeddedDefaultsBranchCleanupTestNameConstant            = "BranchCleanupDefaults"
+	embeddedDefaultsPackagesTestNameConstant                 = "PackagesDefaults"
+	embeddedDefaultsReposRemotesTestNameConstant             = "ReposRemotesDefaults"
+	embeddedDefaultsReposProtocolTestNameConstant            = "ReposProtocolDefaults"
+	embeddedDefaultsReposRenameTestNameConstant              = "ReposRenameDefaults"
+	embeddedDefaultsWorkflowTestNameConstant                 = "WorkflowDefaults"
+	embeddedDefaultsBranchMigrateTestNameConstant            = "BranchMigrateDefaults"
+	embeddedDefaultsAuditTestNameConstant                    = "AuditDefaults"
+	embeddedDefaultRootPathConstant                          = "."
+	embeddedDefaultRemoteNameConstant                        = "origin"
+	embeddedDefaultPullRequestLimitConstant                  = 100
+	configurationInitializedMessageTextConstant              = "configuration initialized"
+	configurationInitializedConsoleTemplateConstant          = "%s | log level=%s | log format=%s | config file=%s"
+	configurationLogLevelFieldNameConstant                   = "log_level"
+	configurationLogFormatFieldNameConstant                  = "log_format"
+	configurationFileFieldNameConstant                       = "config_file"
+	testUserConfigurationDirectoryNameConstant               = ".gix"
+	testXDGConfigHomeDirectoryNameConstant                   = "config"
+	testCaseWorkingDirectoryPreferredMessageConstant         = "WorkingDirectoryPreferred"
+	testCaseXDGDirectoryFallbackMessageConstant              = "XDGDirectoryFallback"
+	testCaseHomeDirectoryFallbackMessageConstant             = "HomeDirectoryFallback"
+	applicationSearchPathSubtestNameTemplateConstant         = "%d_%s"
+	configurationDirectoryRoleWorkingConstant                = "working"
+	configurationDirectoryRoleXDGConstant                    = "xdg"
+	configurationDirectoryRoleHomeConstant                   = "home"
+	configurationInitializationLocalTestNameConstant         = "LocalScope"
+	configurationInitializationUserTestNameConstant          = "UserScope"
+	configurationInitializationForceRequiredTestNameConstant = "ForceRequired"
+	configurationInitializationForceEnabledTestNameConstant  = "ForceEnabled"
+	configurationInitializationArgumentsLocalConstant        = "--init"
+	configurationInitializationArgumentsUserConstant         = "--init=user"
+	configurationInitializationForceFlagConstant             = "--force"
+	configurationInitializationExistingContentConstant       = "common:\n  log_level: info\n"
+	configurationInitializationErrorMessageFragmentConstant  = "already exists"
+	configurationInitializationApplicationNameConstant       = "gix"
+	configurationInitializationUserHomeEnvNameConstant       = "HOME"
 )
 
 var requiredOperationNames = []string{
@@ -230,6 +250,235 @@ func TestApplicationInitializationLoggingModes(testInstance *testing.T) {
 	}
 }
 
+func TestApplicationConfigurationInitializationCreatesConfiguration(testInstance *testing.T) {
+	embeddedConfigurationContent, _ := cli.EmbeddedDefaultConfiguration()
+	require.NotEmpty(testInstance, embeddedConfigurationContent)
+
+	testCases := []struct {
+		name      string
+		arguments []string
+		setup     func(*testing.T) string
+	}{
+		{
+			name:      configurationInitializationLocalTestNameConstant,
+			arguments: []string{configurationInitializationArgumentsLocalConstant},
+			setup: func(t *testing.T) string {
+				workingDirectory := t.TempDir()
+				originalWorkingDirectory, workingDirectoryError := os.Getwd()
+				require.NoError(t, workingDirectoryError)
+				require.NoError(t, os.Chdir(workingDirectory))
+				t.Cleanup(func() {
+					require.NoError(t, os.Chdir(originalWorkingDirectory))
+				})
+
+				return filepath.Join(workingDirectory, testConfigurationFileNameConstant)
+			},
+		},
+		{
+			name:      configurationInitializationUserTestNameConstant,
+			arguments: []string{configurationInitializationArgumentsUserConstant},
+			setup: func(t *testing.T) string {
+				workingDirectory := t.TempDir()
+				originalWorkingDirectory, workingDirectoryError := os.Getwd()
+				require.NoError(t, workingDirectoryError)
+				require.NoError(t, os.Chdir(workingDirectory))
+				t.Cleanup(func() {
+					require.NoError(t, os.Chdir(originalWorkingDirectory))
+				})
+
+				homeDirectory := t.TempDir()
+				t.Setenv(configurationInitializationUserHomeEnvNameConstant, homeDirectory)
+
+				return filepath.Join(homeDirectory, testUserConfigurationDirectoryNameConstant, testConfigurationFileNameConstant)
+			},
+		},
+	}
+
+	for testCaseIndex, testCase := range testCases {
+		testInstance.Run(fmt.Sprintf(applicationSearchPathSubtestNameTemplateConstant, testCaseIndex, testCase.name), func(t *testing.T) {
+			expectedConfigurationPath := testCase.setup(t)
+
+			originalArguments := os.Args
+			os.Args = append([]string{configurationInitializationApplicationNameConstant}, testCase.arguments...)
+			t.Cleanup(func() {
+				os.Args = originalArguments
+			})
+
+			application := cli.NewApplication()
+			executionError := application.Execute()
+			require.NoError(t, executionError)
+
+			fileContent, readError := os.ReadFile(expectedConfigurationPath)
+			require.NoError(t, readError)
+			require.Equal(t, embeddedConfigurationContent, fileContent)
+		})
+	}
+}
+
+func TestApplicationConfigurationInitializationForceHandling(testInstance *testing.T) {
+	embeddedConfigurationContent, _ := cli.EmbeddedDefaultConfiguration()
+	require.NotEmpty(testInstance, embeddedConfigurationContent)
+
+	testCases := []struct {
+		name        string
+		arguments   []string
+		expectError bool
+	}{
+		{
+			name:        configurationInitializationForceRequiredTestNameConstant,
+			arguments:   []string{configurationInitializationArgumentsLocalConstant},
+			expectError: true,
+		},
+		{
+			name: configurationInitializationForceEnabledTestNameConstant,
+			arguments: []string{
+				configurationInitializationArgumentsLocalConstant,
+				configurationInitializationForceFlagConstant,
+			},
+			expectError: false,
+		},
+	}
+
+	for testCaseIndex, testCase := range testCases {
+		testInstance.Run(fmt.Sprintf(applicationSearchPathSubtestNameTemplateConstant, testCaseIndex, testCase.name), func(t *testing.T) {
+			workingDirectory := t.TempDir()
+			originalWorkingDirectory, workingDirectoryError := os.Getwd()
+			require.NoError(t, workingDirectoryError)
+			require.NoError(t, os.Chdir(workingDirectory))
+			t.Cleanup(func() {
+				require.NoError(t, os.Chdir(originalWorkingDirectory))
+			})
+
+			configurationPath := filepath.Join(workingDirectory, testConfigurationFileNameConstant)
+			writeError := os.WriteFile(configurationPath, []byte(configurationInitializationExistingContentConstant), 0o600)
+			require.NoError(t, writeError)
+
+			originalArguments := os.Args
+			os.Args = append([]string{configurationInitializationApplicationNameConstant}, testCase.arguments...)
+			t.Cleanup(func() {
+				os.Args = originalArguments
+			})
+
+			application := cli.NewApplication()
+			executionError := application.Execute()
+
+			if testCase.expectError {
+				require.Error(t, executionError)
+				require.Contains(t, executionError.Error(), configurationInitializationErrorMessageFragmentConstant)
+
+				fileContent, readError := os.ReadFile(configurationPath)
+				require.NoError(t, readError)
+				require.Equal(t, configurationInitializationExistingContentConstant, string(fileContent))
+				return
+			}
+
+			require.NoError(t, executionError)
+
+			fileContent, readError := os.ReadFile(configurationPath)
+			require.NoError(t, readError)
+			require.Equal(t, embeddedConfigurationContent, fileContent)
+		})
+	}
+}
+
+func TestApplicationConfigurationSearchPaths(testInstance *testing.T) {
+	fullConfigurationContent := buildConfigurationContent(requiredOperationNames)
+	testCases := []struct {
+		name                                string
+		createWorkingDirectoryConfiguration bool
+		createXDGConfiguration              bool
+		createHomeConfiguration             bool
+		workingDirectoryConfiguration       string
+		expectedDirectoryRole               string
+	}{
+		{
+			name:                                testCaseWorkingDirectoryPreferredMessageConstant,
+			createWorkingDirectoryConfiguration: true,
+			createXDGConfiguration:              true,
+			createHomeConfiguration:             true,
+			workingDirectoryConfiguration:       testConfigurationHeaderConstant,
+			expectedDirectoryRole:               configurationDirectoryRoleWorkingConstant,
+		},
+		{
+			name:                                testCaseXDGDirectoryFallbackMessageConstant,
+			createWorkingDirectoryConfiguration: false,
+			createXDGConfiguration:              true,
+			createHomeConfiguration:             true,
+			workingDirectoryConfiguration:       "",
+			expectedDirectoryRole:               configurationDirectoryRoleXDGConstant,
+		},
+		{
+			name:                                testCaseHomeDirectoryFallbackMessageConstant,
+			createWorkingDirectoryConfiguration: false,
+			createXDGConfiguration:              false,
+			createHomeConfiguration:             true,
+			workingDirectoryConfiguration:       "",
+			expectedDirectoryRole:               configurationDirectoryRoleHomeConstant,
+		},
+	}
+
+	for testCaseIndex, testCase := range testCases {
+		testCase := testCase
+		testInstance.Run(fmt.Sprintf(applicationSearchPathSubtestNameTemplateConstant, testCaseIndex, testCase.name), func(testInstance *testing.T) {
+			workingDirectoryPath := testInstance.TempDir()
+			homeDirectoryPath := testInstance.TempDir()
+			xdgConfigHomeDirectoryPath := filepath.Join(homeDirectoryPath, testXDGConfigHomeDirectoryNameConstant)
+
+			testInstance.Setenv("HOME", homeDirectoryPath)
+			testInstance.Setenv("XDG_CONFIG_HOME", xdgConfigHomeDirectoryPath)
+			testInstance.Setenv(testConfigurationSearchPathEnvironmentName, "")
+
+			homeConfigurationDirectoryPath := filepath.Join(homeDirectoryPath, testUserConfigurationDirectoryNameConstant)
+			xdgConfigurationDirectoryPath := filepath.Join(xdgConfigHomeDirectoryPath, testUserConfigurationDirectoryNameConstant)
+
+			require.NoError(testInstance, os.MkdirAll(homeConfigurationDirectoryPath, 0o755))
+			require.NoError(testInstance, os.MkdirAll(xdgConfigurationDirectoryPath, 0o755))
+
+			previousWorkingDirectoryPath, workingDirectoryResolveError := os.Getwd()
+			require.NoError(testInstance, workingDirectoryResolveError)
+			require.NoError(testInstance, os.Chdir(workingDirectoryPath))
+			testInstance.Cleanup(func() {
+				require.NoError(testInstance, os.Chdir(previousWorkingDirectoryPath))
+			})
+
+			if testCase.createWorkingDirectoryConfiguration {
+				workingDirectoryConfigurationPath := filepath.Join(workingDirectoryPath, testConfigurationFileNameConstant)
+				writeConfigurationFile(testInstance, workingDirectoryConfigurationPath, testCase.workingDirectoryConfiguration)
+			}
+
+			if testCase.createXDGConfiguration {
+				xdgConfigurationPath := filepath.Join(xdgConfigurationDirectoryPath, testConfigurationFileNameConstant)
+				writeConfigurationFile(testInstance, xdgConfigurationPath, fullConfigurationContent)
+			}
+
+			if testCase.createHomeConfiguration {
+				homeConfigurationPath := filepath.Join(homeConfigurationDirectoryPath, testConfigurationFileNameConstant)
+				writeConfigurationFile(testInstance, homeConfigurationPath, fullConfigurationContent)
+			}
+
+			expectedConfigurationPathByRole := map[string]string{
+				configurationDirectoryRoleWorkingConstant: filepath.Join(workingDirectoryPath, testConfigurationFileNameConstant),
+				configurationDirectoryRoleXDGConstant:     filepath.Join(xdgConfigurationDirectoryPath, testConfigurationFileNameConstant),
+				configurationDirectoryRoleHomeConstant:    filepath.Join(homeConfigurationDirectoryPath, testConfigurationFileNameConstant),
+			}
+
+			expectedConfigurationPath, expectedPathKnown := expectedConfigurationPathByRole[testCase.expectedDirectoryRole]
+			require.True(testInstance, expectedPathKnown, "unexpected directory role %s", testCase.expectedDirectoryRole)
+
+			application := cli.NewApplication()
+
+			stderrCapture := startTestStderrCapture(testInstance)
+			initializationError := application.InitializeForCommand(testPackagesCommandNameConstant)
+			capturedOutput := stderrCapture.Stop(testInstance)
+
+			require.NoError(testInstance, initializationError)
+
+			configurationFilePath := extractConfigurationFilePath(testInstance, capturedOutput)
+			require.Equal(testInstance, expectedConfigurationPath, configurationFilePath)
+		})
+	}
+}
+
 func TestApplicationEmbeddedDefaultsProvideCommandConfigurations(testInstance *testing.T) {
 	operationIndex := buildEmbeddedOperationIndex(testInstance)
 
@@ -378,6 +627,43 @@ func TestApplicationEmbeddedDefaultsProvideCommandConfigurations(testInstance *t
 			testCase.assertion(t, operationOptions)
 		})
 	}
+}
+
+func extractConfigurationFilePath(testingInstance testing.TB, capturedOutput string) string {
+	testingInstance.Helper()
+
+	logLines := strings.Split(capturedOutput, "\n")
+	for _, logLine := range logLines {
+		trimmedLine := strings.TrimSpace(logLine)
+		if len(trimmedLine) == 0 {
+			continue
+		}
+
+		var logEntry map[string]any
+		if json.Unmarshal([]byte(trimmedLine), &logEntry) == nil {
+			configurationValue, configurationExists := logEntry[configurationFileFieldNameConstant]
+			if !configurationExists {
+				continue
+			}
+
+			configurationPath, pathIsString := configurationValue.(string)
+			if pathIsString {
+				return configurationPath
+			}
+
+			continue
+		}
+
+		fieldIndex := strings.Index(trimmedLine, configurationFileFieldNameConstant+"=")
+		if fieldIndex >= 0 {
+			configurationFieldValue := strings.TrimSpace(trimmedLine[fieldIndex+len(configurationFileFieldNameConstant)+1:])
+			configurationFieldValue = strings.Trim(configurationFieldValue, "\"")
+			return configurationFieldValue
+		}
+	}
+
+	testingInstance.Fatalf("configuration file path not found in output: %s", capturedOutput)
+	return ""
 }
 
 func buildConfigurationContent(operationNames []string) string {

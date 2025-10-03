@@ -33,7 +33,19 @@ const (
 	testUserConfigurationDirectoryNameConstant        = ".gix"
 	testXDGConfigHomeDirectoryNameConstant            = "config"
 	testCaseSearchPathWorkingDirectoryMessageConstant = "searches working directory"
+	testCaseSearchPathXDGDirectoryMessageConstant     = "searches xdg configuration directory"
 	testCaseSearchPathHomeDirectoryMessageConstant    = "searches home configuration directory"
+	testCaseSearchPathWorkingPreferredMessageConstant = "prefers working directory when all directories contain configuration"
+	testCaseSearchPathXDGPreferredMessageConstant     = "prefers xdg configuration directory when working directory lacks configuration"
+	testCaseSearchPathWorkingOverHomeMessageConstant  = "prefers working directory over home configuration directory"
+)
+
+type configurationDirectoryRole string
+
+const (
+	configurationDirectoryRoleWorking configurationDirectoryRole = "working"
+	configurationDirectoryRoleXDG     configurationDirectoryRole = "xdg"
+	configurationDirectoryRoleHome    configurationDirectoryRole = "home"
 )
 
 type configurationFixture struct {
@@ -127,21 +139,46 @@ func TestConfigurationLoaderLoadConfiguration(testInstance *testing.T) {
 
 func TestConfigurationLoaderSearchPaths(testInstance *testing.T) {
 	testCases := []struct {
-		name                         string
-		configurationDirectorySelect func(workingDirectoryPath string, userConfigurationDirectoryPath string) string
+		name                               string
+		directoriesWithConfiguration       []configurationDirectoryRole
+		expectedConfigurationDirectoryRole configurationDirectoryRole
 	}{
 		{
-			name: testCaseSearchPathWorkingDirectoryMessageConstant,
-			configurationDirectorySelect: func(workingDirectoryPath string, userConfigurationDirectoryPath string) string {
-				return workingDirectoryPath
-			},
+			name:                               testCaseSearchPathWorkingDirectoryMessageConstant,
+			directoriesWithConfiguration:       []configurationDirectoryRole{configurationDirectoryRoleWorking},
+			expectedConfigurationDirectoryRole: configurationDirectoryRoleWorking,
 		},
 		{
-			name: testCaseSearchPathHomeDirectoryMessageConstant,
-			configurationDirectorySelect: func(workingDirectoryPath string, userConfigurationDirectoryPath string) string {
-				return userConfigurationDirectoryPath
-			},
+			name:                               testCaseSearchPathXDGDirectoryMessageConstant,
+			directoriesWithConfiguration:       []configurationDirectoryRole{configurationDirectoryRoleXDG},
+			expectedConfigurationDirectoryRole: configurationDirectoryRoleXDG,
 		},
+		{
+			name:                               testCaseSearchPathHomeDirectoryMessageConstant,
+			directoriesWithConfiguration:       []configurationDirectoryRole{configurationDirectoryRoleHome},
+			expectedConfigurationDirectoryRole: configurationDirectoryRoleHome,
+		},
+		{
+			name:                               testCaseSearchPathWorkingPreferredMessageConstant,
+			directoriesWithConfiguration:       []configurationDirectoryRole{configurationDirectoryRoleWorking, configurationDirectoryRoleXDG, configurationDirectoryRoleHome},
+			expectedConfigurationDirectoryRole: configurationDirectoryRoleWorking,
+		},
+		{
+			name:                               testCaseSearchPathXDGPreferredMessageConstant,
+			directoriesWithConfiguration:       []configurationDirectoryRole{configurationDirectoryRoleXDG, configurationDirectoryRoleHome},
+			expectedConfigurationDirectoryRole: configurationDirectoryRoleXDG,
+		},
+		{
+			name:                               testCaseSearchPathWorkingOverHomeMessageConstant,
+			directoriesWithConfiguration:       []configurationDirectoryRole{configurationDirectoryRoleWorking, configurationDirectoryRoleHome},
+			expectedConfigurationDirectoryRole: configurationDirectoryRoleWorking,
+		},
+	}
+
+	logLevelByDirectoryRole := map[configurationDirectoryRole]string{
+		configurationDirectoryRoleWorking: testConfiguredLogLevelConstant,
+		configurationDirectoryRoleXDG:     testFileLogLevelConstant,
+		configurationDirectoryRoleHome:    testOverriddenLogLevelConstant,
 	}
 
 	for testCaseIndex, testCase := range testCases {
@@ -153,28 +190,32 @@ func TestConfigurationLoaderSearchPaths(testInstance *testing.T) {
 			testInstance.Setenv("HOME", homeDirectoryPath)
 			testInstance.Setenv("XDG_CONFIG_HOME", xdgConfigHomeDirectoryPath)
 
-			userConfigurationBaseDirectoryPath, userConfigurationDirectoryError := os.UserConfigDir()
-			require.NoError(testInstance, userConfigurationDirectoryError)
-			require.NotEmpty(testInstance, userConfigurationBaseDirectoryPath)
+			xdgConfigurationDirectoryPath := filepath.Join(xdgConfigHomeDirectoryPath, testUserConfigurationDirectoryNameConstant)
+			homeConfigurationDirectoryPath := filepath.Join(homeDirectoryPath, testUserConfigurationDirectoryNameConstant)
 
-			userConfigurationDirectoryPath := filepath.Join(userConfigurationBaseDirectoryPath, testUserConfigurationDirectoryNameConstant)
-			createDirectoryError := os.MkdirAll(userConfigurationDirectoryPath, 0o755)
-			require.NoError(testInstance, createDirectoryError)
+			require.NoError(testInstance, os.MkdirAll(workingDirectoryPath, 0o755))
+			require.NoError(testInstance, os.MkdirAll(xdgConfigurationDirectoryPath, 0o755))
+			require.NoError(testInstance, os.MkdirAll(homeConfigurationDirectoryPath, 0o755))
 
-			selectedConfigurationDirectoryPath := testCase.configurationDirectorySelect(workingDirectoryPath, userConfigurationDirectoryPath)
-			ensureSelectedDirectoryError := os.MkdirAll(selectedConfigurationDirectoryPath, 0o755)
-			require.NoError(testInstance, ensureSelectedDirectoryError)
+			directoryPathByRole := map[configurationDirectoryRole]string{
+				configurationDirectoryRoleWorking: workingDirectoryPath,
+				configurationDirectoryRoleXDG:     xdgConfigurationDirectoryPath,
+				configurationDirectoryRoleHome:    homeConfigurationDirectoryPath,
+			}
 
-			configurationFilePath := filepath.Join(selectedConfigurationDirectoryPath, testConfigFileNameConstant)
-			configurationContent := fmt.Sprintf(testConfigContentTemplateConstant, testConfiguredLogLevelConstant)
-			writeConfigurationError := os.WriteFile(configurationFilePath, []byte(configurationContent), 0o600)
-			require.NoError(testInstance, writeConfigurationError)
+			for _, directoryRole := range testCase.directoriesWithConfiguration {
+				configurationDirectoryPath := directoryPathByRole[directoryRole]
+				configurationFilePath := filepath.Join(configurationDirectoryPath, testConfigFileNameConstant)
+				configurationContent := fmt.Sprintf(testConfigContentTemplateConstant, logLevelByDirectoryRole[directoryRole])
+				writeConfigurationError := os.WriteFile(configurationFilePath, []byte(configurationContent), 0o600)
+				require.NoError(testInstance, writeConfigurationError)
+			}
 
 			configurationLoader := utils.NewConfigurationLoader(
 				testConfigurationNameConstant,
 				testConfigurationTypeConstant,
 				testEnvironmentPrefixConstant,
-				[]string{workingDirectoryPath, userConfigurationDirectoryPath},
+				[]string{workingDirectoryPath, xdgConfigurationDirectoryPath, homeConfigurationDirectoryPath},
 			)
 
 			defaultValues := map[string]any{
@@ -184,8 +225,12 @@ func TestConfigurationLoaderSearchPaths(testInstance *testing.T) {
 			loadedConfiguration := configurationFixture{}
 			metadata, loadError := configurationLoader.LoadConfiguration("", defaultValues, &loadedConfiguration)
 			require.NoError(testInstance, loadError)
-			require.Equal(testInstance, testConfiguredLogLevelConstant, loadedConfiguration.Common.LogLevel)
-			require.Equal(testInstance, configurationFilePath, metadata.ConfigFileUsed)
+
+			expectedLogLevel := logLevelByDirectoryRole[testCase.expectedConfigurationDirectoryRole]
+			require.Equal(testInstance, expectedLogLevel, loadedConfiguration.Common.LogLevel)
+
+			expectedConfigurationPath := filepath.Join(directoryPathByRole[testCase.expectedConfigurationDirectoryRole], testConfigFileNameConstant)
+			require.Equal(testInstance, expectedConfigurationPath, metadata.ConfigFileUsed)
 		})
 	}
 }
