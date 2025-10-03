@@ -3,6 +3,7 @@ package repos_test
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -32,6 +33,9 @@ const (
 	remotesMissingRootsMessage       = "no repository roots provided; specify --root or configure defaults"
 	remotesRelativeRootConstant      = "relative/remotes-root"
 	remotesHomeRootSuffixConstant    = "remotes-home-root"
+	remotesOwnerFlagConstant         = "--owner"
+	remotesOwnerConstraintConstant   = "canonical"
+	remotesOwnerMismatchConstant     = "different"
 )
 
 func TestRemotesCommandConfigurationPrecedence(testInstance *testing.T) {
@@ -188,6 +192,126 @@ func TestRemotesCommandConfigurationPrecedence(testInstance *testing.T) {
 			require.Equal(subtest, expectedRoots, discoverer.receivedRoots)
 			require.Equal(subtest, testCase.expectPromptInvocations, prompter.calls)
 			require.Equal(subtest, testCase.expectRemoteUpdates, len(manager.setCalls))
+		})
+	}
+}
+
+func TestRemotesCommandOwnerConstraint(testInstance *testing.T) {
+	expectedSuccessMessage := fmt.Sprintf("UPDATE-REMOTE-DONE: %s origin now https://github.com/canonical/example.git\n", remotesDiscoveredRepository)
+	expectedMismatchMessage := fmt.Sprintf(
+		"UPDATE-REMOTE-SKIP: %s (owner constraint mismatch: expected %s, actual %s)\n",
+		remotesDiscoveredRepository,
+		remotesOwnerMismatchConstant,
+		remotesOwnerConstraintConstant,
+	)
+	expectedFallbackMessage := fmt.Sprintf(
+		"UPDATE-REMOTE-SKIP: %s (owner constraint mismatch: expected %s, actual %s)\n",
+		remotesDiscoveredRepository,
+		remotesOwnerConstraintConstant,
+		"invalid",
+	)
+
+	testCases := []struct {
+		name                    string
+		configuration           repos.RemotesConfiguration
+		arguments               []string
+		expectedUpdates         int
+		expectedOutput          string
+		metadataOwnerRepository string
+	}{
+		{
+			name: "configuration_owner_matches",
+			configuration: repos.RemotesConfiguration{
+				Owner:           remotesOwnerConstraintConstant,
+				RepositoryRoots: []string{remotesConfiguredRootConstant},
+			},
+			arguments:       []string{remotesAssumeYesFlagConstant},
+			expectedUpdates: 1,
+			expectedOutput:  expectedSuccessMessage,
+		},
+		{
+			name: "configuration_owner_mismatch",
+			configuration: repos.RemotesConfiguration{
+				Owner:           remotesOwnerMismatchConstant,
+				RepositoryRoots: []string{remotesConfiguredRootConstant},
+			},
+			arguments:       []string{remotesAssumeYesFlagConstant},
+			expectedUpdates: 0,
+			expectedOutput:  expectedMismatchMessage,
+		},
+		{
+			name: "flag_overrides_configuration",
+			configuration: repos.RemotesConfiguration{
+				Owner:           remotesOwnerMismatchConstant,
+				RepositoryRoots: []string{remotesConfiguredRootConstant},
+			},
+			arguments: []string{
+				remotesAssumeYesFlagConstant,
+				remotesOwnerFlagConstant, remotesOwnerConstraintConstant,
+			},
+			expectedUpdates: 1,
+			expectedOutput:  expectedSuccessMessage,
+		},
+		{
+			name: "invalid_canonical_owner_uses_origin",
+			configuration: repos.RemotesConfiguration{
+				Owner:           remotesOwnerConstraintConstant,
+				RepositoryRoots: []string{remotesConfiguredRootConstant},
+			},
+			arguments: []string{
+				remotesAssumeYesFlagConstant,
+			},
+			metadataOwnerRepository: "invalid",
+			expectedUpdates:         0,
+			expectedOutput:          expectedFallbackMessage,
+		},
+	}
+
+	for testCaseIndex := range testCases {
+		testCase := testCases[testCaseIndex]
+		testInstance.Run(testCase.name, func(subtest *testing.T) {
+			discoverer := &fakeRepositoryDiscoverer{repositories: []string{remotesDiscoveredRepository}}
+			executor := &fakeGitExecutor{}
+			manager := &fakeGitRepositoryManager{remoteURL: remotesOriginURLConstant, currentBranch: remotesMetadataDefaultBranch, panicOnCurrentBranchLookup: true}
+			repositoryMetadata := remotesCanonicalRepository
+			if len(strings.TrimSpace(testCase.metadataOwnerRepository)) > 0 {
+				repositoryMetadata = testCase.metadataOwnerRepository
+			}
+			resolver := &fakeGitHubResolver{metadata: githubcli.RepositoryMetadata{NameWithOwner: repositoryMetadata, DefaultBranch: remotesMetadataDefaultBranch}}
+			prompter := &recordingPrompter{result: shared.ConfirmationResult{Confirmed: true}}
+
+			builder := repos.RemotesCommandBuilder{
+				LoggerProvider: func() *zap.Logger { return zap.NewNop() },
+				Discoverer:     discoverer,
+				GitExecutor:    executor,
+				GitManager:     manager,
+				GitHubResolver: resolver,
+				PrompterFactory: func(*cobra.Command) shared.ConfirmationPrompter {
+					return prompter
+				},
+				ConfigurationProvider: func() repos.RemotesConfiguration {
+					return testCase.configuration
+				},
+			}
+
+			command, buildError := builder.Build()
+			require.NoError(subtest, buildError)
+			bindGlobalRemotesFlags(command)
+
+			command.SetContext(context.Background())
+			stdoutBuffer := &bytes.Buffer{}
+			stderrBuffer := &bytes.Buffer{}
+			command.SetOut(stdoutBuffer)
+			command.SetErr(stderrBuffer)
+			command.SetArgs(testCase.arguments)
+
+			executionError := command.Execute()
+			require.NoError(subtest, executionError)
+
+			require.Equal(subtest, []string{remotesConfiguredRootConstant}, discoverer.receivedRoots)
+			require.Equal(subtest, testCase.expectedUpdates, len(manager.setCalls))
+			combinedOutput := stdoutBuffer.String() + stderrBuffer.String()
+			require.Equal(subtest, testCase.expectedOutput, combinedOutput)
 		})
 	}
 }

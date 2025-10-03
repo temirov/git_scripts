@@ -17,6 +17,7 @@ type ToolsConfiguration struct {
 type RemotesConfiguration struct {
 	DryRun          bool     `mapstructure:"dry_run"`
 	AssumeYes       bool     `mapstructure:"assume_yes"`
+	Owner           string   `mapstructure:"owner"`
 	RepositoryRoots []string `mapstructure:"roots"`
 }
 
@@ -44,6 +45,7 @@ func DefaultToolsConfiguration() ToolsConfiguration {
 		Remotes: RemotesConfiguration{
 			DryRun:          false,
 			AssumeYes:       false,
+			Owner:           "",
 			RepositoryRoots: nil,
 		},
 		Protocol: ProtocolConfiguration{
@@ -67,6 +69,7 @@ func DefaultToolsConfiguration() ToolsConfiguration {
 func (configuration RemotesConfiguration) sanitize() RemotesConfiguration {
 	sanitized := configuration
 	sanitized.RepositoryRoots = rootutils.SanitizeConfigured(configuration.RepositoryRoots)
+	sanitized.Owner = strings.TrimSpace(configuration.Owner)
 	return sanitized
 }
 

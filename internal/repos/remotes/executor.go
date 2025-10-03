@@ -14,6 +14,7 @@ const (
 	skipCanonicalMessage             = "UPDATE-REMOTE-SKIP: %s (no upstream: no canonical redirect found)\n"
 	skipSameMessage                  = "UPDATE-REMOTE-SKIP: %s (already canonical)\n"
 	skipTargetMessage                = "UPDATE-REMOTE-SKIP: %s (error: could not construct target URL)\n"
+	skipOwnerConstraintMessage       = "UPDATE-REMOTE-SKIP: %s (owner constraint mismatch: expected %s, actual %s)\n"
 	planMessage                      = "PLAN-UPDATE-REMOTE: %s origin %s → %s\n"
 	promptTemplate                   = "Update 'origin' in '%s' to canonical (%s → %s)? [y/N] "
 	declinedMessage                  = "UPDATE-REMOTE-SKIP: user declined for %s\n"
@@ -24,6 +25,8 @@ const (
 	gitProtocolURLTemplate           = "git@github.com:%s.git"
 	sshProtocolURLTemplate           = "ssh://git@github.com/%s.git"
 	httpsProtocolURLTemplate         = "https://github.com/%s.git"
+	ownerConstraintUnknownValue      = "unknown"
+	ownerRepositorySeparator         = "/"
 )
 
 // Options configures the remote update workflow.
@@ -35,6 +38,7 @@ type Options struct {
 	RemoteProtocol           shared.RemoteProtocol
 	DryRun                   bool
 	AssumeYes                bool
+	OwnerConstraint          string
 }
 
 // Dependencies captures collaborators required to update remotes.
@@ -71,6 +75,21 @@ func (executor *Executor) Execute(executionContext context.Context, options Opti
 	if strings.EqualFold(trimmedOrigin, trimmedCanonical) {
 		executor.printfOutput(skipSameMessage, options.RepositoryPath)
 		return
+	}
+
+	requiredOwner := strings.TrimSpace(options.OwnerConstraint)
+	if len(requiredOwner) > 0 {
+		actualOwner := canonicalOwner(trimmedCanonical)
+		if len(actualOwner) == 0 {
+			actualOwner = canonicalOwner(trimmedOrigin)
+		}
+		if len(actualOwner) == 0 {
+			actualOwner = ownerConstraintUnknownValue
+		}
+		if !strings.EqualFold(actualOwner, requiredOwner) {
+			executor.printfOutput(skipOwnerConstraintMessage, options.RepositoryPath, requiredOwner, actualOwner)
+			return
+		}
 	}
 
 	targetURL, targetError := BuildRemoteURL(options.RemoteProtocol, trimmedCanonical)
@@ -121,6 +140,25 @@ func (executor *Executor) printfOutput(format string, arguments ...any) {
 		return
 	}
 	fmt.Fprintf(executor.dependencies.Output, format, arguments...)
+}
+
+func canonicalOwner(ownerRepository string) string {
+	trimmed := strings.TrimSpace(ownerRepository)
+	if len(trimmed) == 0 {
+		return ""
+	}
+
+	segments := strings.Split(trimmed, ownerRepositorySeparator)
+	if len(segments) == 0 {
+		return ""
+	}
+
+	owner := strings.TrimSpace(segments[0])
+	if len(owner) == 0 {
+		return ""
+	}
+
+	return owner
 }
 
 // BuildRemoteURL formats the canonical remote URL for the provided protocol and owner/repository tuple.

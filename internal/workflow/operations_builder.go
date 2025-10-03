@@ -41,7 +41,7 @@ func buildOperationFromStep(step StepConfiguration) (Operation, error) {
 	case OperationTypeProtocolConversion:
 		return buildProtocolConversionOperation(normalizedOptions)
 	case OperationTypeCanonicalRemote:
-		return &CanonicalRemoteOperation{}, nil
+		return buildCanonicalRemoteOperation(normalizedOptions)
 	case OperationTypeRenameDirectories:
 		return buildRenameOperation(normalizedOptions)
 	case OperationTypeBranchMigration:
@@ -86,6 +86,16 @@ func buildProtocolConversionOperation(options map[string]any) (Operation, error)
 	}
 
 	return &ProtocolConversionOperation{FromProtocol: fromProtocol, ToProtocol: toProtocol}, nil
+}
+
+func buildCanonicalRemoteOperation(options map[string]any) (Operation, error) {
+	reader := newOptionReader(options)
+	ownerValue, _, ownerError := reader.stringValue(optionOwnerKeyConstant)
+	if ownerError != nil {
+		return nil, ownerError
+	}
+
+	return &CanonicalRemoteOperation{OwnerConstraint: strings.TrimSpace(ownerValue)}, nil
 }
 
 func buildRenameOperation(options map[string]any) (Operation, error) {

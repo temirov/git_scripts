@@ -28,6 +28,7 @@ operations:
     with: &repo_remotes_defaults
       dry_run: false
       assume_yes: true
+      owner: canonical
       roots:
         - ~/Development
 

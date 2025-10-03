@@ -20,6 +20,8 @@ const (
 	configurationOptionToKey                = "to"
 	configurationOptionRequireClean         = "require_clean"
 	configurationOptionIncludeOwnerKey      = "include_owner"
+	configurationOptionOwnerKey             = "owner"
+	configurationOwnerValueConstant         = "canonical"
 	anchoredWorkflowConfigurationTemplate   = `operations:
   - &protocol_conversion_step
     operation: convert-protocol
@@ -70,13 +72,19 @@ func TestBuildOperations(testInstance *testing.T) {
 			name: "builds canonical remote operation",
 			configuration: workflow.Configuration{
 				Steps: []workflow.StepConfiguration{
-					{Operation: workflow.OperationTypeCanonicalRemote},
+					{
+						Operation: workflow.OperationTypeCanonicalRemote,
+						Options: map[string]any{
+							configurationOptionOwnerKey: configurationOwnerValueConstant,
+						},
+					},
 				},
 			},
 			expectedOperationType: workflow.OperationTypeCanonicalRemote,
 			assertFunc: func(testingInstance *testing.T, operation workflow.Operation) {
-				_, castSucceeded := operation.(*workflow.CanonicalRemoteOperation)
+				canonicalOperation, castSucceeded := operation.(*workflow.CanonicalRemoteOperation)
 				require.True(testingInstance, castSucceeded)
+				require.Equal(testingInstance, configurationOwnerValueConstant, canonicalOperation.OwnerConstraint)
 			},
 		},
 		{
