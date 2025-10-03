@@ -24,6 +24,7 @@ operations:
     with:
       roots:
         - .
+      owner: ""
   - operation: repo-protocol-convert
     with:
       roots:
@@ -32,6 +33,7 @@ operations:
     with:
       roots:
         - .
+      include_owner: false
   - operation: workflow
     with:
       roots:

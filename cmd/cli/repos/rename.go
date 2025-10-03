@@ -18,6 +18,8 @@ const (
 	renameLongDescription         = "repo-folders-rename normalizes repository directory names to match canonical GitHub repositories."
 	renameRequireCleanFlagName    = "require-clean"
 	renameRequireCleanDescription = "Require clean worktrees before applying renames"
+	renameIncludeOwnerFlagName    = "owner"
+	renameIncludeOwnerDescription = "Include repository owner in the target directory path"
 )
 
 // RenameCommandBuilder assembles the repo-folders-rename command.
@@ -44,6 +46,7 @@ func (builder *RenameCommandBuilder) Build() (*cobra.Command, error) {
 	}
 
 	command.Flags().Bool(renameRequireCleanFlagName, false, renameRequireCleanDescription)
+	command.Flags().Bool(renameIncludeOwnerFlagName, false, renameIncludeOwnerDescription)
 
 	return command, nil
 }
@@ -65,6 +68,11 @@ func (builder *RenameCommandBuilder) run(command *cobra.Command, arguments []str
 	requireClean := configuration.RequireCleanWorktree
 	if command != nil && command.Flags().Changed(renameRequireCleanFlagName) {
 		requireClean, _ = command.Flags().GetBool(renameRequireCleanFlagName)
+	}
+
+	includeOwner := configuration.IncludeOwner
+	if command != nil && command.Flags().Changed(renameIncludeOwnerFlagName) {
+		includeOwner, _ = command.Flags().GetBool(renameIncludeOwnerFlagName)
 	}
 
 	roots, rootsError := requireRepositoryRoots(command, arguments, configuration.RepositoryRoots)
@@ -114,20 +122,24 @@ func (builder *RenameCommandBuilder) run(command *cobra.Command, arguments []str
 		Errors:     command.ErrOrStderr(),
 	}
 
+	directoryPlanner := rename.NewDirectoryPlanner()
 	for _, inspection := range inspections {
-		if len(strings.TrimSpace(inspection.DesiredFolderName)) == 0 {
+		plan := directoryPlanner.Plan(includeOwner, inspection.FinalOwnerRepo, inspection.DesiredFolderName)
+		if plan.IsNoop(inspection.Path, inspection.FolderName) {
 			continue
 		}
-		if inspection.DesiredFolderName == inspection.FolderName {
+		if len(strings.TrimSpace(plan.FolderName)) == 0 {
 			continue
 		}
 
 		renameOptions := rename.Options{
-			RepositoryPath:       inspection.Path,
-			DesiredFolderName:    inspection.DesiredFolderName,
-			DryRun:               dryRun,
-			RequireCleanWorktree: requireClean,
-			AssumeYes:            trackingPrompter.AssumeYes(),
+			RepositoryPath:          inspection.Path,
+			DesiredFolderName:       plan.FolderName,
+			DryRun:                  dryRun,
+			RequireCleanWorktree:    requireClean,
+			AssumeYes:               trackingPrompter.AssumeYes(),
+			IncludeOwner:            plan.IncludeOwner,
+			EnsureParentDirectories: plan.IncludeOwner,
 		}
 
 		rename.Execute(command.Context(), renameDependencies, renameOptions)

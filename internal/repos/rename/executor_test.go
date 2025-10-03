@@ -17,14 +17,18 @@ import (
 )
 
 type stubFileSystem struct {
-	existingPaths map[string]bool
-	renamedPairs  [][2]string
-	absBase       string
-	absError      error
-	renameError   error
+	existingPaths      map[string]bool
+	renamedPairs       [][2]string
+	createdDirectories []string
+	absBase            string
+	absError           error
+	renameError        error
 }
 
 func (fileSystem *stubFileSystem) Stat(path string) (fs.FileInfo, error) {
+	if fileSystem.existingPaths == nil {
+		fileSystem.existingPaths = map[string]bool{}
+	}
 	if fileSystem.existingPaths[path] {
 		return stubFileInfo{}, nil
 	}
@@ -36,6 +40,9 @@ func (fileSystem *stubFileSystem) Rename(oldPath string, newPath string) error {
 		return fileSystem.renameError
 	}
 	fileSystem.renamedPairs = append(fileSystem.renamedPairs, [2]string{oldPath, newPath})
+	if fileSystem.existingPaths == nil {
+		fileSystem.existingPaths = map[string]bool{}
+	}
 	fileSystem.existingPaths[newPath] = true
 	delete(fileSystem.existingPaths, oldPath)
 	return nil
@@ -49,6 +56,15 @@ func (fileSystem *stubFileSystem) Abs(path string) (string, error) {
 		return path, nil
 	}
 	return filepath.Join(fileSystem.absBase, filepath.Base(path)), nil
+}
+
+func (fileSystem *stubFileSystem) MkdirAll(path string, permissions fs.FileMode) error {
+	if fileSystem.existingPaths == nil {
+		fileSystem.existingPaths = map[string]bool{}
+	}
+	fileSystem.createdDirectories = append(fileSystem.createdDirectories, path)
+	fileSystem.existingPaths[path] = true
+	return nil
 }
 
 type stubFileInfo struct{}
@@ -97,23 +113,27 @@ type stubClock struct{}
 func (stubClock) Now() time.Time { return time.Unix(0, 0) }
 
 const (
-	renameTestRootDirectory     = "/tmp"
-	renameTestLegacyFolderPath  = "/tmp/legacy"
-	renameTestProjectFolderPath = "/tmp/project"
-	renameTestTargetFolderPath  = "/tmp/example"
-	renameTestDesiredFolderName = "example"
+	renameTestRootDirectory          = "/tmp"
+	renameTestLegacyFolderPath       = "/tmp/legacy"
+	renameTestProjectFolderPath      = "/tmp/project"
+	renameTestTargetFolderPath       = "/tmp/example"
+	renameTestDesiredFolderName      = "example"
+	renameTestOwnerSegment           = "owner"
+	renameTestOwnerDesiredFolderName = "owner/example"
+	renameTestOwnerDirectoryPath     = "/tmp/owner"
 )
 
 func TestExecutorBehaviors(testInstance *testing.T) {
 	testCases := []struct {
-		name            string
-		options         rename.Options
-		fileSystem      *stubFileSystem
-		gitManager      shared.GitRepositoryManager
-		prompter        shared.ConfirmationPrompter
-		expectedOutput  string
-		expectedErrors  string
-		expectedRenames int
+		name                       string
+		options                    rename.Options
+		fileSystem                 *stubFileSystem
+		gitManager                 shared.GitRepositoryManager
+		prompter                   shared.ConfirmationPrompter
+		expectedOutput             string
+		expectedErrors             string
+		expectedRenames            int
+		expectedCreatedDirectories []string
 	}{
 		{
 			name: "dry_run_plan_ready",
@@ -131,6 +151,44 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 			},
 			gitManager:      stubGitManager{clean: true},
 			expectedOutput:  fmt.Sprintf("PLAN-OK: %s → %s\n", renameTestLegacyFolderPath, renameTestTargetFolderPath),
+			expectedErrors:  "",
+			expectedRenames: 0,
+		},
+		{
+			name: "dry_run_missing_parent_without_creation",
+			options: rename.Options{
+				RepositoryPath:          renameTestLegacyFolderPath,
+				DesiredFolderName:       renameTestOwnerDesiredFolderName,
+				DryRun:                  true,
+				RequireCleanWorktree:    true,
+				EnsureParentDirectories: false,
+			},
+			fileSystem: &stubFileSystem{
+				existingPaths: map[string]bool{
+					renameTestRootDirectory: true,
+				},
+			},
+			gitManager:      stubGitManager{clean: true},
+			expectedOutput:  fmt.Sprintf("PLAN-SKIP (target parent missing): %s\n", renameTestOwnerDirectoryPath),
+			expectedErrors:  "",
+			expectedRenames: 0,
+		},
+		{
+			name: "dry_run_missing_parent_with_creation",
+			options: rename.Options{
+				RepositoryPath:          renameTestLegacyFolderPath,
+				DesiredFolderName:       renameTestOwnerDesiredFolderName,
+				DryRun:                  true,
+				RequireCleanWorktree:    true,
+				EnsureParentDirectories: true,
+			},
+			fileSystem: &stubFileSystem{
+				existingPaths: map[string]bool{
+					renameTestRootDirectory: true,
+				},
+			},
+			gitManager:      stubGitManager{clean: true},
+			expectedOutput:  fmt.Sprintf("PLAN-OK: %s → %s\n", renameTestLegacyFolderPath, filepath.Join(renameTestRootDirectory, renameTestOwnerDesiredFolderName)),
 			expectedErrors:  "",
 			expectedRenames: 0,
 		},
@@ -244,6 +302,45 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 			expectedErrors:  "",
 			expectedRenames: 0,
 		},
+		{
+			name: "execute_missing_parent_without_creation",
+			options: rename.Options{
+				RepositoryPath:          renameTestProjectFolderPath,
+				DesiredFolderName:       renameTestOwnerDesiredFolderName,
+				AssumeYes:               true,
+				EnsureParentDirectories: false,
+			},
+			fileSystem: &stubFileSystem{
+				existingPaths: map[string]bool{
+					renameTestRootDirectory:     true,
+					renameTestProjectFolderPath: true,
+				},
+			},
+			gitManager:      stubGitManager{clean: true},
+			expectedOutput:  "",
+			expectedErrors:  fmt.Sprintf("ERROR: target parent missing: %s\n", renameTestOwnerDirectoryPath),
+			expectedRenames: 0,
+		},
+		{
+			name: "execute_missing_parent_with_creation",
+			options: rename.Options{
+				RepositoryPath:          renameTestProjectFolderPath,
+				DesiredFolderName:       renameTestOwnerDesiredFolderName,
+				AssumeYes:               true,
+				EnsureParentDirectories: true,
+			},
+			fileSystem: &stubFileSystem{
+				existingPaths: map[string]bool{
+					renameTestRootDirectory:     true,
+					renameTestProjectFolderPath: true,
+				},
+			},
+			gitManager:                 stubGitManager{clean: true},
+			expectedOutput:             fmt.Sprintf("Renamed %s → %s\n", renameTestProjectFolderPath, filepath.Join(renameTestRootDirectory, renameTestOwnerDesiredFolderName)),
+			expectedErrors:             "",
+			expectedRenames:            1,
+			expectedCreatedDirectories: []string{renameTestOwnerDirectoryPath},
+		},
 	}
 
 	for _, testCase := range testCases {
@@ -263,6 +360,7 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 			require.Equal(testingInstance, testCase.expectedOutput, outputBuffer.String())
 			require.Equal(testingInstance, testCase.expectedErrors, errorBuffer.String())
 			require.Len(testingInstance, testCase.fileSystem.renamedPairs, testCase.expectedRenames)
+			require.Equal(testingInstance, testCase.expectedCreatedDirectories, testCase.fileSystem.createdDirectories)
 		})
 	}
 }

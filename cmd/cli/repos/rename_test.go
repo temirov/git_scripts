@@ -25,12 +25,15 @@ const (
 	renameDryRunFlagConstant            = "--" + flagutils.DryRunFlagName
 	renameAssumeYesFlagConstant         = "--" + flagutils.AssumeYesFlagName
 	renameRequireCleanFlagConstant      = "--require-clean"
+	renameIncludeOwnerFlagConstant      = "--owner"
 	renameRootFlagConstant              = "--" + flagutils.DefaultRootFlagName
 	renameConfiguredRootConstant        = "/tmp/rename-config-root"
 	renameCLIRepositoryRootConstant     = "/tmp/rename-cli-root"
 	renameDiscoveredRepositoryPath      = "/tmp/rename-repo"
 	renameOriginURLConstant             = "https://github.com/origin/example.git"
 	renameCanonicalRepositoryConstant   = "canonical/example"
+	renameOwnerSegmentConstant          = "canonical"
+	renameRepositorySegmentConstant     = "example"
 	renameMetadataDefaultBranchConstant = "main"
 	renameLocalBranchConstant           = "main"
 	renameMissingRootsMessage           = "no repository roots provided; specify --root or configure defaults"
@@ -41,16 +44,18 @@ const (
 
 func TestRenameCommandConfigurationPrecedence(testInstance *testing.T) {
 	testCases := []struct {
-		name                 string
-		configuration        *repos.RenameConfiguration
-		arguments            []string
-		expectedRoots        []string
-		expectedRootsBuilder func(testing.TB) []string
-		expectError          bool
-		expectedErrorMessage string
-		expectedPromptCalls  int
-		expectedRenameCalls  int
-		expectedCleanChecks  int
+		name                       string
+		configuration              *repos.RenameConfiguration
+		arguments                  []string
+		expectedRoots              []string
+		expectedRootsBuilder       func(testing.TB) []string
+		expectError                bool
+		expectedErrorMessage       string
+		expectedPromptCalls        int
+		expectedRenameCalls        int
+		expectedCleanChecks        int
+		expectedRenameTargets      []renameOperation
+		expectedCreatedDirectories []string
 	}{
 		{
 			name: "configuration_supplies_defaults",
@@ -148,6 +153,78 @@ func TestRenameCommandConfigurationPrecedence(testInstance *testing.T) {
 			expectedRenameCalls: 0,
 			expectedCleanChecks: 1,
 		},
+		{
+			name: "configuration_enables_include_owner",
+			configuration: &repos.RenameConfiguration{
+				DryRun:               false,
+				AssumeYes:            true,
+				RequireCleanWorktree: false,
+				IncludeOwner:         true,
+				RepositoryRoots:      []string{renameConfiguredRootConstant},
+			},
+			arguments:           []string{},
+			expectedRoots:       []string{renameConfiguredRootConstant},
+			expectedPromptCalls: 0,
+			expectedRenameCalls: 1,
+			expectedCleanChecks: 0,
+			expectedRenameTargets: []renameOperation{
+				{
+					oldPath: renameDiscoveredRepositoryPath,
+					newPath: filepath.Join(renameParentDirectoryPathConstant, renameOwnerSegmentConstant, renameRepositorySegmentConstant),
+				},
+			},
+			expectedCreatedDirectories: []string{filepath.Join(renameParentDirectoryPathConstant, renameOwnerSegmentConstant)},
+		},
+		{
+			name: "flag_enables_include_owner",
+			configuration: &repos.RenameConfiguration{
+				DryRun:               false,
+				AssumeYes:            true,
+				RequireCleanWorktree: false,
+				RepositoryRoots:      []string{renameConfiguredRootConstant},
+			},
+			arguments: []string{
+				renameAssumeYesFlagConstant,
+				renameIncludeOwnerFlagConstant,
+				renameRootFlagConstant, renameCLIRepositoryRootConstant,
+			},
+			expectedRoots:       []string{renameCLIRepositoryRootConstant},
+			expectedPromptCalls: 0,
+			expectedRenameCalls: 1,
+			expectedCleanChecks: 0,
+			expectedRenameTargets: []renameOperation{
+				{
+					oldPath: renameDiscoveredRepositoryPath,
+					newPath: filepath.Join(renameParentDirectoryPathConstant, renameOwnerSegmentConstant, renameRepositorySegmentConstant),
+				},
+			},
+			expectedCreatedDirectories: []string{filepath.Join(renameParentDirectoryPathConstant, renameOwnerSegmentConstant)},
+		},
+		{
+			name: "flag_disables_include_owner",
+			configuration: &repos.RenameConfiguration{
+				DryRun:               false,
+				AssumeYes:            true,
+				RequireCleanWorktree: false,
+				IncludeOwner:         true,
+				RepositoryRoots:      []string{renameConfiguredRootConstant},
+			},
+			arguments: []string{
+				renameAssumeYesFlagConstant,
+				renameIncludeOwnerFlagConstant + "=false",
+			},
+			expectedRoots:       []string{renameConfiguredRootConstant},
+			expectedPromptCalls: 0,
+			expectedRenameCalls: 1,
+			expectedCleanChecks: 0,
+			expectedRenameTargets: []renameOperation{
+				{
+					oldPath: renameDiscoveredRepositoryPath,
+					newPath: filepath.Join(renameParentDirectoryPathConstant, renameRepositorySegmentConstant),
+				},
+			},
+			expectedCreatedDirectories: nil,
+		},
 	}
 
 	for testCaseIndex := range testCases {
@@ -164,7 +241,10 @@ func TestRenameCommandConfigurationPrecedence(testInstance *testing.T) {
 			}
 			resolver := &fakeGitHubResolver{metadata: githubcli.RepositoryMetadata{NameWithOwner: renameCanonicalRepositoryConstant, DefaultBranch: renameMetadataDefaultBranchConstant}}
 			prompter := &recordingPrompter{result: shared.ConfirmationResult{Confirmed: true}}
-			fileSystem := newRecordingFileSystem([]string{renameParentDirectoryPathConstant, renameDiscoveredRepositoryPath})
+			fileSystem := newRecordingFileSystem([]string{
+				renameParentDirectoryPathConstant,
+				renameDiscoveredRepositoryPath,
+			})
 
 			var configurationProvider func() repos.RenameConfiguration
 			if testCase.configuration != nil {
@@ -209,6 +289,7 @@ func TestRenameCommandConfigurationPrecedence(testInstance *testing.T) {
 				require.Zero(subtest, prompter.calls)
 				require.Empty(subtest, fileSystem.renameOperations)
 				require.Zero(subtest, manager.checkCleanCalls)
+				require.Empty(subtest, fileSystem.createdDirectories)
 				return
 			}
 
@@ -222,6 +303,10 @@ func TestRenameCommandConfigurationPrecedence(testInstance *testing.T) {
 			require.Equal(subtest, testCase.expectedPromptCalls, prompter.calls)
 			require.Equal(subtest, testCase.expectedRenameCalls, len(fileSystem.renameOperations))
 			require.Equal(subtest, testCase.expectedCleanChecks, manager.checkCleanCalls)
+			if len(testCase.expectedRenameTargets) > 0 {
+				require.Equal(subtest, testCase.expectedRenameTargets, fileSystem.renameOperations)
+			}
+			require.Equal(subtest, testCase.expectedCreatedDirectories, fileSystem.createdDirectories)
 		})
 	}
 }
@@ -260,8 +345,9 @@ type renameOperation struct {
 }
 
 type recordingFileSystem struct {
-	renameOperations []renameOperation
-	existingPaths    map[string]struct{}
+	renameOperations   []renameOperation
+	existingPaths      map[string]struct{}
+	createdDirectories []string
 }
 
 func newRecordingFileSystem(existingPaths []string) *recordingFileSystem {
@@ -281,18 +367,33 @@ func (fileSystem *recordingFileSystem) Stat(path string) (fs.FileInfo, error) {
 
 func (fileSystem *recordingFileSystem) Rename(oldPath string, newPath string) error {
 	fileSystem.renameOperations = append(fileSystem.renameOperations, renameOperation{oldPath: oldPath, newPath: newPath})
+	fileSystem.ensurePathSet()
 	fileSystem.existingPaths[newPath] = struct{}{}
 	delete(fileSystem.existingPaths, oldPath)
 	return nil
 }
 
+func (fileSystem *recordingFileSystem) MkdirAll(path string, permissions fs.FileMode) error {
+	fileSystem.ensurePathSet()
+	fileSystem.createdDirectories = append(fileSystem.createdDirectories, path)
+	fileSystem.existingPaths[path] = struct{}{}
+	return nil
+}
+
 func (fileSystem *recordingFileSystem) Exists(path string) bool {
+	fileSystem.ensurePathSet()
 	_, exists := fileSystem.existingPaths[path]
 	return exists
 }
 
 func (fileSystem *recordingFileSystem) Abs(path string) (string, error) {
 	return filepath.Clean(path), nil
+}
+
+func (fileSystem *recordingFileSystem) ensurePathSet() {
+	if fileSystem.existingPaths == nil {
+		fileSystem.existingPaths = map[string]struct{}{}
+	}
 }
 
 type fakeFileInfo struct {

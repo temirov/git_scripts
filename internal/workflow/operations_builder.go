@@ -41,7 +41,7 @@ func buildOperationFromStep(step StepConfiguration) (Operation, error) {
 	case OperationTypeProtocolConversion:
 		return buildProtocolConversionOperation(normalizedOptions)
 	case OperationTypeCanonicalRemote:
-		return &CanonicalRemoteOperation{}, nil
+		return buildCanonicalRemoteOperation(normalizedOptions)
 	case OperationTypeRenameDirectories:
 		return buildRenameOperation(normalizedOptions)
 	case OperationTypeBranchMigration:
@@ -88,13 +88,31 @@ func buildProtocolConversionOperation(options map[string]any) (Operation, error)
 	return &ProtocolConversionOperation{FromProtocol: fromProtocol, ToProtocol: toProtocol}, nil
 }
 
+func buildCanonicalRemoteOperation(options map[string]any) (Operation, error) {
+	reader := newOptionReader(options)
+	ownerValue, _, ownerError := reader.stringValue(optionOwnerKeyConstant)
+	if ownerError != nil {
+		return nil, ownerError
+	}
+
+	return &CanonicalRemoteOperation{OwnerConstraint: strings.TrimSpace(ownerValue)}, nil
+}
+
 func buildRenameOperation(options map[string]any) (Operation, error) {
 	reader := newOptionReader(options)
 	requireClean, requireCleanExplicit, requireCleanError := reader.boolValue(optionRequireCleanKeyConstant)
 	if requireCleanError != nil {
 		return nil, requireCleanError
 	}
-	return &RenameOperation{RequireCleanWorktree: requireClean, requireCleanExplicit: requireCleanExplicit}, nil
+	includeOwner, _, includeOwnerError := reader.boolValue(optionIncludeOwnerKeyConstant)
+	if includeOwnerError != nil {
+		return nil, includeOwnerError
+	}
+	return &RenameOperation{
+		RequireCleanWorktree: requireClean,
+		requireCleanExplicit: requireCleanExplicit,
+		IncludeOwner:         includeOwner,
+	}, nil
 }
 
 func buildBranchMigrationOperation(options map[string]any) (Operation, error) {

@@ -322,6 +322,7 @@ operations:
         - .
       assume_yes: true
       dry_run: false
+      owner: canonical
   - operation: branch-migrate
     with: &migration_defaults
       roots:

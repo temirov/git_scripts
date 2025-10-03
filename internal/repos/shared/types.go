@@ -49,6 +49,7 @@ type FileSystem interface {
 	Stat(path string) (fs.FileInfo, error)
 	Rename(oldPath string, newPath string) error
 	Abs(path string) (string, error)
+	MkdirAll(path string, permissions fs.FileMode) error
 }
 
 // ConfirmationResult captures the outcome of a user confirmation prompt.

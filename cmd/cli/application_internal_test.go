@@ -43,6 +43,7 @@ func TestApplicationCommonDefaultsApplied(t *testing.T) {
 	require.True(t, renameConfiguration.DryRun)
 	require.True(t, renameConfiguration.AssumeYes)
 	require.True(t, renameConfiguration.RequireCleanWorktree)
+	require.False(t, renameConfiguration.IncludeOwner)
 
 	workflowConfiguration := application.workflowCommandConfiguration()
 	require.True(t, workflowConfiguration.DryRun)
@@ -58,6 +59,7 @@ func TestApplicationOperationOverridesTakePriority(t *testing.T) {
 				"dry_run":       false,
 				"assume_yes":    false,
 				"require_clean": false,
+				"include_owner": true,
 				"roots":         []string{"/tmp/rename"},
 			},
 		},
@@ -89,6 +91,7 @@ func TestApplicationOperationOverridesTakePriority(t *testing.T) {
 	require.False(t, renameConfiguration.DryRun)
 	require.False(t, renameConfiguration.AssumeYes)
 	require.False(t, renameConfiguration.RequireCleanWorktree)
+	require.True(t, renameConfiguration.IncludeOwner)
 
 	workflowConfiguration := application.workflowCommandConfiguration()
 	require.False(t, workflowConfiguration.DryRun)

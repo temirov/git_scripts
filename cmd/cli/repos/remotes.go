@@ -13,9 +13,11 @@ import (
 )
 
 const (
-	remotesUseConstant      = "repo-remote-update"
-	remotesShortDescription = "Update origin URLs to match canonical GitHub repositories"
-	remotesLongDescription  = "repo-remote-update adjusts origin remotes to point to canonical GitHub repositories."
+	remotesUseConstant          = "repo-remote-update"
+	remotesShortDescription     = "Update origin URLs to match canonical GitHub repositories"
+	remotesLongDescription      = "repo-remote-update adjusts origin remotes to point to canonical GitHub repositories."
+	remotesOwnerFlagName        = "owner"
+	remotesOwnerFlagDescription = "Require canonical owner to match this value"
 )
 
 // RemotesCommandBuilder assembles the repo-remote-update command.
@@ -40,6 +42,8 @@ func (builder *RemotesCommandBuilder) Build() (*cobra.Command, error) {
 		RunE:  builder.run,
 	}
 
+	command.Flags().String(remotesOwnerFlagName, "", remotesOwnerFlagDescription)
+
 	return command, nil
 }
 
@@ -55,6 +59,12 @@ func (builder *RemotesCommandBuilder) run(command *cobra.Command, arguments []st
 	assumeYes := configuration.AssumeYes
 	if executionFlagsAvailable && executionFlags.AssumeYesSet {
 		assumeYes = executionFlags.AssumeYes
+	}
+
+	ownerConstraint := configuration.Owner
+	if command != nil && command.Flags().Changed(remotesOwnerFlagName) {
+		ownerValue, _ := command.Flags().GetString(remotesOwnerFlagName)
+		ownerConstraint = strings.TrimSpace(ownerValue)
 	}
 
 	roots, rootsError := requireRepositoryRoots(command, arguments, configuration.RepositoryRoots)
@@ -112,6 +122,7 @@ func (builder *RemotesCommandBuilder) run(command *cobra.Command, arguments []st
 			RemoteProtocol:           shared.RemoteProtocol(inspection.RemoteProtocol),
 			DryRun:                   dryRun,
 			AssumeYes:                trackingPrompter.AssumeYes(),
+			OwnerConstraint:          ownerConstraint,
 		}
 
 		remotes.Execute(command.Context(), remotesDependencies, remotesOptions)
