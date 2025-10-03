@@ -24,6 +24,7 @@ operations:
     with:
       roots:
         - .
+      owner: ""
   - operation: repo-protocol-convert
     with:
       roots:

@@ -14,7 +14,9 @@ const (
 )
 
 // CanonicalRemoteOperation updates origin URLs to their canonical GitHub equivalents.
-type CanonicalRemoteOperation struct{}
+type CanonicalRemoteOperation struct {
+	OwnerConstraint string
+}
 
 // Name identifies the operation type.
 func (operation *CanonicalRemoteOperation) Name() string {
@@ -54,6 +56,7 @@ func (operation *CanonicalRemoteOperation) Execute(executionContext context.Cont
 			RemoteProtocol:           shared.RemoteProtocol(repository.Inspection.RemoteProtocol),
 			DryRun:                   environment.DryRun,
 			AssumeYes:                assumeYes,
+			OwnerConstraint:          strings.TrimSpace(operation.OwnerConstraint),
 		}
 
 		remotes.Execute(executionContext, dependencies, options)
