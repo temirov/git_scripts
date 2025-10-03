@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
@@ -16,6 +17,7 @@ const (
 	integrationCommandFailureFormatConstant     = "command failed: %v\n%s"
 	pathEnvironmentVariableNameConstant         = "PATH"
 	environmentAssignmentSeparatorConstant      = "="
+	integrationBinaryFileNameConstant           = "gix-integration"
 )
 
 type integrationCommandOptions struct {
@@ -116,4 +118,43 @@ func requireNoError(testInstance *testing.T, err error, output string) {
 	if err != nil {
 		testInstance.Fatalf(integrationCommandFailureFormatConstant, err, output)
 	}
+}
+
+func buildIntegrationBinary(testInstance *testing.T, repositoryRoot string) string {
+	testInstance.Helper()
+	binaryDirectory := testInstance.TempDir()
+	binaryPath := filepath.Join(binaryDirectory, integrationBinaryFileNameConstant)
+
+	command := exec.Command("go", "build", "-o", binaryPath, ".")
+	command.Dir = repositoryRoot
+	command.Env = os.Environ()
+
+	outputBytes, runError := command.CombinedOutput()
+	if runError != nil {
+		testInstance.Fatalf(integrationCommandFailureFormatConstant, runError, string(outputBytes))
+	}
+
+	return binaryPath
+}
+
+func runBinaryIntegrationCommand(
+	testInstance *testing.T,
+	binaryPath string,
+	workingDirectory string,
+	environmentOverrides map[string]string,
+	timeout time.Duration,
+	arguments []string,
+) (string, error) {
+	testInstance.Helper()
+
+	executionContext, cancelFunction := context.WithTimeout(context.Background(), timeout)
+	defer cancelFunction()
+
+	command := exec.CommandContext(executionContext, binaryPath, arguments...)
+	command.Dir = workingDirectory
+	command.Env = buildCommandEnvironment(integrationCommandOptions{EnvironmentOverrides: environmentOverrides})
+
+	outputBytes, runError := command.CombinedOutput()
+	outputText := string(outputBytes)
+	return outputText, runError
 }
