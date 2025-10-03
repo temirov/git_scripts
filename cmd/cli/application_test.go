@@ -25,46 +25,57 @@ import (
 )
 
 const (
-	testConfigurationFileNameConstant                = "config.yaml"
-	testConfigurationHeaderConstant                  = "common:\n  log_level: info\n  log_format: structured\noperations:\n"
-	testConsoleConfigurationHeaderConstant           = "common:\n  log_level: info\n  log_format: console\noperations:\n"
-	testOperationBlockTemplateConstant               = "  - operation: %s\n    with:\n%s"
-	testOperationRootsTemplateConstant               = "      roots:\n        - %s\n"
-	testOperationRootDirectoryConstant               = "/tmp/config-root"
-	testConfigurationSearchPathEnvironmentName       = "GIX_CONFIG_SEARCH_PATH"
-	testPackagesCommandNameConstant                  = "repo-packages-purge"
-	testBranchMigrateCommandNameConstant             = "branch-migrate"
-	testBranchCleanupCommandNameConstant             = "repo-prs-purge"
-	testReposRemotesCommandNameConstant              = "repo-remote-update"
-	testReposProtocolCommandNameConstant             = "repo-protocol-convert"
-	testReposRenameCommandNameConstant               = "repo-folders-rename"
-	testAuditCommandNameConstant                     = "audit"
-	testWorkflowCommandNameConstant                  = "workflow"
-	embeddedDefaultsBranchCleanupTestNameConstant    = "BranchCleanupDefaults"
-	embeddedDefaultsPackagesTestNameConstant         = "PackagesDefaults"
-	embeddedDefaultsReposRemotesTestNameConstant     = "ReposRemotesDefaults"
-	embeddedDefaultsReposProtocolTestNameConstant    = "ReposProtocolDefaults"
-	embeddedDefaultsReposRenameTestNameConstant      = "ReposRenameDefaults"
-	embeddedDefaultsWorkflowTestNameConstant         = "WorkflowDefaults"
-	embeddedDefaultsBranchMigrateTestNameConstant    = "BranchMigrateDefaults"
-	embeddedDefaultsAuditTestNameConstant            = "AuditDefaults"
-	embeddedDefaultRootPathConstant                  = "."
-	embeddedDefaultRemoteNameConstant                = "origin"
-	embeddedDefaultPullRequestLimitConstant          = 100
-	configurationInitializedMessageTextConstant      = "configuration initialized"
-	configurationInitializedConsoleTemplateConstant  = "%s | log level=%s | log format=%s | config file=%s"
-	configurationLogLevelFieldNameConstant           = "log_level"
-	configurationLogFormatFieldNameConstant          = "log_format"
-	configurationFileFieldNameConstant               = "config_file"
-	testUserConfigurationDirectoryNameConstant       = ".gix"
-	testXDGConfigHomeDirectoryNameConstant           = "config"
-	testCaseWorkingDirectoryPreferredMessageConstant = "WorkingDirectoryPreferred"
-	testCaseXDGDirectoryFallbackMessageConstant      = "XDGDirectoryFallback"
-	testCaseHomeDirectoryFallbackMessageConstant     = "HomeDirectoryFallback"
-	applicationSearchPathSubtestNameTemplateConstant = "%d_%s"
-	configurationDirectoryRoleWorkingConstant        = "working"
-	configurationDirectoryRoleXDGConstant            = "xdg"
-	configurationDirectoryRoleHomeConstant           = "home"
+	testConfigurationFileNameConstant                        = "config.yaml"
+	testConfigurationHeaderConstant                          = "common:\n  log_level: info\n  log_format: structured\noperations:\n"
+	testConsoleConfigurationHeaderConstant                   = "common:\n  log_level: info\n  log_format: console\noperations:\n"
+	testOperationBlockTemplateConstant                       = "  - operation: %s\n    with:\n%s"
+	testOperationRootsTemplateConstant                       = "      roots:\n        - %s\n"
+	testOperationRootDirectoryConstant                       = "/tmp/config-root"
+	testConfigurationSearchPathEnvironmentName               = "GIX_CONFIG_SEARCH_PATH"
+	testPackagesCommandNameConstant                          = "repo-packages-purge"
+	testBranchMigrateCommandNameConstant                     = "branch-migrate"
+	testBranchCleanupCommandNameConstant                     = "repo-prs-purge"
+	testReposRemotesCommandNameConstant                      = "repo-remote-update"
+	testReposProtocolCommandNameConstant                     = "repo-protocol-convert"
+	testReposRenameCommandNameConstant                       = "repo-folders-rename"
+	testAuditCommandNameConstant                             = "audit"
+	testWorkflowCommandNameConstant                          = "workflow"
+	embeddedDefaultsBranchCleanupTestNameConstant            = "BranchCleanupDefaults"
+	embeddedDefaultsPackagesTestNameConstant                 = "PackagesDefaults"
+	embeddedDefaultsReposRemotesTestNameConstant             = "ReposRemotesDefaults"
+	embeddedDefaultsReposProtocolTestNameConstant            = "ReposProtocolDefaults"
+	embeddedDefaultsReposRenameTestNameConstant              = "ReposRenameDefaults"
+	embeddedDefaultsWorkflowTestNameConstant                 = "WorkflowDefaults"
+	embeddedDefaultsBranchMigrateTestNameConstant            = "BranchMigrateDefaults"
+	embeddedDefaultsAuditTestNameConstant                    = "AuditDefaults"
+	embeddedDefaultRootPathConstant                          = "."
+	embeddedDefaultRemoteNameConstant                        = "origin"
+	embeddedDefaultPullRequestLimitConstant                  = 100
+	configurationInitializedMessageTextConstant              = "configuration initialized"
+	configurationInitializedConsoleTemplateConstant          = "%s | log level=%s | log format=%s | config file=%s"
+	configurationLogLevelFieldNameConstant                   = "log_level"
+	configurationLogFormatFieldNameConstant                  = "log_format"
+	configurationFileFieldNameConstant                       = "config_file"
+	testUserConfigurationDirectoryNameConstant               = ".gix"
+	testXDGConfigHomeDirectoryNameConstant                   = "config"
+	testCaseWorkingDirectoryPreferredMessageConstant         = "WorkingDirectoryPreferred"
+	testCaseXDGDirectoryFallbackMessageConstant              = "XDGDirectoryFallback"
+	testCaseHomeDirectoryFallbackMessageConstant             = "HomeDirectoryFallback"
+	applicationSearchPathSubtestNameTemplateConstant         = "%d_%s"
+	configurationDirectoryRoleWorkingConstant                = "working"
+	configurationDirectoryRoleXDGConstant                    = "xdg"
+	configurationDirectoryRoleHomeConstant                   = "home"
+	configurationInitializationLocalTestNameConstant         = "LocalScope"
+	configurationInitializationUserTestNameConstant          = "UserScope"
+	configurationInitializationForceRequiredTestNameConstant = "ForceRequired"
+	configurationInitializationForceEnabledTestNameConstant  = "ForceEnabled"
+	configurationInitializationArgumentsLocalConstant        = "--init"
+	configurationInitializationArgumentsUserConstant         = "--init=user"
+	configurationInitializationForceFlagConstant             = "--force"
+	configurationInitializationExistingContentConstant       = "common:\n  log_level: info\n"
+	configurationInitializationErrorMessageFragmentConstant  = "already exists"
+	configurationInitializationApplicationNameConstant       = "gix"
+	configurationInitializationUserHomeEnvNameConstant       = "HOME"
 )
 
 var requiredOperationNames = []string{
@@ -235,6 +246,137 @@ func TestApplicationInitializationLoggingModes(testInstance *testing.T) {
 			require.NoError(t, initializationError)
 
 			testCase.assertion(t, capturedOutput, configurationPath)
+		})
+	}
+}
+
+func TestApplicationConfigurationInitializationCreatesConfiguration(testInstance *testing.T) {
+	embeddedConfigurationContent, _ := cli.EmbeddedDefaultConfiguration()
+	require.NotEmpty(testInstance, embeddedConfigurationContent)
+
+	testCases := []struct {
+		name      string
+		arguments []string
+		setup     func(*testing.T) string
+	}{
+		{
+			name:      configurationInitializationLocalTestNameConstant,
+			arguments: []string{configurationInitializationArgumentsLocalConstant},
+			setup: func(t *testing.T) string {
+				workingDirectory := t.TempDir()
+				originalWorkingDirectory, workingDirectoryError := os.Getwd()
+				require.NoError(t, workingDirectoryError)
+				require.NoError(t, os.Chdir(workingDirectory))
+				t.Cleanup(func() {
+					require.NoError(t, os.Chdir(originalWorkingDirectory))
+				})
+
+				return filepath.Join(workingDirectory, testConfigurationFileNameConstant)
+			},
+		},
+		{
+			name:      configurationInitializationUserTestNameConstant,
+			arguments: []string{configurationInitializationArgumentsUserConstant},
+			setup: func(t *testing.T) string {
+				workingDirectory := t.TempDir()
+				originalWorkingDirectory, workingDirectoryError := os.Getwd()
+				require.NoError(t, workingDirectoryError)
+				require.NoError(t, os.Chdir(workingDirectory))
+				t.Cleanup(func() {
+					require.NoError(t, os.Chdir(originalWorkingDirectory))
+				})
+
+				homeDirectory := t.TempDir()
+				t.Setenv(configurationInitializationUserHomeEnvNameConstant, homeDirectory)
+
+				return filepath.Join(homeDirectory, testUserConfigurationDirectoryNameConstant, testConfigurationFileNameConstant)
+			},
+		},
+	}
+
+	for testCaseIndex, testCase := range testCases {
+		testInstance.Run(fmt.Sprintf(applicationSearchPathSubtestNameTemplateConstant, testCaseIndex, testCase.name), func(t *testing.T) {
+			expectedConfigurationPath := testCase.setup(t)
+
+			originalArguments := os.Args
+			os.Args = append([]string{configurationInitializationApplicationNameConstant}, testCase.arguments...)
+			t.Cleanup(func() {
+				os.Args = originalArguments
+			})
+
+			application := cli.NewApplication()
+			executionError := application.Execute()
+			require.NoError(t, executionError)
+
+			fileContent, readError := os.ReadFile(expectedConfigurationPath)
+			require.NoError(t, readError)
+			require.Equal(t, embeddedConfigurationContent, fileContent)
+		})
+	}
+}
+
+func TestApplicationConfigurationInitializationForceHandling(testInstance *testing.T) {
+	embeddedConfigurationContent, _ := cli.EmbeddedDefaultConfiguration()
+	require.NotEmpty(testInstance, embeddedConfigurationContent)
+
+	testCases := []struct {
+		name        string
+		arguments   []string
+		expectError bool
+	}{
+		{
+			name:        configurationInitializationForceRequiredTestNameConstant,
+			arguments:   []string{configurationInitializationArgumentsLocalConstant},
+			expectError: true,
+		},
+		{
+			name: configurationInitializationForceEnabledTestNameConstant,
+			arguments: []string{
+				configurationInitializationArgumentsLocalConstant,
+				configurationInitializationForceFlagConstant,
+			},
+			expectError: false,
+		},
+	}
+
+	for testCaseIndex, testCase := range testCases {
+		testInstance.Run(fmt.Sprintf(applicationSearchPathSubtestNameTemplateConstant, testCaseIndex, testCase.name), func(t *testing.T) {
+			workingDirectory := t.TempDir()
+			originalWorkingDirectory, workingDirectoryError := os.Getwd()
+			require.NoError(t, workingDirectoryError)
+			require.NoError(t, os.Chdir(workingDirectory))
+			t.Cleanup(func() {
+				require.NoError(t, os.Chdir(originalWorkingDirectory))
+			})
+
+			configurationPath := filepath.Join(workingDirectory, testConfigurationFileNameConstant)
+			writeError := os.WriteFile(configurationPath, []byte(configurationInitializationExistingContentConstant), 0o600)
+			require.NoError(t, writeError)
+
+			originalArguments := os.Args
+			os.Args = append([]string{configurationInitializationApplicationNameConstant}, testCase.arguments...)
+			t.Cleanup(func() {
+				os.Args = originalArguments
+			})
+
+			application := cli.NewApplication()
+			executionError := application.Execute()
+
+			if testCase.expectError {
+				require.Error(t, executionError)
+				require.Contains(t, executionError.Error(), configurationInitializationErrorMessageFragmentConstant)
+
+				fileContent, readError := os.ReadFile(configurationPath)
+				require.NoError(t, readError)
+				require.Equal(t, configurationInitializationExistingContentConstant, string(fileContent))
+				return
+			}
+
+			require.NoError(t, executionError)
+
+			fileContent, readError := os.ReadFile(configurationPath)
+			require.NoError(t, readError)
+			require.Equal(t, embeddedConfigurationContent, fileContent)
 		})
 	}
 }

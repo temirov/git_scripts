@@ -26,61 +26,83 @@ import (
 )
 
 const (
-	applicationNameConstant                             = "gix"
-	applicationShortDescriptionConstant                 = "Command-line interface for gix utilities"
-	applicationLongDescriptionConstant                  = "gix ships reusable helpers that integrate Git, GitHub CLI, and related tooling."
-	configFileFlagNameConstant                          = "config"
-	configFileFlagUsageConstant                         = "Optional path to a configuration file (YAML or JSON)."
-	logLevelFlagNameConstant                            = "log-level"
-	logLevelFlagUsageConstant                           = "Override the configured log level."
-	logFormatFlagNameConstant                           = "log-format"
-	logFormatFlagUsageConstant                          = "Override the configured log format (structured or console)."
-	commonConfigurationKeyConstant                      = "common"
-	commonLogLevelConfigKeyConstant                     = commonConfigurationKeyConstant + ".log_level"
-	commonLogFormatConfigKeyConstant                    = commonConfigurationKeyConstant + ".log_format"
-	commonDryRunConfigKeyConstant                       = commonConfigurationKeyConstant + ".dry_run"
-	commonAssumeYesConfigKeyConstant                    = commonConfigurationKeyConstant + ".assume_yes"
-	commonRequireCleanConfigKeyConstant                 = commonConfigurationKeyConstant + ".require_clean"
-	environmentPrefixConstant                           = "GIX"
-	configurationNameConstant                           = "config"
-	configurationTypeConstant                           = "yaml"
-	configurationInitializedMessageConstant             = "configuration initialized"
-	configurationLogLevelFieldConstant                  = "log_level"
-	configurationLogFormatFieldConstant                 = "log_format"
-	configurationFileFieldConstant                      = "config_file"
-	configurationLoadErrorTemplateConstant              = "unable to load configuration: %w"
-	loggerCreationErrorTemplateConstant                 = "unable to create logger: %w"
-	loggerSyncErrorTemplateConstant                     = "unable to flush logger: %w"
-	configurationInitializedConsoleTemplateConstant     = "%s | log level=%s | log format=%s | config file=%s"
-	rootCommandInfoMessageConstant                      = "gix CLI executed"
-	rootCommandDebugMessageConstant                     = "gix CLI diagnostics"
-	logFieldCommandNameConstant                         = "command_name"
-	logFieldArgumentCountConstant                       = "argument_count"
-	logFieldArgumentsConstant                           = "arguments"
-	loggerNotInitializedMessageConstant                 = "logger not initialized"
-	defaultConfigurationSearchPathConstant              = "."
-	userConfigurationDirectoryNameConstant              = ".gix"
-	configurationSearchPathEnvironmentVariableConstant  = "GIX_CONFIG_SEARCH_PATH"
-	auditOperationNameConstant                          = "audit"
-	packagesPurgeOperationNameConstant                  = "repo-packages-purge"
-	branchCleanupOperationNameConstant                  = "repo-prs-purge"
-	reposRenameOperationNameConstant                    = "repo-folders-rename"
-	reposRemotesOperationNameConstant                   = "repo-remote-update"
-	reposProtocolOperationNameConstant                  = "repo-protocol-convert"
-	workflowCommandOperationNameConstant                = "workflow"
-	branchMigrateOperationNameConstant                  = "branch-migrate"
-	operationDecodeErrorMessageConstant                 = "unable to decode operation defaults"
-	operationNameLogFieldConstant                       = "operation"
-	operationErrorLogFieldConstant                      = "error"
-	duplicateOperationConfigurationTemplateConstant     = "duplicate configuration for operation %q"
-	missingOperationConfigurationTemplateConstant       = "missing configuration for operation %q"
-	missingOperationConfigurationSkippedMessageConstant = "operation configuration missing; continuing without defaults"
-	unknownCommandNamePlaceholderConstant               = "unknown"
-	dryRunOptionKeyConstant                             = "dry_run"
-	assumeYesOptionKeyConstant                          = "assume_yes"
-	requireCleanOptionKeyConstant                       = "require_clean"
-	branchFlagNameConstant                              = "branch"
-	branchFlagUsageConstant                             = "Branch name for command context"
+	applicationNameConstant                                          = "gix"
+	applicationShortDescriptionConstant                              = "Command-line interface for gix utilities"
+	applicationLongDescriptionConstant                               = "gix ships reusable helpers that integrate Git, GitHub CLI, and related tooling."
+	configFileFlagNameConstant                                       = "config"
+	configFileFlagUsageConstant                                      = "Optional path to a configuration file (YAML or JSON)."
+	logLevelFlagNameConstant                                         = "log-level"
+	logLevelFlagUsageConstant                                        = "Override the configured log level."
+	logFormatFlagNameConstant                                        = "log-format"
+	logFormatFlagUsageConstant                                       = "Override the configured log format (structured or console)."
+	configurationInitializationFlagNameConstant                      = "init"
+	configurationInitializationFlagUsageConstant                     = "Write the embedded default configuration to the selected scope (local or user)."
+	configurationInitializationDefaultScopeConstant                  = "local"
+	configurationInitializationForceFlagNameConstant                 = "force"
+	configurationInitializationForceFlagUsageConstant                = "Overwrite an existing configuration file when initializing."
+	configurationInitializationScopeLocalConstant                    = "local"
+	configurationInitializationScopeUserConstant                     = "user"
+	configurationInitializationUnsupportedScopeTemplateConstant      = "unsupported initialization scope %q"
+	configurationInitializationWorkingDirectoryErrorTemplateConstant = "unable to determine working directory: %w"
+	configurationInitializationWorkingDirectoryEmptyErrorConstant    = "working directory is empty"
+	configurationInitializationHomeDirectoryErrorTemplateConstant    = "unable to determine user home directory: %w"
+	configurationInitializationHomeDirectoryEmptyErrorConstant       = "user home directory is empty"
+	configurationInitializationContentUnavailableErrorConstant       = "embedded configuration content is unavailable"
+	configurationInitializationDirectoryErrorTemplateConstant        = "unable to ensure configuration directory %s: %w"
+	configurationInitializationExistingFileTemplateConstant          = "configuration file already exists at %s (use --force to overwrite)"
+	configurationInitializationExistingDirectoryTemplateConstant     = "configuration path %s is a directory"
+	configurationInitializationDirectoryConflictTemplateConstant     = "configuration directory path %s is not a directory"
+	configurationInitializationWriteErrorTemplateConstant            = "unable to write configuration file %s: %w"
+	configurationInitializationSuccessMessageConstant                = "configuration file created"
+	commonConfigurationKeyConstant                                   = "common"
+	commonLogLevelConfigKeyConstant                                  = commonConfigurationKeyConstant + ".log_level"
+	commonLogFormatConfigKeyConstant                                 = commonConfigurationKeyConstant + ".log_format"
+	commonDryRunConfigKeyConstant                                    = commonConfigurationKeyConstant + ".dry_run"
+	commonAssumeYesConfigKeyConstant                                 = commonConfigurationKeyConstant + ".assume_yes"
+	commonRequireCleanConfigKeyConstant                              = commonConfigurationKeyConstant + ".require_clean"
+	environmentPrefixConstant                                        = "GIX"
+	configurationNameConstant                                        = "config"
+	configurationTypeConstant                                        = "yaml"
+	configurationFileNameConstant                                    = configurationNameConstant + "." + configurationTypeConstant
+	configurationDirectoryPermissionConstant                         = 0o755
+	configurationFilePermissionConstant                              = 0o600
+	configurationInitializedMessageConstant                          = "configuration initialized"
+	configurationLogLevelFieldConstant                               = "log_level"
+	configurationLogFormatFieldConstant                              = "log_format"
+	configurationFileFieldConstant                                   = "config_file"
+	configurationLoadErrorTemplateConstant                           = "unable to load configuration: %w"
+	loggerCreationErrorTemplateConstant                              = "unable to create logger: %w"
+	loggerSyncErrorTemplateConstant                                  = "unable to flush logger: %w"
+	configurationInitializedConsoleTemplateConstant                  = "%s | log level=%s | log format=%s | config file=%s"
+	rootCommandInfoMessageConstant                                   = "gix CLI executed"
+	rootCommandDebugMessageConstant                                  = "gix CLI diagnostics"
+	logFieldCommandNameConstant                                      = "command_name"
+	logFieldArgumentCountConstant                                    = "argument_count"
+	logFieldArgumentsConstant                                        = "arguments"
+	loggerNotInitializedMessageConstant                              = "logger not initialized"
+	defaultConfigurationSearchPathConstant                           = "."
+	userConfigurationDirectoryNameConstant                           = ".gix"
+	configurationSearchPathEnvironmentVariableConstant               = "GIX_CONFIG_SEARCH_PATH"
+	auditOperationNameConstant                                       = "audit"
+	packagesPurgeOperationNameConstant                               = "repo-packages-purge"
+	branchCleanupOperationNameConstant                               = "repo-prs-purge"
+	reposRenameOperationNameConstant                                 = "repo-folders-rename"
+	reposRemotesOperationNameConstant                                = "repo-remote-update"
+	reposProtocolOperationNameConstant                               = "repo-protocol-convert"
+	workflowCommandOperationNameConstant                             = "workflow"
+	branchMigrateOperationNameConstant                               = "branch-migrate"
+	operationDecodeErrorMessageConstant                              = "unable to decode operation defaults"
+	operationNameLogFieldConstant                                    = "operation"
+	operationErrorLogFieldConstant                                   = "error"
+	duplicateOperationConfigurationTemplateConstant                  = "duplicate configuration for operation %q"
+	missingOperationConfigurationTemplateConstant                    = "missing configuration for operation %q"
+	missingOperationConfigurationSkippedMessageConstant              = "operation configuration missing; continuing without defaults"
+	unknownCommandNamePlaceholderConstant                            = "unknown"
+	dryRunOptionKeyConstant                                          = "dry_run"
+	assumeYesOptionKeyConstant                                       = "assume_yes"
+	requireCleanOptionKeyConstant                                    = "require_clean"
+	branchFlagNameConstant                                           = "branch"
+	branchFlagUsageConstant                                          = "Branch name for command context"
 )
 
 var commandOperationRequirements = map[string][]string{
@@ -144,6 +166,11 @@ type ApplicationOperationConfiguration struct {
 // OperationConfigurations stores reusable operation defaults indexed by normalized operation name.
 type OperationConfigurations struct {
 	entries map[string]map[string]any
+}
+
+type configurationInitializationPlan struct {
+	DirectoryPath string
+	FilePath      string
 }
 
 func newOperationConfigurations(definitions []ApplicationOperationConfiguration) (OperationConfigurations, error) {
@@ -227,20 +254,22 @@ func normalizeOperationName(raw string) string {
 
 // Application wires the Cobra root command, configuration loader, and structured logger.
 type Application struct {
-	rootCommand             *cobra.Command
-	configurationLoader     *utils.ConfigurationLoader
-	loggerFactory           loggerOutputsFactory
-	logger                  *zap.Logger
-	consoleLogger           *zap.Logger
-	configuration           ApplicationConfiguration
-	configurationMetadata   utils.LoadedConfiguration
-	configurationFilePath   string
-	logLevelFlagValue       string
-	logFormatFlagValue      string
-	commandContextAccessor  utils.CommandContextAccessor
-	operationConfigurations OperationConfigurations
-	rootFlagValues          *flagutils.RootFlagValues
-	branchFlagValues        *flagutils.BranchFlagValues
+	rootCommand                       *cobra.Command
+	configurationLoader               *utils.ConfigurationLoader
+	loggerFactory                     loggerOutputsFactory
+	logger                            *zap.Logger
+	consoleLogger                     *zap.Logger
+	configuration                     ApplicationConfiguration
+	configurationMetadata             utils.LoadedConfiguration
+	configurationFilePath             string
+	logLevelFlagValue                 string
+	logFormatFlagValue                string
+	commandContextAccessor            utils.CommandContextAccessor
+	operationConfigurations           OperationConfigurations
+	rootFlagValues                    *flagutils.RootFlagValues
+	branchFlagValues                  *flagutils.BranchFlagValues
+	configurationInitializationScope  string
+	configurationInitializationForced bool
 }
 
 // NewApplication assembles a fully wired CLI application instance.
@@ -280,6 +309,22 @@ func NewApplication() *Application {
 	cobraCommand.PersistentFlags().StringVar(&application.configurationFilePath, configFileFlagNameConstant, "", configFileFlagUsageConstant)
 	cobraCommand.PersistentFlags().StringVar(&application.logLevelFlagValue, logLevelFlagNameConstant, "", logLevelFlagUsageConstant)
 	cobraCommand.PersistentFlags().StringVar(&application.logFormatFlagValue, logFormatFlagNameConstant, "", logFormatFlagUsageConstant)
+	cobraCommand.PersistentFlags().StringVar(
+		&application.configurationInitializationScope,
+		configurationInitializationFlagNameConstant,
+		configurationInitializationDefaultScopeConstant,
+		configurationInitializationFlagUsageConstant,
+	)
+	initializationFlag := cobraCommand.PersistentFlags().Lookup(configurationInitializationFlagNameConstant)
+	if initializationFlag != nil {
+		initializationFlag.NoOptDefVal = configurationInitializationDefaultScopeConstant
+	}
+	cobraCommand.PersistentFlags().BoolVar(
+		&application.configurationInitializationForced,
+		configurationInitializationForceFlagNameConstant,
+		false,
+		configurationInitializationForceFlagUsageConstant,
+	)
 
 	application.rootFlagValues = flagutils.BindRootFlags(
 		cobraCommand,
@@ -869,9 +914,153 @@ func collectRequiredOperationConfigurationNames() []string {
 	return orderedNames
 }
 
+func (application *Application) handleConfigurationInitialization(command *cobra.Command) (bool, error) {
+	if !application.configurationInitializationRequested(command) {
+		return false, nil
+	}
+
+	initializationScope := strings.TrimSpace(application.configurationInitializationScope)
+	if len(initializationScope) == 0 {
+		initializationScope = configurationInitializationDefaultScopeConstant
+	}
+
+	initializationPlan, planError := application.resolveConfigurationInitializationPlan(initializationScope)
+	if planError != nil {
+		return true, planError
+	}
+
+	configurationContent, _ := EmbeddedDefaultConfiguration()
+	if len(configurationContent) == 0 {
+		return true, errors.New(configurationInitializationContentUnavailableErrorConstant)
+	}
+
+	if writeError := application.writeConfigurationFile(initializationPlan, configurationContent); writeError != nil {
+		return true, writeError
+	}
+
+	application.logger.Info(
+		configurationInitializationSuccessMessageConstant,
+		zap.String(configurationFileFieldConstant, initializationPlan.FilePath),
+	)
+
+	return true, nil
+}
+
+func (application *Application) configurationInitializationRequested(command *cobra.Command) bool {
+	return application.persistentFlagChanged(command, configurationInitializationFlagNameConstant)
+}
+
+func (application *Application) resolveConfigurationInitializationPlan(initializationScope string) (configurationInitializationPlan, error) {
+	normalizedScope := strings.ToLower(strings.TrimSpace(initializationScope))
+	switch normalizedScope {
+	case "", configurationInitializationScopeLocalConstant:
+		workingDirectoryPath, workingDirectoryError := os.Getwd()
+		if workingDirectoryError != nil {
+			return configurationInitializationPlan{}, fmt.Errorf(configurationInitializationWorkingDirectoryErrorTemplateConstant, workingDirectoryError)
+		}
+
+		trimmedWorkingDirectoryPath := strings.TrimSpace(workingDirectoryPath)
+		if len(trimmedWorkingDirectoryPath) == 0 {
+			return configurationInitializationPlan{}, fmt.Errorf(
+				configurationInitializationWorkingDirectoryErrorTemplateConstant,
+				errors.New(configurationInitializationWorkingDirectoryEmptyErrorConstant),
+			)
+		}
+
+		return configurationInitializationPlan{
+			DirectoryPath: trimmedWorkingDirectoryPath,
+			FilePath:      filepath.Join(trimmedWorkingDirectoryPath, configurationFileNameConstant),
+		}, nil
+	case configurationInitializationScopeUserConstant:
+		userHomeDirectoryPath, userHomeDirectoryError := os.UserHomeDir()
+		if userHomeDirectoryError != nil {
+			return configurationInitializationPlan{}, fmt.Errorf(configurationInitializationHomeDirectoryErrorTemplateConstant, userHomeDirectoryError)
+		}
+
+		trimmedHomeDirectoryPath := strings.TrimSpace(userHomeDirectoryPath)
+		if len(trimmedHomeDirectoryPath) == 0 {
+			return configurationInitializationPlan{}, fmt.Errorf(
+				configurationInitializationHomeDirectoryErrorTemplateConstant,
+				errors.New(configurationInitializationHomeDirectoryEmptyErrorConstant),
+			)
+		}
+
+		configurationDirectoryPath := filepath.Join(trimmedHomeDirectoryPath, userConfigurationDirectoryNameConstant)
+
+		return configurationInitializationPlan{
+			DirectoryPath: configurationDirectoryPath,
+			FilePath:      filepath.Join(configurationDirectoryPath, configurationFileNameConstant),
+		}, nil
+	default:
+		trimmedScope := strings.TrimSpace(initializationScope)
+		if len(trimmedScope) == 0 {
+			trimmedScope = initializationScope
+		}
+		return configurationInitializationPlan{}, fmt.Errorf(configurationInitializationUnsupportedScopeTemplateConstant, trimmedScope)
+	}
+}
+
+func (application *Application) writeConfigurationFile(initializationPlan configurationInitializationPlan, configurationContent []byte) error {
+	if len(configurationContent) == 0 {
+		return errors.New(configurationInitializationContentUnavailableErrorConstant)
+	}
+
+	directoryPath := strings.TrimSpace(initializationPlan.DirectoryPath)
+	if len(directoryPath) == 0 {
+		return fmt.Errorf(
+			configurationInitializationDirectoryErrorTemplateConstant,
+			initializationPlan.DirectoryPath,
+			errors.New(configurationInitializationWorkingDirectoryEmptyErrorConstant),
+		)
+	}
+
+	directoryInfo, directoryStatError := os.Stat(directoryPath)
+	switch {
+	case directoryStatError == nil:
+		if !directoryInfo.IsDir() {
+			return fmt.Errorf(configurationInitializationDirectoryConflictTemplateConstant, directoryPath)
+		}
+	case errors.Is(directoryStatError, os.ErrNotExist):
+		if createError := os.MkdirAll(directoryPath, configurationDirectoryPermissionConstant); createError != nil {
+			return fmt.Errorf(configurationInitializationDirectoryErrorTemplateConstant, directoryPath, createError)
+		}
+	default:
+		return fmt.Errorf(configurationInitializationDirectoryErrorTemplateConstant, directoryPath, directoryStatError)
+	}
+
+	fileInfo, fileStatError := os.Stat(initializationPlan.FilePath)
+	switch {
+	case fileStatError == nil:
+		if fileInfo.IsDir() {
+			return fmt.Errorf(configurationInitializationExistingDirectoryTemplateConstant, initializationPlan.FilePath)
+		}
+		if !application.configurationInitializationForced {
+			return fmt.Errorf(configurationInitializationExistingFileTemplateConstant, initializationPlan.FilePath)
+		}
+	case errors.Is(fileStatError, os.ErrNotExist):
+	default:
+		return fmt.Errorf(configurationInitializationWriteErrorTemplateConstant, initializationPlan.FilePath, fileStatError)
+	}
+
+	writeError := os.WriteFile(initializationPlan.FilePath, configurationContent, configurationFilePermissionConstant)
+	if writeError != nil {
+		return fmt.Errorf(configurationInitializationWriteErrorTemplateConstant, initializationPlan.FilePath, writeError)
+	}
+
+	return nil
+}
+
 func (application *Application) runRootCommand(command *cobra.Command, arguments []string) error {
 	if application.logger == nil {
 		return errors.New(loggerNotInitializedMessageConstant)
+	}
+
+	initializationHandled, initializationError := application.handleConfigurationInitialization(command)
+	if initializationError != nil {
+		return initializationError
+	}
+	if initializationHandled {
+		return nil
 	}
 
 	application.logger.Info(
