@@ -422,9 +422,9 @@ func (application *Application) resolveConfigurationSearchPaths() []string {
 	overrideValue := strings.TrimSpace(os.Getenv(configurationSearchPathEnvironmentVariableConstant))
 	if len(overrideValue) == 0 {
 		defaultSearchPaths := []string{defaultConfigurationSearchPathConstant}
-		userConfigurationDirectoryPath, userConfigurationDirectoryResolved := application.resolveUserConfigurationDirectoryPath()
-		if userConfigurationDirectoryResolved {
-			defaultSearchPaths = append(defaultSearchPaths, userConfigurationDirectoryPath)
+		userConfigurationDirectoryPaths := application.resolveUserConfigurationDirectoryPaths()
+		if len(userConfigurationDirectoryPaths) > 0 {
+			defaultSearchPaths = append(defaultSearchPaths, userConfigurationDirectoryPaths...)
 		}
 
 		return defaultSearchPaths
@@ -450,26 +450,44 @@ func (application *Application) resolveConfigurationSearchPaths() []string {
 	return cleanedPaths
 }
 
-func (application *Application) resolveUserConfigurationDirectoryPath() (string, bool) {
+func (application *Application) resolveUserConfigurationDirectoryPaths() []string {
+	userConfigurationDirectoryPaths := make([]string, 0, 2)
+
 	userConfigurationBaseDirectoryPath, userConfigurationDirectoryError := os.UserConfigDir()
 	if userConfigurationDirectoryError == nil {
 		trimmedBaseDirectoryPath := strings.TrimSpace(userConfigurationBaseDirectoryPath)
 		if len(trimmedBaseDirectoryPath) > 0 {
-			return filepath.Join(trimmedBaseDirectoryPath, userConfigurationDirectoryNameConstant), true
+			userConfigurationDirectoryPaths = append(
+				userConfigurationDirectoryPaths,
+				filepath.Join(trimmedBaseDirectoryPath, userConfigurationDirectoryNameConstant),
+			)
 		}
 	}
 
 	userHomeDirectoryPath, userHomeDirectoryError := os.UserHomeDir()
 	if userHomeDirectoryError != nil {
-		return "", false
+		return userConfigurationDirectoryPaths
 	}
 
 	trimmedHomeDirectoryPath := strings.TrimSpace(userHomeDirectoryPath)
 	if len(trimmedHomeDirectoryPath) == 0 {
-		return "", false
+		return userConfigurationDirectoryPaths
 	}
 
-	return filepath.Join(trimmedHomeDirectoryPath, userConfigurationDirectoryNameConstant), true
+	homeConfigurationDirectoryPath := filepath.Join(trimmedHomeDirectoryPath, userConfigurationDirectoryNameConstant)
+	directoryAlreadyIncluded := false
+	for _, existingDirectoryPath := range userConfigurationDirectoryPaths {
+		if existingDirectoryPath == homeConfigurationDirectoryPath {
+			directoryAlreadyIncluded = true
+			break
+		}
+	}
+
+	if !directoryAlreadyIncluded {
+		userConfigurationDirectoryPaths = append(userConfigurationDirectoryPaths, homeConfigurationDirectoryPath)
+	}
+
+	return userConfigurationDirectoryPaths
 }
 
 func (application *Application) initializeConfiguration(command *cobra.Command) error {
