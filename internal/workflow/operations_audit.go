@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/temirov/gix/internal/audit"
@@ -15,6 +16,8 @@ const (
 	auditPlanMessageTemplateConstant      = "WORKFLOW-PLAN: audit report → %s\n"
 	auditWriteMessageTemplateConstant     = "WORKFLOW-AUDIT: wrote report to %s\n"
 	auditReportDestinationStdoutConstant  = "stdout"
+	auditCurrentDirectorySentinelConstant = "."
+	auditDirectoryPermissionsConstant     = 0o755
 	auditCSVHeaderFinalRepositoryConstant = "final_github_repo"
 	auditCSVHeaderFolderNameConstant      = "folder_name"
 	auditCSVHeaderNameMatchesConstant     = "name_matches"
@@ -43,8 +46,9 @@ func (operation *AuditReportOperation) Execute(executionContext context.Context,
 	}
 
 	destination := auditReportDestinationStdoutConstant
+	sanitizedOutputPath := strings.TrimSpace(operation.OutputPath)
 	if operation.WriteToFile {
-		destination = operation.OutputPath
+		destination = sanitizedOutputPath
 	}
 
 	if environment.DryRun {
@@ -57,7 +61,14 @@ func (operation *AuditReportOperation) Execute(executionContext context.Context,
 	var writer io.Writer
 	var closeFunction func() error
 	if operation.WriteToFile {
-		fileHandle, createError := os.Create(operation.OutputPath)
+		sanitizedOutputDirectory := filepath.Dir(sanitizedOutputPath)
+		if sanitizedOutputDirectory != auditCurrentDirectorySentinelConstant {
+			if directoryCreationError := os.MkdirAll(sanitizedOutputDirectory, auditDirectoryPermissionsConstant); directoryCreationError != nil {
+				return directoryCreationError
+			}
+		}
+
+		fileHandle, createError := os.Create(sanitizedOutputPath)
 		if createError != nil {
 			return createError
 		}
