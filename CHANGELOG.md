@@ -1,3 +1,12 @@
+## [v0.0.3] - 2025-10-03
+
+### Highlights
+
+- Add configuration initialization workflow to CLI
+- Extend CLI configuration search paths
+
+**Upgrade notes:** No breaking changes.
+
 ## [v0.0.2] - 2025-10-03
 
 ### Highlights
