@@ -2,6 +2,7 @@ package flags
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -9,6 +10,8 @@ import (
 
 	"github.com/temirov/gix/internal/utils"
 )
+
+const boolFlagParseErrorTemplate = "unable to parse flag %q: %w"
 
 // ErrFlagNotDefined indicates that the requested flag is not present on the command.
 var ErrFlagNotDefined = errors.New("flag not defined")
@@ -19,10 +22,20 @@ func BoolFlag(command *cobra.Command, name string) (bool, bool, error) {
 		return false, false, ErrFlagNotDefined
 	}
 	value, err := flagSet.GetBool(name)
-	if err != nil {
+	if err == nil {
+		return value, flag.Changed, nil
+	}
+
+	if flag.Value == nil {
 		return false, false, err
 	}
-	return value, flag.Changed, nil
+
+	parsedValue, parseError := parseToggleValue(flag.Value.String())
+	if parseError != nil {
+		return false, false, fmt.Errorf(boolFlagParseErrorTemplate, name, parseError)
+	}
+
+	return parsedValue, flag.Changed, nil
 }
 
 func StringFlag(command *cobra.Command, name string) (string, bool, error) {
