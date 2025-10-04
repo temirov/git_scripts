@@ -36,12 +36,12 @@ func BindExecutionFlags(command *cobra.Command, defaults ExecutionDefaults, defi
 
 	persistentFlagSet := command.PersistentFlags()
 
-	bindBoolFlag(persistentFlagSet, definitions.DryRun, defaults.DryRun)
-	bindBoolFlag(persistentFlagSet, definitions.AssumeYes, defaults.AssumeYes)
-	bindBoolFlag(persistentFlagSet, definitions.RequireClean, defaults.RequireClean)
+	bindToggleFlag(persistentFlagSet, definitions.DryRun, defaults.DryRun)
+	bindToggleFlag(persistentFlagSet, definitions.AssumeYes, defaults.AssumeYes)
+	bindToggleFlag(persistentFlagSet, definitions.RequireClean, defaults.RequireClean)
 }
 
-func bindBoolFlag(flagSet *pflag.FlagSet, definition ExecutionFlagDefinition, defaultValue bool) {
+func bindToggleFlag(flagSet *pflag.FlagSet, definition ExecutionFlagDefinition, defaultValue bool) {
 	if flagSet == nil {
 		return
 	}
@@ -52,10 +52,5 @@ func bindBoolFlag(flagSet *pflag.FlagSet, definition ExecutionFlagDefinition, de
 		return
 	}
 
-	if len(definition.Shorthand) > 0 {
-		flagSet.BoolP(definition.Name, definition.Shorthand, defaultValue, definition.Usage)
-		return
-	}
-
-	flagSet.Bool(definition.Name, defaultValue, definition.Usage)
+	AddToggleFlag(flagSet, nil, definition.Name, definition.Shorthand, defaultValue, definition.Usage)
 }

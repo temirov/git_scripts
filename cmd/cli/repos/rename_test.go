@@ -225,6 +225,58 @@ func TestRenameCommandConfigurationPrecedence(testInstance *testing.T) {
 			},
 			expectedCreatedDirectories: nil,
 		},
+		{
+			name: "flag_disables_include_owner_with_no_literal",
+			configuration: &repos.RenameConfiguration{
+				DryRun:               false,
+				AssumeYes:            true,
+				RequireCleanWorktree: false,
+				IncludeOwner:         true,
+				RepositoryRoots:      []string{renameConfiguredRootConstant},
+			},
+			arguments: []string{
+				renameAssumeYesFlagConstant,
+				renameIncludeOwnerFlagConstant,
+				"no",
+			},
+			expectedRoots:       []string{renameConfiguredRootConstant},
+			expectedPromptCalls: 0,
+			expectedRenameCalls: 1,
+			expectedCleanChecks: 0,
+			expectedRenameTargets: []renameOperation{
+				{
+					oldPath: renameDiscoveredRepositoryPath,
+					newPath: filepath.Join(renameParentDirectoryPathConstant, renameRepositorySegmentConstant),
+				},
+			},
+			expectedCreatedDirectories: nil,
+		},
+		{
+			name: "flag_disables_require_clean_with_no_literal",
+			configuration: &repos.RenameConfiguration{
+				DryRun:               false,
+				AssumeYes:            true,
+				RequireCleanWorktree: true,
+				IncludeOwner:         true,
+				RepositoryRoots:      []string{renameConfiguredRootConstant},
+			},
+			arguments: []string{
+				renameAssumeYesFlagConstant,
+				renameRequireCleanFlagConstant,
+				"no",
+			},
+			expectedRoots:       []string{renameConfiguredRootConstant},
+			expectedPromptCalls: 0,
+			expectedRenameCalls: 1,
+			expectedCleanChecks: 0,
+			expectedRenameTargets: []renameOperation{
+				{
+					oldPath: renameDiscoveredRepositoryPath,
+					newPath: filepath.Join(renameParentDirectoryPathConstant, renameOwnerSegmentConstant, renameRepositorySegmentConstant),
+				},
+			},
+			expectedCreatedDirectories: []string{filepath.Join(renameParentDirectoryPathConstant, renameOwnerSegmentConstant)},
+		},
 	}
 
 	for testCaseIndex := range testCases {
@@ -277,7 +329,8 @@ func TestRenameCommandConfigurationPrecedence(testInstance *testing.T) {
 			stderrBuffer := &bytes.Buffer{}
 			command.SetOut(stdoutBuffer)
 			command.SetErr(stderrBuffer)
-			command.SetArgs(testCase.arguments)
+			normalizedArguments := flagutils.NormalizeToggleArguments(testCase.arguments)
+			command.SetArgs(normalizedArguments)
 
 			executionError := command.Execute()
 			if testCase.expectError {

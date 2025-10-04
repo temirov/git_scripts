@@ -451,6 +451,8 @@ func NewApplication() *Application {
 
 // Execute runs the configured Cobra command hierarchy and ensures logger flushing.
 func (application *Application) Execute() error {
+	application.rootCommand.SetArgs(flagutils.NormalizeToggleArguments(os.Args[1:]))
+
 	executionError := application.rootCommand.Execute()
 	if syncError := application.flushLogger(); syncError != nil {
 		return fmt.Errorf(loggerSyncErrorTemplateConstant, syncError)

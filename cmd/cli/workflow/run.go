@@ -50,7 +50,7 @@ func (builder *CommandBuilder) Build() (*cobra.Command, error) {
 		RunE:  builder.run,
 	}
 
-	command.Flags().Bool(requireCleanFlagNameConstant, false, requireCleanFlagDescriptionConstant)
+	flagutils.AddToggleFlag(command.Flags(), nil, requireCleanFlagNameConstant, "", false, requireCleanFlagDescriptionConstant)
 
 	return command, nil
 }
@@ -132,9 +132,14 @@ func (builder *CommandBuilder) run(command *cobra.Command, arguments []string) e
 	commandConfiguration := builder.resolveConfiguration()
 
 	requireCleanDefault := commandConfiguration.RequireClean
-	if command != nil && command.Flags().Changed(requireCleanFlagNameConstant) {
-		requireCleanFlagValue, _ := command.Flags().GetBool(requireCleanFlagNameConstant)
-		requireCleanDefault = requireCleanFlagValue
+	if command != nil {
+		requireCleanFlagValue, requireCleanFlagChanged, requireCleanFlagError := flagutils.BoolFlag(command, requireCleanFlagNameConstant)
+		if requireCleanFlagError != nil && !errors.Is(requireCleanFlagError, flagutils.ErrFlagNotDefined) {
+			return requireCleanFlagError
+		}
+		if requireCleanFlagChanged {
+			requireCleanDefault = requireCleanFlagValue
+		}
 	}
 
 	workflow.ApplyDefaults(operations, workflow.OperationDefaults{RequireClean: requireCleanDefault})

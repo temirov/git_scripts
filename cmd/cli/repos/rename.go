@@ -1,6 +1,7 @@
 package repos
 
 import (
+	"errors"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -45,8 +46,8 @@ func (builder *RenameCommandBuilder) Build() (*cobra.Command, error) {
 		RunE:  builder.run,
 	}
 
-	command.Flags().Bool(renameRequireCleanFlagName, false, renameRequireCleanDescription)
-	command.Flags().Bool(renameIncludeOwnerFlagName, false, renameIncludeOwnerDescription)
+	flagutils.AddToggleFlag(command.Flags(), nil, renameRequireCleanFlagName, "", false, renameRequireCleanDescription)
+	flagutils.AddToggleFlag(command.Flags(), nil, renameIncludeOwnerFlagName, "", false, renameIncludeOwnerDescription)
 
 	return command, nil
 }
@@ -66,13 +67,25 @@ func (builder *RenameCommandBuilder) run(command *cobra.Command, arguments []str
 	}
 
 	requireClean := configuration.RequireCleanWorktree
-	if command != nil && command.Flags().Changed(renameRequireCleanFlagName) {
-		requireClean, _ = command.Flags().GetBool(renameRequireCleanFlagName)
+	if command != nil {
+		requireCleanFlagValue, requireCleanFlagChanged, requireCleanFlagError := flagutils.BoolFlag(command, renameRequireCleanFlagName)
+		if requireCleanFlagError != nil && !errors.Is(requireCleanFlagError, flagutils.ErrFlagNotDefined) {
+			return requireCleanFlagError
+		}
+		if requireCleanFlagChanged {
+			requireClean = requireCleanFlagValue
+		}
 	}
 
 	includeOwner := configuration.IncludeOwner
-	if command != nil && command.Flags().Changed(renameIncludeOwnerFlagName) {
-		includeOwner, _ = command.Flags().GetBool(renameIncludeOwnerFlagName)
+	if command != nil {
+		includeOwnerFlagValue, includeOwnerFlagChanged, includeOwnerFlagError := flagutils.BoolFlag(command, renameIncludeOwnerFlagName)
+		if includeOwnerFlagError != nil && !errors.Is(includeOwnerFlagError, flagutils.ErrFlagNotDefined) {
+			return includeOwnerFlagError
+		}
+		if includeOwnerFlagChanged {
+			includeOwner = includeOwnerFlagValue
+		}
 	}
 
 	roots, rootsError := requireRepositoryRoots(command, arguments, configuration.RepositoryRoots)

@@ -70,6 +70,23 @@ func TestWorkflowCommandConfigurationPrecedence(testInstance *testing.T) {
 			expectExecutionError: false,
 		},
 		{
+			name: "flag_disables_require_clean_with_no_literal",
+			configuration: workflowcmd.CommandConfiguration{
+				Roots:        []string{workflowConfiguredRootConstant},
+				RequireClean: true,
+				DryRun:       false,
+			},
+			additionalArgs: []string{
+				workflowRootsFlagConstant,
+				workflowConfiguredRootConstant,
+				"--require-clean",
+				"no",
+			},
+			expectedRoots:        []string{workflowConfiguredRootConstant},
+			expectPlanMessage:    false,
+			expectExecutionError: false,
+		},
+		{
 			name:                 "error_when_roots_missing",
 			configuration:        workflowcmd.CommandConfiguration{},
 			additionalArgs:       []string{},
@@ -112,7 +129,8 @@ func TestWorkflowCommandConfigurationPrecedence(testInstance *testing.T) {
 			command.SetContext(context.Background())
 
 			arguments := append([]string{configPath}, testCase.additionalArgs...)
-			command.SetArgs(arguments)
+			normalizedArguments := flagutils.NormalizeToggleArguments(arguments)
+			command.SetArgs(normalizedArguments)
 
 			executionError := command.Execute()
 
