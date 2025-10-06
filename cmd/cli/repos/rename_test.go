@@ -36,7 +36,7 @@ const (
 	renameRepositorySegmentConstant     = "example"
 	renameMetadataDefaultBranchConstant = "main"
 	renameLocalBranchConstant           = "main"
-	renameMissingRootsMessage           = "no repository roots provided; specify --root or configure defaults"
+	renameMissingRootsMessage           = "no repository roots provided; specify --roots or configure defaults"
 	renameRelativeRootConstant          = "relative/rename-root"
 	renameHomeRootSuffixConstant        = "rename-home-root"
 	renameParentDirectoryPathConstant   = "/tmp"

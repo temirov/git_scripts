@@ -81,6 +81,7 @@
 * Dependency injection for I/O.
 * Table-driven tests.
 * Mock external boundaries via interfaces.
+* Use real, integration tests with comprehensive coverage
 
 ---
 

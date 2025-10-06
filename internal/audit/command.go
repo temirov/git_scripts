@@ -9,6 +9,7 @@ import (
 
 	"github.com/temirov/gix/internal/repos/dependencies"
 	"github.com/temirov/gix/internal/utils"
+	flagutils "github.com/temirov/gix/internal/utils/flags"
 )
 
 // LoggerProvider supplies a zap logger for command execution.
@@ -31,11 +32,12 @@ func (builder *CommandBuilder) Build() (*cobra.Command, error) {
 		Use:   commandUseConstant,
 		Short: commandShortDescription,
 		Long:  commandLongDescription,
-		Args:  cobra.NoArgs,
+		Args:  builder.noArgumentValidator(),
 		RunE:  builder.run,
 	}
 
 	command.Flags().StringSlice(flagRootNameConstant, nil, flagRootDescriptionConstant)
+	command.Flags().Bool(flagIncludeAllNameConstant, false, flagIncludeAllDescriptionConstant)
 	return command, nil
 }
 
@@ -80,10 +82,20 @@ func (builder *CommandBuilder) parseOptions(command *cobra.Command) (CommandOpti
 		}
 	}
 
+	includeAllFolders := configuration.IncludeAll
 	roots := append([]string{}, configuration.Roots...)
 	if command != nil && command.Flags().Changed(flagRootNameConstant) {
 		flagRoots, _ := command.Flags().GetStringSlice(flagRootNameConstant)
 		roots = auditConfigurationRepositoryPathSanitizer.Sanitize(flagRoots)
+	}
+	if command != nil {
+		includeAllValue, includeAllChanged, includeAllError := flagutils.BoolFlag(command, flagIncludeAllNameConstant)
+		if includeAllError != nil && !errors.Is(includeAllError, flagutils.ErrFlagNotDefined) {
+			return CommandOptions{}, includeAllError
+		}
+		if includeAllChanged {
+			includeAllFolders = includeAllValue
+		}
 	}
 
 	if len(roots) == 0 {
@@ -94,12 +106,24 @@ func (builder *CommandBuilder) parseOptions(command *cobra.Command) (CommandOpti
 	}
 
 	options := CommandOptions{
-		Roots:           roots,
-		DebugOutput:     debugMode,
-		InspectionDepth: InspectionDepthFull,
+		Roots:             roots,
+		DebugOutput:       debugMode,
+		InspectionDepth:   InspectionDepthFull,
+		IncludeAllFolders: includeAllFolders,
 	}
 
 	return options, nil
+}
+
+func (builder *CommandBuilder) noArgumentValidator() cobra.PositionalArgs {
+	return func(command *cobra.Command, arguments []string) error {
+		if len(arguments) == 0 {
+			return nil
+		}
+
+		_ = command.Help()
+		return cobra.NoArgs(command, arguments)
+	}
 }
 
 func (builder *CommandBuilder) resolveLogger() *zap.Logger {

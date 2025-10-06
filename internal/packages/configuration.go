@@ -4,7 +4,7 @@ import (
 	pathutils "github.com/temirov/gix/internal/utils/path"
 )
 
-var packagesConfigurationRepositoryPathSanitizer = pathutils.NewRepositoryPathSanitizer()
+var packagesConfigurationRepositoryPathSanitizer = pathutils.NewRepositoryPathSanitizerWithConfiguration(nil, pathutils.RepositoryPathSanitizerConfiguration{PruneNestedPaths: true})
 
 const (
 	defaultTokenSourceValueConstant = "env:GITHUB_PACKAGES_TOKEN"

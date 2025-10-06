@@ -4,19 +4,21 @@ import (
 	pathutils "github.com/temirov/gix/internal/utils/path"
 )
 
-var auditConfigurationRepositoryPathSanitizer = pathutils.NewRepositoryPathSanitizer()
+var auditConfigurationRepositoryPathSanitizer = pathutils.NewRepositoryPathSanitizerWithConfiguration(nil, pathutils.RepositoryPathSanitizerConfiguration{PruneNestedPaths: true})
 
 // CommandConfiguration captures persistent settings for the audit command.
 type CommandConfiguration struct {
-	Roots []string `mapstructure:"roots"`
-	Debug bool     `mapstructure:"debug"`
+	Roots      []string `mapstructure:"roots"`
+	Debug      bool     `mapstructure:"debug"`
+	IncludeAll bool     `mapstructure:"all"`
 }
 
 // DefaultCommandConfiguration returns baseline configuration values for the audit command.
 func DefaultCommandConfiguration() CommandConfiguration {
 	return CommandConfiguration{
-		Roots: nil,
-		Debug: false,
+		Roots:      nil,
+		Debug:      false,
+		IncludeAll: false,
 	}
 }
 

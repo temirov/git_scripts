@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -13,6 +15,8 @@ import (
 	"github.com/temirov/gix/internal/execshell"
 	"github.com/temirov/gix/internal/repos/shared"
 )
+
+const gitMetadataDirectoryNameConstant = ".git"
 
 // Service coordinates repository discovery, reporting, and reconciliation.
 type Service struct {
@@ -43,7 +47,7 @@ func (service *Service) Run(executionContext context.Context, options CommandOpt
 		return errors.New(missingRootsErrorMessageConstant)
 	}
 
-	inspections, inspectionError := service.DiscoverInspections(executionContext, roots, options.DebugOutput, options.InspectionDepth)
+	inspections, inspectionError := service.DiscoverInspections(executionContext, roots, options.IncludeAllFolders, options.DebugOutput, options.InspectionDepth)
 	if inspectionError != nil {
 		return inspectionError
 	}
@@ -52,8 +56,13 @@ func (service *Service) Run(executionContext context.Context, options CommandOpt
 }
 
 // DiscoverInspections collects repository inspections for the provided roots.
-func (service *Service) DiscoverInspections(executionContext context.Context, roots []string, debug bool, inspectionDepth InspectionDepth) ([]RepositoryInspection, error) {
+func (service *Service) DiscoverInspections(executionContext context.Context, roots []string, includeAll bool, debug bool, inspectionDepth InspectionDepth) ([]RepositoryInspection, error) {
 	normalizedDepth := normalizeInspectionDepth(inspectionDepth)
+
+	normalizedRoots, rootsNormalizationError := normalizeRepositoryPaths(roots)
+	if rootsNormalizationError != nil {
+		return nil, rootsNormalizationError
+	}
 
 	repositories, discoveryError := service.discoverer.DiscoverRepositories(roots)
 	if discoveryError != nil {
@@ -69,15 +78,36 @@ func (service *Service) DiscoverInspections(executionContext context.Context, ro
 		fmt.Fprintf(service.errorWriter, debugDiscoveredTemplate, len(repositories), strings.Join(roots, " "))
 	}
 
-	uniqueRepositories := deduplicatePaths(normalizedRepositories)
-	inspections := make([]RepositoryInspection, 0, len(uniqueRepositories))
+	repositoryRootSet := make(map[string]struct{}, len(normalizedRepositories))
+	for _, repositoryPath := range normalizedRepositories {
+		repositoryRootSet[repositoryPath] = struct{}{}
+	}
 
-	for _, repositoryPath := range uniqueRepositories {
+	candidatePaths := deduplicatePaths(normalizedRepositories)
+	if includeAll {
+		expandedCandidates, candidateError := collectAllFolders(roots)
+		if candidateError != nil {
+			return nil, candidateError
+		}
+		candidatePaths = mergeCandidatePaths(candidatePaths, expandedCandidates)
+	}
+
+	inspections := make([]RepositoryInspection, 0, len(candidatePaths))
+
+	for _, repositoryPath := range candidatePaths {
+		if includeAll && isPathWithinRepository(repositoryPath, repositoryRootSet) {
+			continue
+		}
 		if debug {
 			fmt.Fprintf(service.errorWriter, debugCheckingTemplate, repositoryPath)
 		}
 
+		folderName := relativeFolderName(repositoryPath, normalizedRoots)
+
 		if !service.isGitRepository(executionContext, repositoryPath) {
+			if includeAll {
+				inspections = append(inspections, buildNonRepositoryInspection(repositoryPath, folderName))
+			}
 			continue
 		}
 
@@ -86,10 +116,11 @@ func (service *Service) DiscoverInspections(executionContext context.Context, ro
 			continue
 		}
 
-		if len(inspection.OriginOwnerRepo) == 0 && len(inspection.CanonicalOwnerRepo) == 0 {
+		if inspection.IsGitRepository && len(inspection.OriginOwnerRepo) == 0 && len(inspection.CanonicalOwnerRepo) == 0 {
 			continue
 		}
 
+		inspection.FolderName = folderName
 		inspections = append(inspections, inspection)
 	}
 
@@ -99,8 +130,8 @@ func (service *Service) DiscoverInspections(executionContext context.Context, ro
 func (service *Service) writeAuditReport(inspections []RepositoryInspection) error {
 	csvWriter := csv.NewWriter(service.outputWriter)
 	header := []string{
-		csvHeaderFinalRepository,
 		csvHeaderFolderName,
+		csvHeaderFinalRepository,
 		csvHeaderNameMatches,
 		csvHeaderRemoteDefault,
 		csvHeaderLocalBranch,
@@ -240,6 +271,7 @@ func (service *Service) inspectRepository(executionContext context.Context, repo
 		LocalBranch:            localBranch,
 		InSyncStatus:           inSyncStatus,
 		OriginMatchesCanonical: matchesCanonical(originOwnerRepo, canonicalOwnerRepo),
+		IsGitRepository:        true,
 	}
 	return inspection, nil
 }
@@ -259,20 +291,155 @@ func inspectionReportRow(inspection RepositoryInspection) AuditReportRow {
 	if len(strings.TrimSpace(finalRepo)) == 0 {
 		finalRepo = inspection.OriginOwnerRepo
 	}
-	nameMatches := TernaryValueNo
-	if len(inspection.DesiredFolderName) > 0 && inspection.DesiredFolderName == inspection.FolderName {
-		nameMatches = TernaryValueYes
+	nameMatches := TernaryValueNotApplicable
+	if inspection.IsGitRepository {
+		nameMatches = TernaryValueNo
+		folderBaseName := filepath.Base(inspection.FolderName)
+		if len(inspection.DesiredFolderName) > 0 && inspection.DesiredFolderName == folderBaseName {
+			nameMatches = TernaryValueYes
+		}
+	}
+
+	remoteDefaultBranch := inspection.RemoteDefaultBranch
+	localBranch := inspection.LocalBranch
+	inSync := inspection.InSyncStatus
+	remoteProtocol := inspection.RemoteProtocol
+	originMatches := inspection.OriginMatchesCanonical
+
+	if !inspection.IsGitRepository {
+		finalRepo = string(TernaryValueNotApplicable)
+		remoteDefaultBranch = string(TernaryValueNotApplicable)
+		localBranch = string(TernaryValueNotApplicable)
+		inSync = TernaryValueNotApplicable
+		remoteProtocol = RemoteProtocolType(string(TernaryValueNotApplicable))
+		originMatches = TernaryValueNotApplicable
 	}
 	return AuditReportRow{
-		FinalRepository:        finalRepo,
 		FolderName:             inspection.FolderName,
+		FinalRepository:        finalRepo,
 		NameMatches:            nameMatches,
-		RemoteDefaultBranch:    inspection.RemoteDefaultBranch,
-		LocalBranch:            inspection.LocalBranch,
-		InSync:                 inspection.InSyncStatus,
-		RemoteProtocol:         inspection.RemoteProtocol,
-		OriginMatchesCanonical: inspection.OriginMatchesCanonical,
+		RemoteDefaultBranch:    remoteDefaultBranch,
+		LocalBranch:            localBranch,
+		InSync:                 inSync,
+		RemoteProtocol:         remoteProtocol,
+		OriginMatchesCanonical: originMatches,
 	}
+}
+
+func relativeFolderName(path string, roots []string) string {
+	cleanedPath := filepath.Clean(path)
+	var bestRelative string
+	for _, root := range roots {
+		cleanedRoot := filepath.Clean(root)
+		relativePath, relativeError := filepath.Rel(cleanedRoot, cleanedPath)
+		if relativeError != nil {
+			continue
+		}
+		if strings.HasPrefix(relativePath, "..") {
+			continue
+		}
+		if relativePath == "." {
+			baseName := filepath.Base(cleanedPath)
+			if len(baseName) == 0 {
+				continue
+			}
+			return baseName
+		}
+		relativePath = filepath.ToSlash(relativePath)
+		if len(bestRelative) == 0 || len(relativePath) < len(bestRelative) {
+			bestRelative = relativePath
+		}
+	}
+	if len(bestRelative) > 0 {
+		return bestRelative
+	}
+	return filepath.Base(cleanedPath)
+}
+
+func mergeCandidatePaths(existing []string, extras []string) []string {
+	seen := make(map[string]struct{}, len(existing))
+	for _, path := range existing {
+		seen[path] = struct{}{}
+	}
+	for _, extra := range extras {
+		cleaned := filepath.Clean(extra)
+		if _, exists := seen[cleaned]; exists {
+			continue
+		}
+		existing = append(existing, cleaned)
+		seen[cleaned] = struct{}{}
+	}
+	sort.Strings(existing)
+	return existing
+}
+
+func collectAllFolders(roots []string) ([]string, error) {
+	seen := make(map[string]struct{})
+	var folders []string
+
+	for _, root := range roots {
+		absoluteRoot, absoluteError := filepath.Abs(root)
+		if absoluteError != nil {
+			return nil, absoluteError
+		}
+
+		directoryEntries, readError := os.ReadDir(absoluteRoot)
+		if readError != nil {
+			return nil, readError
+		}
+
+		for _, directoryEntry := range directoryEntries {
+			if directoryEntry.Type()&fs.ModeSymlink != 0 {
+				continue
+			}
+			if !directoryEntry.IsDir() {
+				continue
+			}
+			if directoryEntry.Name() == gitMetadataDirectoryNameConstant {
+				continue
+			}
+
+			folderPath := filepath.Join(absoluteRoot, directoryEntry.Name())
+			cleanedFolderPath := filepath.Clean(folderPath)
+			if _, exists := seen[cleanedFolderPath]; exists {
+				continue
+			}
+			seen[cleanedFolderPath] = struct{}{}
+			folders = append(folders, cleanedFolderPath)
+		}
+	}
+
+	sort.Strings(folders)
+	return folders, nil
+}
+
+func buildNonRepositoryInspection(path string, folderName string) RepositoryInspection {
+	placeholder := string(TernaryValueNotApplicable)
+
+	return RepositoryInspection{
+		Path:                   filepath.Clean(path),
+		FolderName:             folderName,
+		RemoteDefaultBranch:    placeholder,
+		LocalBranch:            placeholder,
+		InSyncStatus:           TernaryValueNotApplicable,
+		RemoteProtocol:         RemoteProtocolOther,
+		OriginMatchesCanonical: TernaryValueNotApplicable,
+		IsGitRepository:        false,
+	}
+}
+
+func isPathWithinRepository(path string, repositories map[string]struct{}) bool {
+	cleaned := filepath.Clean(path)
+	if _, exists := repositories[cleaned]; exists {
+		return false
+	}
+	for repositoryPath := range repositories {
+		repositoryPrefix := repositoryPath + string(os.PathSeparator)
+		if strings.HasPrefix(cleaned, repositoryPrefix) {
+			return true
+		}
+	}
+	return false
 }
 
 func (service *Service) resolveDefaultBranchFromGit(executionContext context.Context, repositoryPath string) string {

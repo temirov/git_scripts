@@ -25,7 +25,7 @@ const (
 	workflowConfiguredRootConstant = "/tmp/workflow-config-root"
 	workflowCliRootConstant        = "/tmp/workflow-cli-root"
 	workflowPlanMessageSnippet     = "WORKFLOW-PLAN: audit report"
-	workflowCSVHeaderSnippet       = "final_github_repo,folder_name"
+	workflowCSVHeaderSnippet       = "folder_name,final_github_repo"
 	workflowRootsFlagConstant      = "--" + flagutils.DefaultRootFlagName
 	workflowDryRunFlagConstant     = "--dry-run"
 	workflowUsageSnippet           = "Usage:"

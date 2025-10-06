@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	rootFlagArgumentConstant               = "--root"
+	rootFlagArgumentConstant               = "--roots"
 	multiRootFirstArgumentConstant         = "root-one"
 	multiRootSecondArgumentConstant        = "root-two"
 	repositoryOnePathConstant              = "/tmp/repository-one"
@@ -49,7 +49,7 @@ const (
 	toFlagArgumentConstant                 = "--to"
 	customSourceBranchNameConstant         = "release"
 	customTargetBranchNameConstant         = "stable"
-	missingRootsErrorMessageConstant       = "no repository roots provided; specify --root or configure defaults"
+	missingRootsErrorMessageConstant       = "no repository roots provided; specify --roots or configure defaults"
 )
 
 func TestMigrateCommandRunScenarios(testInstance *testing.T) {

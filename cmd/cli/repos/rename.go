@@ -120,7 +120,7 @@ func (builder *RenameCommandBuilder) run(command *cobra.Command, arguments []str
 
 	service := audit.NewService(repositoryDiscoverer, gitManager, gitExecutor, githubResolver, command.OutOrStdout(), command.ErrOrStderr())
 
-	inspections, inspectionError := service.DiscoverInspections(command.Context(), roots, false, audit.InspectionDepthMinimal)
+	inspections, inspectionError := service.DiscoverInspections(command.Context(), roots, false, false, audit.InspectionDepthMinimal)
 	if inspectionError != nil {
 		return inspectionError
 	}

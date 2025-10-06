@@ -9,6 +9,7 @@
 - Added an `--owner` toggle to `repo-folders-rename`, planned via a new directory planner that joins owner and repository segments and ensures parent directories exist.
 - Propagated owner preferences through workflow configuration and remote update execution, including owner-constraint enforcement when rewriting origin URLs.
 - Introduced reusable toggle flag helpers that register boolean flags accepting multiple literal forms and normalize command-line arguments before parsing.
+- Added an `--all` flag to `audit` so directories without Git metadata appear in reports with git fields marked as `n/a`.
 
 ### Improvements ⚙️
 - Normalized toggle arguments across commands so `--flag value` and `--flag=value` behave consistently for all boolean options.
@@ -44,12 +45,12 @@
 ## [v0.0.2] - 2025-10-03
 
 ### Highlights
-- Standardized global CLI flags so `--root`, `--dry-run`, `--yes`, and `--require-clean` behave consistently across commands.
+- Standardized global CLI flags so `--roots`, `--dry-run`, `--yes`, and `--require-clean` behave consistently across commands.
 - Embedded configuration defaults and extended search paths improve out-of-the-box repository discovery.
 - Enhanced branch and audit workflows with cleaner logging defaults and additional safeguards.
 
 ### Features ✨
-- Enabled a shared root-resolution context that exposes `--root` on every command and centralizes flag handling.
+- Enabled a shared root-resolution context that exposes `--roots` on every command and centralizes flag handling.
 - Added `--from` and `--to` options for branch migration, alongside enforceable clean-worktree checks for branch-level operations.
 - Embedded default configuration content into the binary and merged it with user configuration files discovered on disk.
 
@@ -71,4 +72,3 @@
 1. Bash scripts replaced with Go implementation
 2. The config.yaml file stores the defaults 
 3. The config.yaml file defines a runnable workflow, chaining multiple commands
-

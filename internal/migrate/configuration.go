@@ -6,7 +6,7 @@ import (
 	pathutils "github.com/temirov/gix/internal/utils/path"
 )
 
-var migrateConfigurationRepositoryPathSanitizer = pathutils.NewRepositoryPathSanitizer()
+var migrateConfigurationRepositoryPathSanitizer = pathutils.NewRepositoryPathSanitizerWithConfiguration(nil, pathutils.RepositoryPathSanitizerConfiguration{PruneNestedPaths: true})
 
 // CommandConfiguration captures persisted configuration for branch migration.
 type CommandConfiguration struct {

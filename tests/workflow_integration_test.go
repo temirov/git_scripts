@@ -22,7 +22,7 @@ const (
 	workflowIntegrationConfigFlag              = "--config"
 	workflowIntegrationErrorLevel              = "error"
 	workflowIntegrationCommand                 = "workflow"
-	workflowIntegrationRootsFlag               = "--root"
+	workflowIntegrationRootsFlag               = "--roots"
 	workflowIntegrationYesFlag                 = "--yes"
 	workflowIntegrationGitExecutable           = "git"
 	workflowIntegrationInitFlag                = "init"
@@ -53,7 +53,7 @@ const (
 	workflowIntegrationConvertExpectedTemplate = "CONVERT-DONE: %s origin now ssh://git@github.com/canonical/example.git\n"
 	workflowIntegrationMigrateExpectedTemplate = "WORKFLOW-MIGRATE: %s (main → master) safe_to_delete=true\n"
 	workflowIntegrationAuditExpectedTemplate   = "WORKFLOW-AUDIT: wrote report to %s\n"
-	workflowIntegrationCSVHeader               = "final_github_repo,folder_name,name_matches,remote_default_branch,local_branch,in_sync,remote_protocol,origin_matches_canonical\n"
+	workflowIntegrationCSVHeader               = "folder_name,final_github_repo,name_matches,remote_default_branch,local_branch,in_sync,remote_protocol,origin_matches_canonical\n"
 	workflowIntegrationSubtestNameTemplate     = "%d_%s"
 	workflowIntegrationDefaultCaseName         = "protocol_migrate_audit"
 	workflowIntegrationConfigFlagCaseName      = "config_flag_without_positional"
@@ -427,8 +427,8 @@ func verifyWorkflowRepositoryState(testInstance *testing.T, repositoryPath strin
 	require.NoError(testInstance, parseError)
 	require.Len(testInstance, records, 2)
 	require.Equal(testInstance, strings.Split(strings.TrimSuffix(workflowIntegrationCSVHeader, "\n"), ","), records[0])
-	require.Equal(testInstance, "canonical/example", records[1][0])
-	require.Equal(testInstance, "legacy", records[1][1])
+	require.Equal(testInstance, "legacy", records[1][0])
+	require.Equal(testInstance, "canonical/example", records[1][1])
 	require.Equal(testInstance, "no", records[1][2])
 	require.Equal(testInstance, "master", records[1][3])
 	require.Equal(testInstance, "master", records[1][4])

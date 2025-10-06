@@ -28,7 +28,7 @@ const (
 	protocolConfiguredRootConstant = "/tmp/protocol-config-root"
 	protocolSSHRemoteURL           = "ssh://git@github.com/origin/example.git"
 	protocolHTTPSRemoteURL         = "https://github.com/origin/example.git"
-	protocolMissingRootsMessage    = "no repository roots provided; specify --root or configure defaults"
+	protocolMissingRootsMessage    = "no repository roots provided; specify --roots or configure defaults"
 	protocolRelativeRootConstant   = "relative/protocol-root"
 	protocolHomeRootSuffixConstant = "protocol-home-root"
 )

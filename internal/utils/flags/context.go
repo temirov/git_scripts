@@ -4,9 +4,9 @@ import "github.com/spf13/cobra"
 
 const (
 	// DefaultRootFlagName exposes the shared repository root flag name.
-	DefaultRootFlagName = "root"
+	DefaultRootFlagName = "roots"
 	// DefaultRootFlagUsage describes the shared repository root flag purpose.
-	DefaultRootFlagUsage = "Repository roots to scan (repeatable)"
+	DefaultRootFlagUsage = "Repository roots to scan (repeatable; nested paths ignored)"
 	// DryRunFlagName exposes the shared dry-run flag name.
 	DryRunFlagName = "dry-run"
 	// DryRunFlagUsage describes the shared dry-run flag purpose.

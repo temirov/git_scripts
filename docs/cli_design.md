@@ -72,18 +72,13 @@ The table below maps current script switches to Cobra equivalents and documents 
 
 | Script behavior | Cobra command | Flags & arguments | `gh` usage strategy |
 | --- | --- | --- | --- |
-| CSV audit (read-only) | `git-maintenance audit` | `--root` (repeatable; defaults to `.`), `--debug`, `--format csv` (defaults to CSV; future extensibility), `--output` (optional file). Command is read-only. | Use `exec.CommandContext` to run `gh repo view` and `gh api repos/{owner}/{repo}` exactly once per repo. Results cached per repo to minimize API calls. |
-| Directory rename (`--rename`) | `git-maintenance repo-folders-rename` | `--root`, `--dry-run`, `--require-clean`, `--yes`, `--owner`. | Same metadata resolution as audit. No extra `gh` commands beyond canonical lookup. |
-| Update remote to canonical (`--update-remote`) | `git-maintenance repo-remote-update` | `--root`, `--dry-run`, `--yes`. | Requires canonical owner/repo from `gh api repos/{owner}/{repo}`. |
-| Protocol conversion (`--protocol-from`, `--protocol-to`) | `git-maintenance repo-protocol-convert` | `--root`, `--from {https\|git\|ssh}`, `--to {https\|git\|ssh}`, `--dry-run`, `--yes`. | Canonical resolution via `gh api`; no other `gh` usage. |
-| Delete merged branches | `git-maintenance repo-prs-purge` | `--root`, `--remote origin` (default), `--pr-state closed` (default). No positional args. | Invoke `gh pr list --state <state>` via `exec`. The command will stream JSON once, then process locally. |
-| Migrate `main` → `master` | `git-maintenance branch-migrate` | `--root`, `--debug`, `--skip-rebase`, `--skip-pages`, `--skip-workflows` (new guardrails), `--non-interactive` to suppress prompts if any. | Heavy use of `gh`. Continue to shell out to `gh` for PR retargeting, default branch update, Pages reconfiguration, branch protection queries. Each sub-operation encapsulated in domain service structs that wrap `gh` invocations. |
 | Remove untagged GHCR packages | `git-maintenance repo-packages-purge` | `--package` (optional override), `--dry-run`, `--page-size` (default 100). The command resolves the owner, owner type, and default package name from each repository's origin remote and requires a token with GitHub Packages scopes. Configurable via Viper with env prefix `GITMAINT`. | Prefer direct HTTP using `go-github` REST client authenticated with token. If we reuse `gh`, we would invoke `gh api` with `--method`. The design chooses native HTTP to avoid shelling out where OAuth token is already provided. |
 
 ### 3.2 Shared command behavior
 - All `repo` subcommands support `--debug` to raise Zap logging level to `Debug`.
 - `--yes` maps to `--confirm` boolean flag in Cobra (`--yes` alias) to allow scripted runs.
-- Roots accept multiple entries via `--root`; commands fall back to configured defaults when provided and otherwise return an error.
+- Roots accept multiple entries via `--roots`; commands fall back to configured defaults when provided and otherwise return an error.
+- The audit command adds `--all` to report top-level directories lacking Git repositories for each root, marking git-specific columns as `n/a`.
 - Commands that mutate Git state will request clean worktrees when `--require-clean` is provided (rename) or by default when destructive (branch flip).
 - Exit codes mirror existing scripts: non-zero on invalid flag combinations or fatal errors; continue processing across repositories when possible.
 

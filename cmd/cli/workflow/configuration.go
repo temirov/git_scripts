@@ -4,7 +4,7 @@ import (
 	pathutils "github.com/temirov/gix/internal/utils/path"
 )
 
-var workflowConfigurationRepositoryPathSanitizer = pathutils.NewRepositoryPathSanitizer()
+var workflowConfigurationRepositoryPathSanitizer = pathutils.NewRepositoryPathSanitizerWithConfiguration(nil, pathutils.RepositoryPathSanitizerConfiguration{PruneNestedPaths: true})
 
 // CommandConfiguration captures configuration values for workflow.
 type CommandConfiguration struct {

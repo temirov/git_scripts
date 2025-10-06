@@ -34,9 +34,10 @@ const (
 
 // CommandOptions captures the configurable parameters for the audit command.
 type CommandOptions struct {
-	Roots           []string
-	DebugOutput     bool
-	InspectionDepth InspectionDepth
+	Roots             []string
+	DebugOutput       bool
+	InspectionDepth   InspectionDepth
+	IncludeAllFolders bool
 }
 
 // RepositoryInspection captures gathered repository state.
@@ -53,12 +54,13 @@ type RepositoryInspection struct {
 	LocalBranch            string
 	InSyncStatus           TernaryValue
 	OriginMatchesCanonical TernaryValue
+	IsGitRepository        bool
 }
 
 // AuditReportRow models a single CSV audit result.
 type AuditReportRow struct {
-	FinalRepository        string
 	FolderName             string
+	FinalRepository        string
 	NameMatches            TernaryValue
 	RemoteDefaultBranch    string
 	LocalBranch            string
@@ -70,8 +72,8 @@ type AuditReportRow struct {
 // CSVRecord returns the row formatted for CSV encoding.
 func (row AuditReportRow) CSVRecord() []string {
 	return []string{
-		row.FinalRepository,
 		row.FolderName,
+		row.FinalRepository,
 		string(row.NameMatches),
 		row.RemoteDefaultBranch,
 		row.LocalBranch,

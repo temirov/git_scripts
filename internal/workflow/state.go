@@ -30,7 +30,7 @@ func (state *RepositoryState) Refresh(executionContext context.Context, service 
 		return errors.New(repositoryRefreshMissingServiceMessageConstant)
 	}
 
-	inspections, inspectionError := service.DiscoverInspections(executionContext, []string{state.Path}, false, audit.InspectionDepthFull)
+	inspections, inspectionError := service.DiscoverInspections(executionContext, []string{state.Path}, false, false, audit.InspectionDepthFull)
 	if inspectionError != nil {
 		return inspectionError
 	}

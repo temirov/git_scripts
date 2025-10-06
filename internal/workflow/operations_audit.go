@@ -93,8 +93,8 @@ func (operation *AuditReportOperation) Execute(executionContext context.Context,
 
 	csvWriter := csv.NewWriter(writer)
 	header := []string{
-		auditCSVHeaderFinalRepositoryConstant,
 		auditCSVHeaderFolderNameConstant,
+		auditCSVHeaderFinalRepositoryConstant,
 		auditCSVHeaderNameMatchesConstant,
 		auditCSVHeaderRemoteDefaultConstant,
 		auditCSVHeaderLocalBranchConstant,
@@ -133,19 +133,37 @@ func buildAuditReportRow(inspection audit.RepositoryInspection) []string {
 		finalRepository = inspection.OriginOwnerRepo
 	}
 
-	nameMatches := audit.TernaryValueNo
-	if len(inspection.DesiredFolderName) > 0 && inspection.DesiredFolderName == inspection.FolderName {
-		nameMatches = audit.TernaryValueYes
+	nameMatches := audit.TernaryValueNotApplicable
+	if inspection.IsGitRepository {
+		nameMatches = audit.TernaryValueNo
+		if len(inspection.DesiredFolderName) > 0 && inspection.DesiredFolderName == inspection.FolderName {
+			nameMatches = audit.TernaryValueYes
+		}
+	}
+
+	remoteDefaultBranch := inspection.RemoteDefaultBranch
+	localBranch := inspection.LocalBranch
+	inSync := inspection.InSyncStatus
+	remoteProtocol := string(inspection.RemoteProtocol)
+	originMatches := string(inspection.OriginMatchesCanonical)
+
+	if !inspection.IsGitRepository {
+		finalRepository = string(audit.TernaryValueNotApplicable)
+		remoteDefaultBranch = string(audit.TernaryValueNotApplicable)
+		localBranch = string(audit.TernaryValueNotApplicable)
+		inSync = audit.TernaryValueNotApplicable
+		remoteProtocol = string(audit.TernaryValueNotApplicable)
+		originMatches = string(audit.TernaryValueNotApplicable)
 	}
 
 	return []string{
-		finalRepository,
 		inspection.FolderName,
+		finalRepository,
 		string(nameMatches),
-		inspection.RemoteDefaultBranch,
-		inspection.LocalBranch,
-		string(inspection.InSyncStatus),
-		string(inspection.RemoteProtocol),
-		string(inspection.OriginMatchesCanonical),
+		remoteDefaultBranch,
+		localBranch,
+		string(inSync),
+		remoteProtocol,
+		originMatches,
 	}
 }

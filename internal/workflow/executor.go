@@ -15,7 +15,7 @@ import (
 	pathutils "github.com/temirov/gix/internal/utils/path"
 )
 
-var workflowExecutorRepositoryPathSanitizer = pathutils.NewRepositoryPathSanitizer()
+var workflowExecutorRepositoryPathSanitizer = pathutils.NewRepositoryPathSanitizerWithConfiguration(nil, pathutils.RepositoryPathSanitizerConfiguration{PruneNestedPaths: true})
 
 const (
 	workflowExecutionErrorTemplateConstant = "workflow operation %s failed: %w"
@@ -74,7 +74,7 @@ func (executor *Executor) Execute(executionContext context.Context, roots []stri
 		executor.dependencies.Errors,
 	)
 
-	inspections, inspectionError := auditService.DiscoverInspections(executionContext, sanitizedRoots, false, audit.InspectionDepthFull)
+	inspections, inspectionError := auditService.DiscoverInspections(executionContext, sanitizedRoots, false, false, audit.InspectionDepthFull)
 	if inspectionError != nil {
 		return fmt.Errorf(workflowRepositoryLoadErrorTemplate, inspectionError)
 	}

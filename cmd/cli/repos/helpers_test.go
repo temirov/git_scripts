@@ -38,7 +38,7 @@ func TestRequireRepositoryRoots(t *testing.T) {
 			arguments:     []string{"/tmp/positional"},
 			configured:    nil,
 			expectError:   true,
-			expectedError: "repository roots must be provided using --root",
+			expectedError: "repository roots must be provided using --roots",
 		},
 		{
 			name:          "flag_values_take_precedence",
@@ -55,7 +55,7 @@ func TestRequireRepositoryRoots(t *testing.T) {
 			name:          "missing_roots_error",
 			configured:    nil,
 			expectError:   true,
-			expectedError: "no repository roots provided; specify --root or configure defaults",
+			expectedError: "no repository roots provided; specify --roots or configure defaults",
 		},
 	}
 
