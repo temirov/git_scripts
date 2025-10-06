@@ -59,6 +59,11 @@ func (service *Service) Run(executionContext context.Context, options CommandOpt
 func (service *Service) DiscoverInspections(executionContext context.Context, roots []string, includeAll bool, debug bool, inspectionDepth InspectionDepth) ([]RepositoryInspection, error) {
 	normalizedDepth := normalizeInspectionDepth(inspectionDepth)
 
+	normalizedRoots, rootsNormalizationError := normalizeRepositoryPaths(roots)
+	if rootsNormalizationError != nil {
+		return nil, rootsNormalizationError
+	}
+
 	repositories, discoveryError := service.discoverer.DiscoverRepositories(roots)
 	if discoveryError != nil {
 		return nil, discoveryError
@@ -97,9 +102,11 @@ func (service *Service) DiscoverInspections(executionContext context.Context, ro
 			fmt.Fprintf(service.errorWriter, debugCheckingTemplate, repositoryPath)
 		}
 
+		folderName := relativeFolderName(repositoryPath, normalizedRoots)
+
 		if !service.isGitRepository(executionContext, repositoryPath) {
 			if includeAll {
-				inspections = append(inspections, buildNonRepositoryInspection(repositoryPath))
+				inspections = append(inspections, buildNonRepositoryInspection(repositoryPath, folderName))
 			}
 			continue
 		}
@@ -113,6 +120,7 @@ func (service *Service) DiscoverInspections(executionContext context.Context, ro
 			continue
 		}
 
+		inspection.FolderName = folderName
 		inspections = append(inspections, inspection)
 	}
 
@@ -286,7 +294,8 @@ func inspectionReportRow(inspection RepositoryInspection) AuditReportRow {
 	nameMatches := TernaryValueNotApplicable
 	if inspection.IsGitRepository {
 		nameMatches = TernaryValueNo
-		if len(inspection.DesiredFolderName) > 0 && inspection.DesiredFolderName == inspection.FolderName {
+		folderBaseName := filepath.Base(inspection.FolderName)
+		if len(inspection.DesiredFolderName) > 0 && inspection.DesiredFolderName == folderBaseName {
 			nameMatches = TernaryValueYes
 		}
 	}
@@ -315,6 +324,36 @@ func inspectionReportRow(inspection RepositoryInspection) AuditReportRow {
 		RemoteProtocol:         remoteProtocol,
 		OriginMatchesCanonical: originMatches,
 	}
+}
+
+func relativeFolderName(path string, roots []string) string {
+	cleanedPath := filepath.Clean(path)
+	var bestRelative string
+	for _, root := range roots {
+		cleanedRoot := filepath.Clean(root)
+		relativePath, relativeError := filepath.Rel(cleanedRoot, cleanedPath)
+		if relativeError != nil {
+			continue
+		}
+		if strings.HasPrefix(relativePath, "..") {
+			continue
+		}
+		if relativePath == "." {
+			baseName := filepath.Base(cleanedPath)
+			if len(baseName) == 0 {
+				continue
+			}
+			return baseName
+		}
+		relativePath = filepath.ToSlash(relativePath)
+		if len(bestRelative) == 0 || len(relativePath) < len(bestRelative) {
+			bestRelative = relativePath
+		}
+	}
+	if len(bestRelative) > 0 {
+		return bestRelative
+	}
+	return filepath.Base(cleanedPath)
 }
 
 func mergeCandidatePaths(existing []string, extras []string) []string {
@@ -374,8 +413,7 @@ func collectAllFolders(roots []string) ([]string, error) {
 	return folders, nil
 }
 
-func buildNonRepositoryInspection(path string) RepositoryInspection {
-	folderName := filepath.Base(path)
+func buildNonRepositoryInspection(path string, folderName string) RepositoryInspection {
 	placeholder := string(TernaryValueNotApplicable)
 
 	return RepositoryInspection{
