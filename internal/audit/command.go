@@ -31,7 +31,7 @@ func (builder *CommandBuilder) Build() (*cobra.Command, error) {
 		Use:   commandUseConstant,
 		Short: commandShortDescription,
 		Long:  commandLongDescription,
-		Args:  cobra.NoArgs,
+		Args:  builder.noArgumentValidator(),
 		RunE:  builder.run,
 	}
 
@@ -100,6 +100,17 @@ func (builder *CommandBuilder) parseOptions(command *cobra.Command) (CommandOpti
 	}
 
 	return options, nil
+}
+
+func (builder *CommandBuilder) noArgumentValidator() cobra.PositionalArgs {
+	return func(command *cobra.Command, arguments []string) error {
+		if len(arguments) == 0 {
+			return nil
+		}
+
+		_ = command.Help()
+		return cobra.NoArgs(command, arguments)
+	}
 }
 
 func (builder *CommandBuilder) resolveLogger() *zap.Logger {

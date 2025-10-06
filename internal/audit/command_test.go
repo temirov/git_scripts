@@ -75,6 +75,30 @@ func TestCommandBuilderDisplaysHelpWhenRootsMissing(testInstance *testing.T) {
 	}
 }
 
+func TestCommandBuilderDisplaysHelpWhenArgumentsProvided(testInstance *testing.T) {
+	testInstance.Parallel()
+
+	commandBuilder := audit.CommandBuilder{
+		LoggerProvider:        func() *zap.Logger { return zap.NewNop() },
+		ConfigurationProvider: func() audit.CommandConfiguration { return audit.CommandConfiguration{} },
+	}
+
+	command, buildError := commandBuilder.Build()
+	require.NoError(testInstance, buildError)
+
+	command.SetContext(context.Background())
+	command.SetArgs([]string{"unexpected"})
+
+	outputBuffer := &strings.Builder{}
+	command.SetOut(outputBuffer)
+	command.SetErr(outputBuffer)
+
+	executionError := command.Execute()
+	require.Error(testInstance, executionError)
+	require.Contains(testInstance, executionError.Error(), "unknown command \"unexpected\"")
+	require.Contains(testInstance, outputBuffer.String(), command.UseLine())
+}
+
 func TestCommandBuilderExpandsTildeRoots(testInstance *testing.T) {
 	testInstance.Helper()
 
