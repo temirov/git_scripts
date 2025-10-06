@@ -85,7 +85,9 @@ func (scenario filesystemDiscoveryTestScenario) execute(
 
 	sort.Strings(expectedRepositories)
 	sort.Strings(discoveredRepositories)
-	require.Equal(testFramework, expectedRepositories, discoveredRepositories)
+	resolvedExpectedRepositories := resolveSymlinkedPaths(testFramework, expectedRepositories)
+	resolvedDiscoveredRepositories := resolveSymlinkedPaths(testFramework, discoveredRepositories)
+	require.Equal(testFramework, resolvedExpectedRepositories, resolvedDiscoveredRepositories)
 }
 
 func TestFilesystemRepositoryDiscovererDiscoversNestedLayouts(testFramework *testing.T) {
@@ -124,4 +126,18 @@ func TestFilesystemRepositoryDiscovererDiscoversNestedLayouts(testFramework *tes
 			testScenario.execute(testFramework, repositoryDefinitions)
 		})
 	}
+}
+
+func resolveSymlinkedPaths(testFramework *testing.T, candidatePaths []string) []string {
+	testFramework.Helper()
+	if len(candidatePaths) == 0 {
+		return nil
+	}
+	resolvedPaths := make([]string, 0, len(candidatePaths))
+	for index := range candidatePaths {
+		resolvedPath, resolveError := filepath.EvalSymlinks(candidatePaths[index])
+		require.NoError(testFramework, resolveError)
+		resolvedPaths = append(resolvedPaths, resolvedPath)
+	}
+	return resolvedPaths
 }

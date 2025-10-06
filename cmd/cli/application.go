@@ -70,6 +70,7 @@ const (
 	configurationLogLevelFieldConstant                               = "log_level"
 	configurationLogFormatFieldConstant                              = "log_format"
 	configurationFileFieldConstant                                   = "config_file"
+	xdgConfigHomeEnvironmentVariableConstant                         = "XDG_CONFIG_HOME"
 	configurationLoadErrorTemplateConstant                           = "unable to load configuration: %w"
 	loggerCreationErrorTemplateConstant                              = "unable to create logger: %w"
 	loggerSyncErrorTemplateConstant                                  = "unable to flush logger: %w"
@@ -498,40 +499,34 @@ func (application *Application) resolveConfigurationSearchPaths() []string {
 }
 
 func (application *Application) resolveUserConfigurationDirectoryPaths() []string {
-	userConfigurationDirectoryPaths := make([]string, 0, 2)
+	userConfigurationDirectoryPaths := make([]string, 0, 3)
+
+	appendConfigurationDirectory := func(baseDirectoryPath string) {
+		trimmedBaseDirectoryPath := strings.TrimSpace(baseDirectoryPath)
+		if len(trimmedBaseDirectoryPath) == 0 {
+			return
+		}
+
+		candidateDirectoryPath := filepath.Join(trimmedBaseDirectoryPath, userConfigurationDirectoryNameConstant)
+		for _, existingDirectoryPath := range userConfigurationDirectoryPaths {
+			if existingDirectoryPath == candidateDirectoryPath {
+				return
+			}
+		}
+
+		userConfigurationDirectoryPaths = append(userConfigurationDirectoryPaths, candidateDirectoryPath)
+	}
+
+	appendConfigurationDirectory(os.Getenv(xdgConfigHomeEnvironmentVariableConstant))
 
 	userConfigurationBaseDirectoryPath, userConfigurationDirectoryError := os.UserConfigDir()
 	if userConfigurationDirectoryError == nil {
-		trimmedBaseDirectoryPath := strings.TrimSpace(userConfigurationBaseDirectoryPath)
-		if len(trimmedBaseDirectoryPath) > 0 {
-			userConfigurationDirectoryPaths = append(
-				userConfigurationDirectoryPaths,
-				filepath.Join(trimmedBaseDirectoryPath, userConfigurationDirectoryNameConstant),
-			)
-		}
+		appendConfigurationDirectory(userConfigurationBaseDirectoryPath)
 	}
 
 	userHomeDirectoryPath, userHomeDirectoryError := os.UserHomeDir()
-	if userHomeDirectoryError != nil {
-		return userConfigurationDirectoryPaths
-	}
-
-	trimmedHomeDirectoryPath := strings.TrimSpace(userHomeDirectoryPath)
-	if len(trimmedHomeDirectoryPath) == 0 {
-		return userConfigurationDirectoryPaths
-	}
-
-	homeConfigurationDirectoryPath := filepath.Join(trimmedHomeDirectoryPath, userConfigurationDirectoryNameConstant)
-	directoryAlreadyIncluded := false
-	for _, existingDirectoryPath := range userConfigurationDirectoryPaths {
-		if existingDirectoryPath == homeConfigurationDirectoryPath {
-			directoryAlreadyIncluded = true
-			break
-		}
-	}
-
-	if !directoryAlreadyIncluded {
-		userConfigurationDirectoryPaths = append(userConfigurationDirectoryPaths, homeConfigurationDirectoryPath)
+	if userHomeDirectoryError == nil {
+		appendConfigurationDirectory(userHomeDirectoryPath)
 	}
 
 	return userConfigurationDirectoryPaths

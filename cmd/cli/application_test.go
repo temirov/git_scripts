@@ -464,6 +464,7 @@ func TestApplicationConfigurationSearchPaths(testInstance *testing.T) {
 
 			expectedConfigurationPath, expectedPathKnown := expectedConfigurationPathByRole[testCase.expectedDirectoryRole]
 			require.True(testInstance, expectedPathKnown, "unexpected directory role %s", testCase.expectedDirectoryRole)
+			expectedConfigurationPath = resolveSymlinkedPath(testInstance, expectedConfigurationPath)
 
 			application := cli.NewApplication()
 
@@ -474,6 +475,7 @@ func TestApplicationConfigurationSearchPaths(testInstance *testing.T) {
 			require.NoError(testInstance, initializationError)
 
 			configurationFilePath := extractConfigurationFilePath(testInstance, capturedOutput)
+			configurationFilePath = resolveSymlinkedPath(testInstance, configurationFilePath)
 			require.Equal(testInstance, expectedConfigurationPath, configurationFilePath)
 		})
 	}
@@ -664,6 +666,18 @@ func extractConfigurationFilePath(testingInstance testing.TB, capturedOutput str
 
 	testingInstance.Fatalf("configuration file path not found in output: %s", capturedOutput)
 	return ""
+}
+
+func resolveSymlinkedPath(testingInstance testing.TB, candidatePath string) string {
+	testingInstance.Helper()
+	trimmedPath := strings.TrimSpace(candidatePath)
+	if len(trimmedPath) == 0 {
+		return ""
+	}
+
+	resolvedPath, resolveError := filepath.EvalSymlinks(trimmedPath)
+	require.NoError(testingInstance, resolveError)
+	return resolvedPath
 }
 
 func buildConfigurationContent(operationNames []string) string {
