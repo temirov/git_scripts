@@ -12,15 +12,6 @@ Leave BugFixes section empty but don't delete the section itself.
 
 ## BugFixes
 
-### Change root sematics and rename to roots
-
-- [ ] Allow multiple folders to be passed under --roots. Remove --root and replace it with --roots which accepts mutiple roots. Check if one includes another and silently ignore the inclusion
-```shell
-11:34:36 tyemirov@Vadyms-MacBook-Pro:~/Development/git_scripts - [master] $ gix audit --roots ../
-unknown flag: --roots
-```
-Test and document
-
 ### Add all folders under audit
 
 - [ ] add a flag to include non git enabled folders in the audit command, --all. when added this flag will include folders without git repo in the output, leaving all git-related fileds as n/a

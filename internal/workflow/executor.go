@@ -15,7 +15,7 @@ import (
 	pathutils "github.com/temirov/gix/internal/utils/path"
 )
 
-var workflowExecutorRepositoryPathSanitizer = pathutils.NewRepositoryPathSanitizer()
+var workflowExecutorRepositoryPathSanitizer = pathutils.NewRepositoryPathSanitizerWithConfiguration(nil, pathutils.RepositoryPathSanitizerConfiguration{PruneNestedPaths: true})
 
 const (
 	workflowExecutionErrorTemplateConstant = "workflow operation %s failed: %w"

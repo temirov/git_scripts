@@ -4,7 +4,7 @@ import (
 	pathutils "github.com/temirov/gix/internal/utils/path"
 )
 
-var auditConfigurationRepositoryPathSanitizer = pathutils.NewRepositoryPathSanitizer()
+var auditConfigurationRepositoryPathSanitizer = pathutils.NewRepositoryPathSanitizerWithConfiguration(nil, pathutils.RepositoryPathSanitizerConfiguration{PruneNestedPaths: true})
 
 // CommandConfiguration captures persistent settings for the audit command.
 type CommandConfiguration struct {

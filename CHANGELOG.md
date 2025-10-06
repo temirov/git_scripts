@@ -44,12 +44,12 @@
 ## [v0.0.2] - 2025-10-03
 
 ### Highlights
-- Standardized global CLI flags so `--root`, `--dry-run`, `--yes`, and `--require-clean` behave consistently across commands.
+- Standardized global CLI flags so `--roots`, `--dry-run`, `--yes`, and `--require-clean` behave consistently across commands.
 - Embedded configuration defaults and extended search paths improve out-of-the-box repository discovery.
 - Enhanced branch and audit workflows with cleaner logging defaults and additional safeguards.
 
 ### Features ✨
-- Enabled a shared root-resolution context that exposes `--root` on every command and centralizes flag handling.
+- Enabled a shared root-resolution context that exposes `--roots` on every command and centralizes flag handling.
 - Added `--from` and `--to` options for branch migration, alongside enforceable clean-worktree checks for branch-level operations.
 - Embedded default configuration content into the binary and merged it with user configuration files discovered on disk.
 
@@ -71,4 +71,3 @@
 1. Bash scripts replaced with Go implementation
 2. The config.yaml file stores the defaults 
 3. The config.yaml file defines a runnable workflow, chaining multiple commands
-

@@ -20,7 +20,7 @@ const (
 	auditIntegrationRunSubcommand              = "run"
 	auditIntegrationModulePathConstant         = "."
 	auditIntegrationAuditCommandName           = "audit"
-	auditIntegrationRootFlag                   = "--root"
+	auditIntegrationRootFlag                   = "--roots"
 	auditIntegrationGitExecutable              = "git"
 	auditIntegrationInitFlag                   = "init"
 	auditIntegrationInitialBranchFlag          = "--initial-branch=main"

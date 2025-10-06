@@ -6,7 +6,7 @@ import (
 	pathutils "github.com/temirov/gix/internal/utils/path"
 )
 
-var branchConfigurationRepositoryPathSanitizer = pathutils.NewRepositoryPathSanitizer()
+var branchConfigurationRepositoryPathSanitizer = pathutils.NewRepositoryPathSanitizerWithConfiguration(nil, pathutils.RepositoryPathSanitizerConfiguration{PruneNestedPaths: true})
 
 // CommandConfiguration captures configuration values for the branch cleanup command.
 type CommandConfiguration struct {

@@ -16,9 +16,9 @@ import (
 )
 
 const (
-	auditMissingRootsErrorMessageConstant = "no repository roots provided; specify --root or configure defaults"
+	auditMissingRootsErrorMessageConstant = "no repository roots provided; specify --roots or configure defaults"
 	auditWhitespaceRootArgumentConstant   = "   "
-	auditRootFlagNameConstant             = "--root"
+	auditRootFlagNameConstant             = "--roots"
 	auditConfigurationMissingSubtestName  = "configuration_and_flags_missing"
 	auditWhitespaceRootFlagSubtestName    = "flag_provided_without_roots"
 	auditTildeRootArgumentConstant        = "~/audit/repositories"
@@ -132,6 +132,43 @@ func TestCommandBuilderExpandsTildeRoots(testInstance *testing.T) {
 	executionError := command.Execute()
 	require.NoError(testInstance, executionError)
 	require.Equal(testInstance, []string{expectedRoot}, repositoryDiscoverer.receivedRoots)
+}
+
+func TestCommandBuilderDeduplicatesNestedRoots(testInstance *testing.T) {
+	testInstance.Helper()
+
+	parentRoot := testInstance.TempDir()
+	nestedRoot := filepath.Join(parentRoot, "nested")
+	require.NoError(testInstance, os.MkdirAll(nestedRoot, 0o755))
+
+	repositoryDiscoverer := &repositoryDiscovererStub{}
+	builder := audit.CommandBuilder{
+		LoggerProvider: func() *zap.Logger { return zap.NewNop() },
+		Discoverer:     repositoryDiscoverer,
+		GitExecutor:    &gitExecutorStub{},
+		GitManager:     &gitRepositoryManagerStub{},
+		GitHubResolver: &gitHubResolverStub{},
+		ConfigurationProvider: func() audit.CommandConfiguration {
+			return audit.CommandConfiguration{}
+		},
+	}
+
+	command, buildError := builder.Build()
+	require.NoError(testInstance, buildError)
+
+	command.SetContext(context.Background())
+	command.SetArgs([]string{
+		auditRootFlagNameConstant, parentRoot,
+		auditRootFlagNameConstant, nestedRoot,
+	})
+
+	outputBuffer := &strings.Builder{}
+	command.SetOut(outputBuffer)
+	command.SetErr(outputBuffer)
+
+	executionError := command.Execute()
+	require.NoError(testInstance, executionError)
+	require.Equal(testInstance, []string{parentRoot}, repositoryDiscoverer.receivedRoots)
 }
 
 type repositoryDiscovererStub struct {

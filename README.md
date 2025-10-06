@@ -82,7 +82,7 @@ variables prefixed with
 
 Every command accepts the shared execution flags below in addition to its command-specific options:
 
-- `--root <path>` – add one or more repository roots (repeat the flag to supply multiple roots).
+- `--roots <path>` – add one or more repository roots (repeat the flag; nested paths are ignored automatically).
 - `--dry-run` – plan work without performing any side effects.
 - `--yes`/`-y` – automatically confirm interactive prompts.
 - `--remote <name>` – override the Git remote to inspect or mutate (defaults to `origin`).
@@ -94,20 +94,20 @@ with the registered command names and flags.
 
 | Command                 | Summary                                                       | Key flags / example                                                                                                                |
 |-------------------------|---------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------|
-| `audit`                 | Audit and reconcile local GitHub repositories                 | Flags: `--root`, `--log-level`. Example: `go run . audit --log-level=debug --root ~/Development`                                    |
-| `repo-folders-rename`   | Rename repository directories to match canonical GitHub names | Flags: `--dry-run`, `--yes`, `--require-clean`, `--owner`. Example: `go run . repo-folders-rename --yes --require-clean --owner --root ~/Development`        |
-| `repo-remote-update`    | Update origin URLs to match canonical GitHub repositories     | Flags: `--dry-run`, `--yes`, `--owner`. Example: `go run . repo-remote-update --dry-run --owner canonical --root ~/Development`          |
-| `repo-protocol-convert` | Convert repository origin remotes between protocols           | Flags: `--from`, `--to`, `--dry-run`, `--yes`. Example: `go run . repo-protocol-convert --from https --to ssh --yes --root ~/Development` |
-| `repo-prs-purge`        | Remove remote and local branches for closed pull requests     | Flags: `--remote`, `--limit`, `--dry-run`. Example: `go run . repo-prs-purge --remote origin --limit 100 --root ~/Development`            |
-| `branch-migrate`        | Migrate repository defaults from main to master               | Flags: `--from`, `--to`. Example: `go run . branch-migrate --from main --to master --root ~/Development/project-repo`                     |
-| `repo-packages-purge`   | Delete untagged GHCR versions                                 | Flags: `--package` (override), `--dry-run`, `--root`. Example: `go run . repo-packages-purge --dry-run --root ~/Development`       |
-| `workflow`              | Run a workflow configuration file                             | Flags: `--root`, `--dry-run`, `--yes`. Example: `go run . workflow config.yaml --root ~/Development --dry-run`                     |
+| `audit`                 | Audit and reconcile local GitHub repositories                 | Flags: `--roots`, `--log-level`. Example: `go run . audit --log-level=debug --roots ~/Development`                                    |
+| `repo-folders-rename`   | Rename repository directories to match canonical GitHub names | Flags: `--dry-run`, `--yes`, `--require-clean`, `--owner`, `--roots`. Example: `go run . repo-folders-rename --yes --require-clean --owner --roots ~/Development`        |
+| `repo-remote-update`    | Update origin URLs to match canonical GitHub repositories     | Flags: `--dry-run`, `--yes`, `--owner`, `--roots`. Example: `go run . repo-remote-update --dry-run --owner canonical --roots ~/Development`          |
+| `repo-protocol-convert` | Convert repository origin remotes between protocols           | Flags: `--from`, `--to`, `--dry-run`, `--yes`, `--roots`. Example: `go run . repo-protocol-convert --from https --to ssh --yes --roots ~/Development` |
+| `repo-prs-purge`        | Remove remote and local branches for closed pull requests     | Flags: `--remote`, `--limit`, `--dry-run`, `--roots`. Example: `go run . repo-prs-purge --remote origin --limit 100 --roots ~/Development`            |
+| `branch-migrate`        | Migrate repository defaults from main to master               | Flags: `--from`, `--to`, `--roots`. Example: `go run . branch-migrate --from main --to master --roots ~/Development/project-repo`                     |
+| `repo-packages-purge`   | Delete untagged GHCR versions                                 | Flags: `--package` (override), `--dry-run`, `--roots`. Example: `go run . repo-packages-purge --dry-run --roots ~/Development`       |
+| `workflow`              | Run a workflow configuration file                             | Flags: `--roots`, `--dry-run`, `--yes`. Example: `go run . workflow config.yaml --roots ~/Development --dry-run`                     |
 
 Persist defaults and workflow plans in a single configuration file to avoid long flag lists and keep the runner in sync:
 
 The purge command derives the GHCR owner, owner type, and default package name from each repository's `origin` remote
 and the canonical metadata returned by the GitHub CLI. Ensure the remotes point at the desired GitHub repositories
-before running the command. Provide one or more roots with `--root` or in configuration to run the purge across
+before running the command. Provide one or more roots with `--roots` or in configuration to run the purge across
 multiple repositories; the command discovers Git repositories beneath every root and executes the purge workflow for
 each repository, continuing after non-fatal errors. Specify `--package` only when the container name in GHCR differs
 from the repository name.
@@ -231,9 +231,9 @@ Specify `--config path/to/override.yaml` when you need to load an alternate conf
 Define ordered steps in YAML or JSON and execute them with `workflow`:
 
 ```shell
-go run . workflow --root ~/Development --dry-run
+go run . workflow --roots ~/Development --dry-run
 # Execute with confirmations suppressed
-go run . workflow --root ~/Development --yes
+go run . workflow --roots ~/Development --yes
 ```
 
 `workflow` reads the `workflow` array from `config.yaml`, reusing the same repository discovery, prompting, and logging

@@ -30,7 +30,7 @@ const (
 	remotesOriginURLConstant         = "https://github.com/origin/example.git"
 	remotesCanonicalRepository       = "canonical/example"
 	remotesMetadataDefaultBranch     = "main"
-	remotesMissingRootsMessage       = "no repository roots provided; specify --root or configure defaults"
+	remotesMissingRootsMessage       = "no repository roots provided; specify --roots or configure defaults"
 	remotesRelativeRootConstant      = "relative/remotes-root"
 	remotesHomeRootSuffixConstant    = "remotes-home-root"
 	remotesOwnerFlagConstant         = "--owner"

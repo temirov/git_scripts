@@ -10,11 +10,11 @@ import (
 )
 
 const (
-	missingRootsErrorMessage          = "no repository roots provided; specify --root or configure defaults"
-	positionalRootsUnsupportedMessage = "repository roots must be provided using --root"
+	missingRootsErrorMessage          = "no repository roots provided; specify --roots or configure defaults"
+	positionalRootsUnsupportedMessage = "repository roots must be provided using --roots"
 )
 
-var sanitizer = pathutils.NewRepositoryPathSanitizerWithConfiguration(nil, pathutils.RepositoryPathSanitizerConfiguration{ExcludeBooleanLiteralCandidates: true})
+var sanitizer = pathutils.NewRepositoryPathSanitizerWithConfiguration(nil, pathutils.RepositoryPathSanitizerConfiguration{ExcludeBooleanLiteralCandidates: true, PruneNestedPaths: true})
 
 // MissingRootsError returns the canonical error message when no roots are supplied.
 func MissingRootsError() error {
@@ -26,7 +26,7 @@ func PositionalRootsUnsupportedError() error {
 	return errors.New(positionalRootsUnsupportedMessage)
 }
 
-// Resolve determines the repository roots for a command, enforcing --root usage.
+// Resolve determines the repository roots for a command, enforcing --roots usage.
 func Resolve(command *cobra.Command, positional []string, configured []string) ([]string, error) {
 	if len(sanitizer.Sanitize(positional)) > 0 {
 		if command != nil {

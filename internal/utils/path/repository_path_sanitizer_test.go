@@ -19,6 +19,7 @@ const (
 	testCaseBooleanLiteralFalseMixedConstant    = "False"
 	testCaseSanitizerDefaultCaseNameConstant    = "default_configuration"
 	testCaseBooleanFilterCaseNameConstant       = "boolean_filter_configuration"
+	testCaseNestedRootPruningCaseNameConstant   = "nested_root_pruning"
 )
 
 func TestRepositoryPathSanitizerNormalizesInputs(testInstance *testing.T) {
@@ -57,6 +58,16 @@ func TestRepositoryPathSanitizerNormalizesInputs(testInstance *testing.T) {
 				tildeInput,
 			},
 			expectedOutputs: []string{expandedTilde},
+		},
+		{
+			name:      testCaseNestedRootPruningCaseNameConstant,
+			sanitizer: pathutils.NewRepositoryPathSanitizerWithConfiguration(nil, pathutils.RepositoryPathSanitizerConfiguration{PruneNestedPaths: true}),
+			inputs: []string{
+				filepath.Join(absolutePath, "nested"),
+				absolutePath,
+				filepath.Join(absolutePath, "nested", "inner"),
+			},
+			expectedOutputs: []string{absolutePath},
 		},
 	}
 
