@@ -122,8 +122,8 @@ func (service *Service) DiscoverInspections(executionContext context.Context, ro
 func (service *Service) writeAuditReport(inspections []RepositoryInspection) error {
 	csvWriter := csv.NewWriter(service.outputWriter)
 	header := []string{
-		csvHeaderFinalRepository,
 		csvHeaderFolderName,
+		csvHeaderFinalRepository,
 		csvHeaderNameMatches,
 		csvHeaderRemoteDefault,
 		csvHeaderLocalBranch,
@@ -306,8 +306,8 @@ func inspectionReportRow(inspection RepositoryInspection) AuditReportRow {
 		originMatches = TernaryValueNotApplicable
 	}
 	return AuditReportRow{
-		FinalRepository:        finalRepo,
 		FolderName:             inspection.FolderName,
+		FinalRepository:        finalRepo,
 		NameMatches:            nameMatches,
 		RemoteDefaultBranch:    remoteDefaultBranch,
 		LocalBranch:            localBranch,

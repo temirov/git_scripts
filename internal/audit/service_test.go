@@ -137,7 +137,7 @@ func TestServiceRunBehaviors(testInstance *testing.T) {
 					DefaultBranch: "main",
 				},
 			},
-			expectedOutput: "final_github_repo,folder_name,name_matches,remote_default_branch,local_branch,in_sync,remote_protocol,origin_matches_canonical\ncanonical/example,example,yes,main,main,n/a,https,no\n",
+			expectedOutput: "folder_name,final_github_repo,name_matches,remote_default_branch,local_branch,in_sync,remote_protocol,origin_matches_canonical\nexample,canonical/example,yes,main,main,n/a,https,no\n",
 			expectedError:  "",
 		},
 		{
@@ -162,7 +162,7 @@ func TestServiceRunBehaviors(testInstance *testing.T) {
 					DefaultBranch: "main",
 				},
 			},
-			expectedOutput:       "final_github_repo,folder_name,name_matches,remote_default_branch,local_branch,in_sync,remote_protocol,origin_matches_canonical\ncanonical/example,example,yes,main,,n/a,https,no\n",
+			expectedOutput:       "folder_name,final_github_repo,name_matches,remote_default_branch,local_branch,in_sync,remote_protocol,origin_matches_canonical\nexample,canonical/example,yes,main,,n/a,https,no\n",
 			expectedError:        "",
 			panicOnUnexpectedGit: true,
 		},
@@ -188,7 +188,7 @@ func TestServiceRunBehaviors(testInstance *testing.T) {
 					DefaultBranch: "main",
 				},
 			},
-			expectedOutput: "final_github_repo,folder_name,name_matches,remote_default_branch,local_branch,in_sync,remote_protocol,origin_matches_canonical\ncanonical/example,example,yes,main,main,n/a,https,no\n",
+			expectedOutput: "folder_name,final_github_repo,name_matches,remote_default_branch,local_branch,in_sync,remote_protocol,origin_matches_canonical\nexample,canonical/example,yes,main,main,n/a,https,no\n",
 			expectedError:  "DEBUG: discovered 1 candidate repos under: /tmp/example\nDEBUG: checking /tmp/example\n",
 		},
 	}
@@ -266,7 +266,7 @@ func TestServiceRunNormalizesRepositoryPaths(testInstance *testing.T) {
 	}
 
 	expectedCSVOutput := fmt.Sprintf(
-		"final_github_repo,folder_name,name_matches,remote_default_branch,local_branch,in_sync,remote_protocol,origin_matches_canonical\ncanonical/example,%s,%s,main,,n/a,https,no\n",
+		"folder_name,final_github_repo,name_matches,remote_default_branch,local_branch,in_sync,remote_protocol,origin_matches_canonical\n%s,canonical/example,%s,main,,n/a,https,no\n",
 		repositoryFolderName,
 		expectedNameMatches,
 	)
@@ -324,9 +324,9 @@ func TestServiceRunIncludesAllFolders(testInstance *testing.T) {
 	require.NoError(testInstance, runError)
 
 	expectedOutput := fmt.Sprintf(
-		"final_github_repo,folder_name,name_matches,remote_default_branch,local_branch,in_sync,remote_protocol,origin_matches_canonical\n"+
-			"canonical/example,%s,no,main,,n/a,https,no\n"+
-			"n/a,%s,n/a,n/a,n/a,n/a,n/a,n/a\n",
+		"folder_name,final_github_repo,name_matches,remote_default_branch,local_branch,in_sync,remote_protocol,origin_matches_canonical\n"+
+			"%s,canonical/example,no,main,,n/a,https,no\n"+
+			"%s,n/a,n/a,n/a,n/a,n/a,n/a,n/a\n",
 		gitRepositoryFolderName,
 		nonRepositoryFolderName,
 	)

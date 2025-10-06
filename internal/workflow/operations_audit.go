@@ -93,8 +93,8 @@ func (operation *AuditReportOperation) Execute(executionContext context.Context,
 
 	csvWriter := csv.NewWriter(writer)
 	header := []string{
-		auditCSVHeaderFinalRepositoryConstant,
 		auditCSVHeaderFolderNameConstant,
+		auditCSVHeaderFinalRepositoryConstant,
 		auditCSVHeaderNameMatchesConstant,
 		auditCSVHeaderRemoteDefaultConstant,
 		auditCSVHeaderLocalBranchConstant,
@@ -157,8 +157,8 @@ func buildAuditReportRow(inspection audit.RepositoryInspection) []string {
 	}
 
 	return []string{
-		finalRepository,
 		inspection.FolderName,
+		finalRepository,
 		string(nameMatches),
 		remoteDefaultBranch,
 		localBranch,

@@ -14,6 +14,8 @@ Leave Features, BugFixes, Improvements, Maintenance sections empty when all fixe
 
 ## Improvements
 
+- [ ] The folder_name shall be relative to the root folder in the output of the audit coammnd. E.g. if we have a git folder `openai_extract` is under the folder `yoy`, then the folder name must be `yoy/openai_extract`
+
 ## BugFixes
 
 ## Maintenance
