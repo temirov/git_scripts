@@ -430,10 +430,10 @@ func buildNonRepositoryInspection(path string, folderName string) RepositoryInsp
 
 func isPathWithinRepository(path string, repositories map[string]struct{}) bool {
 	cleaned := filepath.Clean(path)
+	if _, exists := repositories[cleaned]; exists {
+		return false
+	}
 	for repositoryPath := range repositories {
-		if cleaned == repositoryPath {
-			return false
-		}
 		repositoryPrefix := repositoryPath + string(os.PathSeparator)
 		if strings.HasPrefix(cleaned, repositoryPrefix) {
 			return true
