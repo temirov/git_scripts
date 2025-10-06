@@ -44,6 +44,10 @@ confirmation via `--yes`.
 
 ## Installing and running
 
+```shell
+go install github.com/temirov/gix@latest
+```
+
 The CLI targets Go **1.24** or newer.
 
 ```shell
