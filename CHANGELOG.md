@@ -1,3 +1,37 @@
+## [v0.0.6] - 2025-10-06
+
+### Highlights
+- Audit reports now surface non-repository directories with `--all` while presenting folder names relative to their configured roots for quicker scanning.
+- Root sanitization trims nested duplicates so CLI commands and workflows operate on a predictable set of repositories.
+
+### Features ✨
+- Added an `--all` toggle to `audit` to include top-level directories lacking Git metadata, filling Git-specific columns with `n/a` in CSV output and workflow reports.
+
+### Improvements ⚙️
+- Reordered audit CSV columns to lead with `folder_name` and emit paths relative to each root, preserving canonical-name checks through the basename.
+- Centralized root sanitation to deduplicate nested entries, expand tildes, and enforce the new singular `--root` flag across commands and workflows.
+- Surfaced usage guidance whenever `audit` is invoked without required roots to clarify flag expectations.
+
+### Bug Fixes 🐛
+- Corrected repository containment detection so nested Git repositories are not skipped when scanning with `--all`.
+
+### Docs 📚
+- Expanded installation guidance and refreshed flag examples in `README.md` to reflect the singular `--root` flag and new audit behaviors.
+
+### CI & Maintenance
+- Updated the release workflow to build and publish the `gix` binary from this repository.
+
+## [v0.0.5] - 2025-10-06
+
+### Highlights
+- CLI configuration discovery now honors `XDG_CONFIG_HOME` while normalizing resolved paths for consistent behavior across platforms and tests.
+
+### Improvements ⚙️
+- Updated the application bootstrap to expand XDG-aware configuration search paths and align emitted logs with the resolved directories.
+
+### Testing 🧪
+- Normalized temporary path expectations in repository and application tests so macOS `/private` prefixes no longer cause false negatives.
+
 ## [v0.0.4] - 2025-10-03
 
 ### Highlights
