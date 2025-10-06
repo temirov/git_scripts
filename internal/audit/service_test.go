@@ -85,6 +85,25 @@ func (resolver stubGitHubResolver) ResolveRepoMetadata(ctx context.Context, repo
 	return resolver.metadata, nil
 }
 
+type pathSensitiveGitExecutor struct {
+	repositoryPath string
+}
+
+func (executor pathSensitiveGitExecutor) ExecuteGit(executionContext context.Context, details execshell.CommandDetails) (execshell.ExecutionResult, error) {
+	key := strings.Join(details.Arguments, " ")
+	if key == "rev-parse --is-inside-work-tree" {
+		if filepath.Clean(details.WorkingDirectory) == filepath.Clean(executor.repositoryPath) {
+			return execshell.ExecutionResult{StandardOutput: "true"}, nil
+		}
+		return execshell.ExecutionResult{}, fmt.Errorf("unexpected git command: %s", key)
+	}
+	return execshell.ExecutionResult{}, fmt.Errorf("unexpected git command: %s", key)
+}
+
+func (executor pathSensitiveGitExecutor) ExecuteGitHubCLI(executionContext context.Context, details execshell.CommandDetails) (execshell.ExecutionResult, error) {
+	return execshell.ExecutionResult{}, fmt.Errorf("unexpected github command: %s", strings.Join(details.Arguments, " "))
+}
+
 func TestServiceRunBehaviors(testInstance *testing.T) {
 	testCases := []struct {
 		name                 string
@@ -259,4 +278,48 @@ func TestServiceRunNormalizesRepositoryPaths(testInstance *testing.T) {
 
 	require.Equal(testInstance, expectedCSVOutput, outputBuffer.String())
 	require.Equal(testInstance, expectedDebugOutput, errorBuffer.String())
+}
+
+func TestServiceRunIncludesAllFolders(testInstance *testing.T) {
+	testInstance.Helper()
+
+	rootDirectory := testInstance.TempDir()
+	gitRepositoryPath := filepath.Join(rootDirectory, "git-project")
+	require.NoError(testInstance, os.MkdirAll(gitRepositoryPath, 0o755))
+	nonRepositoryPath := filepath.Join(rootDirectory, "notes")
+	require.NoError(testInstance, os.MkdirAll(nonRepositoryPath, 0o755))
+
+	outputBuffer := &bytes.Buffer{}
+	service := audit.NewService(
+		stubDiscoverer{repositories: []string{gitRepositoryPath}},
+		stubGitManager{
+			cleanWorktree:       true,
+			branchName:          "main",
+			remoteURL:           "https://github.com/origin/example.git",
+			panicOnBranchLookup: true,
+		},
+		pathSensitiveGitExecutor{repositoryPath: gitRepositoryPath},
+		stubGitHubResolver{
+			metadata: githubcli.RepositoryMetadata{
+				NameWithOwner: "canonical/example",
+				DefaultBranch: "main",
+			},
+		},
+		outputBuffer,
+		&bytes.Buffer{},
+	)
+
+	options := audit.CommandOptions{
+		Roots:             []string{rootDirectory},
+		InspectionDepth:   audit.InspectionDepthMinimal,
+		IncludeAllFolders: true,
+	}
+
+	runError := service.Run(context.Background(), options)
+	require.NoError(testInstance, runError)
+
+	expectedOutput := "final_github_repo,folder_name,name_matches,remote_default_branch,local_branch,in_sync,remote_protocol,origin_matches_canonical\n" +
+		"canonical/example,git-project,no,main,,n/a,https,no\n" +
+		"n/a,notes,n/a,n/a,n/a,n/a,n/a,n/a\n"
+	require.Equal(testInstance, expectedOutput, outputBuffer.String())
 }

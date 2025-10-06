@@ -9,6 +9,7 @@
 - Added an `--owner` toggle to `repo-folders-rename`, planned via a new directory planner that joins owner and repository segments and ensures parent directories exist.
 - Propagated owner preferences through workflow configuration and remote update execution, including owner-constraint enforcement when rewriting origin URLs.
 - Introduced reusable toggle flag helpers that register boolean flags accepting multiple literal forms and normalize command-line arguments before parsing.
+- Added an `--all` flag to `audit` so directories without Git metadata appear in reports with git fields marked as `n/a`.
 
 ### Improvements ⚙️
 - Normalized toggle arguments across commands so `--flag value` and `--flag=value` behave consistently for all boolean options.

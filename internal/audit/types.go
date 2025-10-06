@@ -34,9 +34,10 @@ const (
 
 // CommandOptions captures the configurable parameters for the audit command.
 type CommandOptions struct {
-	Roots           []string
-	DebugOutput     bool
-	InspectionDepth InspectionDepth
+	Roots             []string
+	DebugOutput       bool
+	InspectionDepth   InspectionDepth
+	IncludeAllFolders bool
 }
 
 // RepositoryInspection captures gathered repository state.
@@ -53,6 +54,7 @@ type RepositoryInspection struct {
 	LocalBranch            string
 	InSyncStatus           TernaryValue
 	OriginMatchesCanonical TernaryValue
+	IsGitRepository        bool
 }
 
 // AuditReportRow models a single CSV audit result.

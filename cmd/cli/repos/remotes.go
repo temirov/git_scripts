@@ -97,7 +97,7 @@ func (builder *RemotesCommandBuilder) run(command *cobra.Command, arguments []st
 
 	service := audit.NewService(repositoryDiscoverer, gitManager, gitExecutor, githubResolver, command.OutOrStdout(), command.ErrOrStderr())
 
-	inspections, inspectionError := service.DiscoverInspections(command.Context(), roots, false, audit.InspectionDepthMinimal)
+	inspections, inspectionError := service.DiscoverInspections(command.Context(), roots, false, false, audit.InspectionDepthMinimal)
 	if inspectionError != nil {
 		return inspectionError
 	}

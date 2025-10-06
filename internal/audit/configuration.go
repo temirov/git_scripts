@@ -8,15 +8,17 @@ var auditConfigurationRepositoryPathSanitizer = pathutils.NewRepositoryPathSanit
 
 // CommandConfiguration captures persistent settings for the audit command.
 type CommandConfiguration struct {
-	Roots []string `mapstructure:"roots"`
-	Debug bool     `mapstructure:"debug"`
+	Roots      []string `mapstructure:"roots"`
+	Debug      bool     `mapstructure:"debug"`
+	IncludeAll bool     `mapstructure:"all"`
 }
 
 // DefaultCommandConfiguration returns baseline configuration values for the audit command.
 func DefaultCommandConfiguration() CommandConfiguration {
 	return CommandConfiguration{
-		Roots: nil,
-		Debug: false,
+		Roots:      nil,
+		Debug:      false,
+		IncludeAll: false,
 	}
 }
 

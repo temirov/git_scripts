@@ -11,7 +11,3 @@ Remove a bug from the notes.md after the bug is fixed. commit and push to the re
 Leave BugFixes section empty but don't delete the section itself.
 
 ## BugFixes
-
-### Add all folders under audit
-
-- [ ] add a flag to include non git enabled folders in the audit command, --all. when added this flag will include folders without git repo in the output, leaving all git-related fileds as n/a

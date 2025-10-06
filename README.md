@@ -94,7 +94,7 @@ with the registered command names and flags.
 
 | Command                 | Summary                                                       | Key flags / example                                                                                                                |
 |-------------------------|---------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------|
-| `audit`                 | Audit and reconcile local GitHub repositories                 | Flags: `--roots`, `--log-level`. Example: `go run . audit --log-level=debug --roots ~/Development`                                    |
+| `audit`                 | Audit and reconcile local GitHub repositories                 | Flags: `--roots`, `--all`, `--log-level`. Example: `go run . audit --log-level=debug --roots ~/Development --all`                                    |
 | `repo-folders-rename`   | Rename repository directories to match canonical GitHub names | Flags: `--dry-run`, `--yes`, `--require-clean`, `--owner`, `--roots`. Example: `go run . repo-folders-rename --yes --require-clean --owner --roots ~/Development`        |
 | `repo-remote-update`    | Update origin URLs to match canonical GitHub repositories     | Flags: `--dry-run`, `--yes`, `--owner`, `--roots`. Example: `go run . repo-remote-update --dry-run --owner canonical --roots ~/Development`          |
 | `repo-protocol-convert` | Convert repository origin remotes between protocols           | Flags: `--from`, `--to`, `--dry-run`, `--yes`, `--roots`. Example: `go run . repo-protocol-convert --from https --to ssh --yes --roots ~/Development` |
@@ -104,6 +104,8 @@ with the registered command names and flags.
 | `workflow`              | Run a workflow configuration file                             | Flags: `--roots`, `--dry-run`, `--yes`. Example: `go run . workflow config.yaml --roots ~/Development --dry-run`                     |
 
 Persist defaults and workflow plans in a single configuration file to avoid long flag lists and keep the runner in sync:
+
+The audit command exposes `--all` to enumerate folders lacking Git repositories alongside canonical results, marking git-related fields as `n/a` when metadata is unavailable.
 
 The purge command derives the GHCR owner, owner type, and default package name from each repository's `origin` remote
 and the canonical metadata returned by the GitHub CLI. Ensure the remotes point at the desired GitHub repositories

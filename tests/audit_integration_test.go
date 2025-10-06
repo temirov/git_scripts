@@ -21,6 +21,7 @@ const (
 	auditIntegrationModulePathConstant         = "."
 	auditIntegrationAuditCommandName           = "audit"
 	auditIntegrationRootFlag                   = "--roots"
+	auditIntegrationIncludeAllFlag             = "--all"
 	auditIntegrationGitExecutable              = "git"
 	auditIntegrationInitFlag                   = "init"
 	auditIntegrationInitialBranchFlag          = "--initial-branch=main"
@@ -38,6 +39,7 @@ const (
 	auditIntegrationCSVCaseNameConstant        = "audit_csv"
 	auditIntegrationDebugCaseNameConstant      = "audit_debug"
 	auditIntegrationTildeCaseNameConstant      = "audit_tilde"
+	auditIntegrationIncludeAllCaseNameConstant = "audit_include_all"
 	auditIntegrationSubtestNameTemplate        = "%d_%s"
 )
 
@@ -84,6 +86,22 @@ func TestAuditRunCommandIntegration(testInstance *testing.T) {
 	relativeRepositoryPath = strings.TrimPrefix(relativeRepositoryPath, string(os.PathSeparator))
 	tildeRootArgument := auditIntegrationHomeShortcutPrefixConstant + filepath.ToSlash(relativeRepositoryPath)
 
+	includeAllRoot := filepath.Join(tempDirectory, "include_all_root")
+	require.NoError(testInstance, os.Mkdir(includeAllRoot, 0o755))
+	testInstance.Cleanup(func() {
+		_ = os.RemoveAll(includeAllRoot)
+	})
+	includeAllRepositoryPath := filepath.Join(includeAllRoot, "audit-all-repository")
+	initIncludeAllCommand := exec.Command(auditIntegrationGitExecutable, auditIntegrationInitFlag, auditIntegrationInitialBranchFlag, includeAllRepositoryPath)
+	initIncludeAllCommand.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	require.NoError(testInstance, initIncludeAllCommand.Run())
+	includeAllRemoteCommand := exec.Command(auditIntegrationGitExecutable, "-C", includeAllRepositoryPath, auditIntegrationRemoteSubcommand, auditIntegrationAddSubcommand, auditIntegrationOriginRemoteName, auditIntegrationOriginURL)
+	includeAllRemoteCommand.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	require.NoError(testInstance, includeAllRemoteCommand.Run())
+
+	nonGitFolderPath := filepath.Join(includeAllRoot, "notes")
+	require.NoError(testInstance, os.Mkdir(nonGitFolderPath, 0o755))
+
 	buildArguments := func(logLevel string, root string) []string {
 		return []string{
 			auditIntegrationRunSubcommand,
@@ -99,6 +117,9 @@ func TestAuditRunCommandIntegration(testInstance *testing.T) {
 	rootFlagArguments := buildArguments(auditIntegrationErrorLevel, repositoryPath)
 	debugLogLevelArguments := buildArguments(auditIntegrationDebugLevel, repositoryPath)
 	tildeRootArguments := buildArguments(auditIntegrationErrorLevel, tildeRootArgument)
+	includeAllArguments := append(buildArguments(auditIntegrationErrorLevel, includeAllRoot), auditIntegrationIncludeAllFlag)
+	includeAllRepositoryFolderName := filepath.Base(includeAllRepositoryPath)
+	nonGitFolderName := filepath.Base(nonGitFolderPath)
 
 	testCases := []struct {
 		name              string
@@ -125,6 +146,15 @@ func TestAuditRunCommandIntegration(testInstance *testing.T) {
 			name:           auditIntegrationTildeCaseNameConstant,
 			arguments:      tildeRootArguments,
 			expectedOutput: expectedCSVOutput,
+		},
+		{
+			name:      auditIntegrationIncludeAllCaseNameConstant,
+			arguments: includeAllArguments,
+			expectedOutput: fmt.Sprintf(
+				"final_github_repo,folder_name,name_matches,remote_default_branch,local_branch,in_sync,remote_protocol,origin_matches_canonical\ncanonical/example,%s,no,main,,n/a,https,no\nn/a,%s,n/a,n/a,n/a,n/a,n/a,n/a\n",
+				includeAllRepositoryFolderName,
+				nonGitFolderName,
+			),
 		},
 	}
 
