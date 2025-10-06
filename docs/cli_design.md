@@ -78,7 +78,7 @@ The table below maps current script switches to Cobra equivalents and documents 
 - All `repo` subcommands support `--debug` to raise Zap logging level to `Debug`.
 - `--yes` maps to `--confirm` boolean flag in Cobra (`--yes` alias) to allow scripted runs.
 - Roots accept multiple entries via `--roots`; commands fall back to configured defaults when provided and otherwise return an error.
-- The audit command adds `--all` to report directories lacking Git repositories, marking git-specific columns as `n/a`.
+- The audit command adds `--all` to report top-level directories lacking Git repositories for each root, marking git-specific columns as `n/a`.
 - Commands that mutate Git state will request clean worktrees when `--require-clean` is provided (rename) or by default when destructive (branch flip).
 - Exit codes mirror existing scripts: non-zero on invalid flag combinations or fatal errors; continue processing across repositories when possible.
 

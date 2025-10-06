@@ -99,8 +99,12 @@ func TestAuditRunCommandIntegration(testInstance *testing.T) {
 	includeAllRemoteCommand.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
 	require.NoError(testInstance, includeAllRemoteCommand.Run())
 
-	nonGitFolderPath := filepath.Join(includeAllRoot, "notes")
+	nonGitFolderName := "notes"
+	nonGitFolderPath := filepath.Join(includeAllRoot, nonGitFolderName)
 	require.NoError(testInstance, os.Mkdir(nonGitFolderPath, 0o755))
+	nestedNonGitFolderName := "drafts"
+	nestedNonGitFolderPath := filepath.Join(nonGitFolderPath, nestedNonGitFolderName)
+	require.NoError(testInstance, os.MkdirAll(nestedNonGitFolderPath, 0o755))
 
 	buildArguments := func(logLevel string, root string) []string {
 		return []string{
@@ -119,13 +123,13 @@ func TestAuditRunCommandIntegration(testInstance *testing.T) {
 	tildeRootArguments := buildArguments(auditIntegrationErrorLevel, tildeRootArgument)
 	includeAllArguments := append(buildArguments(auditIntegrationErrorLevel, includeAllRoot), auditIntegrationIncludeAllFlag)
 	includeAllRepositoryFolderName := filepath.Base(includeAllRepositoryPath)
-	nonGitFolderName := filepath.Base(nonGitFolderPath)
 
 	testCases := []struct {
-		name              string
-		arguments         []string
-		expectedOutput    string
-		expectedFragments []string
+		name                string
+		arguments           []string
+		expectedOutput      string
+		expectedFragments   []string
+		unexpectedFragments []string
 	}{
 		{
 			name:           auditIntegrationCSVCaseNameConstant,
@@ -155,6 +159,7 @@ func TestAuditRunCommandIntegration(testInstance *testing.T) {
 				includeAllRepositoryFolderName,
 				nonGitFolderName,
 			),
+			unexpectedFragments: []string{nestedNonGitFolderName},
 		},
 	}
 
@@ -168,6 +173,9 @@ func TestAuditRunCommandIntegration(testInstance *testing.T) {
 			}
 			for _, fragment := range testCase.expectedFragments {
 				require.Contains(subtest, filteredOutput, fragment)
+			}
+			for _, fragment := range testCase.unexpectedFragments {
+				require.NotContains(subtest, filteredOutput, fragment)
 			}
 		})
 	}

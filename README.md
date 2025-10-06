@@ -105,7 +105,7 @@ with the registered command names and flags.
 
 Persist defaults and workflow plans in a single configuration file to avoid long flag lists and keep the runner in sync:
 
-The audit command exposes `--all` to enumerate folders lacking Git repositories alongside canonical results, marking git-related fields as `n/a` when metadata is unavailable.
+The audit command exposes `--all` to enumerate top-level folders lacking Git repositories for each root alongside canonical results, marking git-related fields as `n/a` when metadata is unavailable.
 
 The purge command derives the GHCR owner, owner type, and default package name from each repository's `origin` remote
 and the canonical metadata returned by the GitHub CLI. Ensure the remotes point at the desired GitHub repositories

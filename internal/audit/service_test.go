@@ -284,10 +284,15 @@ func TestServiceRunIncludesAllFolders(testInstance *testing.T) {
 	testInstance.Helper()
 
 	rootDirectory := testInstance.TempDir()
-	gitRepositoryPath := filepath.Join(rootDirectory, "git-project")
+	gitRepositoryFolderName := "git-project"
+	gitRepositoryPath := filepath.Join(rootDirectory, gitRepositoryFolderName)
 	require.NoError(testInstance, os.MkdirAll(gitRepositoryPath, 0o755))
-	nonRepositoryPath := filepath.Join(rootDirectory, "notes")
+	nonRepositoryFolderName := "notes"
+	nonRepositoryPath := filepath.Join(rootDirectory, nonRepositoryFolderName)
 	require.NoError(testInstance, os.MkdirAll(nonRepositoryPath, 0o755))
+	nestedNonRepositoryFolderName := "drafts"
+	nestedNonRepositoryPath := filepath.Join(nonRepositoryPath, nestedNonRepositoryFolderName)
+	require.NoError(testInstance, os.MkdirAll(nestedNonRepositoryPath, 0o755))
 
 	outputBuffer := &bytes.Buffer{}
 	service := audit.NewService(
@@ -318,8 +323,13 @@ func TestServiceRunIncludesAllFolders(testInstance *testing.T) {
 	runError := service.Run(context.Background(), options)
 	require.NoError(testInstance, runError)
 
-	expectedOutput := "final_github_repo,folder_name,name_matches,remote_default_branch,local_branch,in_sync,remote_protocol,origin_matches_canonical\n" +
-		"canonical/example,git-project,no,main,,n/a,https,no\n" +
-		"n/a,notes,n/a,n/a,n/a,n/a,n/a,n/a\n"
+	expectedOutput := fmt.Sprintf(
+		"final_github_repo,folder_name,name_matches,remote_default_branch,local_branch,in_sync,remote_protocol,origin_matches_canonical\n"+
+			"canonical/example,%s,no,main,,n/a,https,no\n"+
+			"n/a,%s,n/a,n/a,n/a,n/a,n/a,n/a\n",
+		gitRepositoryFolderName,
+		nonRepositoryFolderName,
+	)
 	require.Equal(testInstance, expectedOutput, outputBuffer.String())
+	require.NotContains(testInstance, outputBuffer.String(), nestedNonRepositoryFolderName)
 }

@@ -344,33 +344,29 @@ func collectAllFolders(roots []string) ([]string, error) {
 			return nil, absoluteError
 		}
 
-		walkError := filepath.WalkDir(absoluteRoot, func(path string, entry fs.DirEntry, walkError error) error {
-			if walkError != nil {
-				return nil
+		directoryEntries, readError := os.ReadDir(absoluteRoot)
+		if readError != nil {
+			return nil, readError
+		}
+
+		for _, directoryEntry := range directoryEntries {
+			if directoryEntry.Type()&fs.ModeSymlink != 0 {
+				continue
 			}
-			if entry.Type()&fs.ModeSymlink != 0 {
-				return nil
+			if !directoryEntry.IsDir() {
+				continue
 			}
-			if !entry.IsDir() {
-				return nil
-			}
-			if entry.Name() == gitMetadataDirectoryNameConstant {
-				return fs.SkipDir
+			if directoryEntry.Name() == gitMetadataDirectoryNameConstant {
+				continue
 			}
 
-			cleaned := filepath.Clean(path)
-			if cleaned == absoluteRoot {
-				return nil
+			folderPath := filepath.Join(absoluteRoot, directoryEntry.Name())
+			cleanedFolderPath := filepath.Clean(folderPath)
+			if _, exists := seen[cleanedFolderPath]; exists {
+				continue
 			}
-			if _, exists := seen[cleaned]; exists {
-				return nil
-			}
-			seen[cleaned] = struct{}{}
-			folders = append(folders, cleaned)
-			return nil
-		})
-		if walkError != nil {
-			return nil, walkError
+			seen[cleanedFolderPath] = struct{}{}
+			folders = append(folders, cleanedFolderPath)
 		}
 	}
 
