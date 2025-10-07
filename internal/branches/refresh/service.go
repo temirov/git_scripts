@@ -17,6 +17,10 @@ const (
 	repositoryManagerMissingMessageConstant     = "repository manager not configured"
 	cleanVerificationErrorTemplateConstant      = "failed to verify clean worktree: %w"
 	worktreeNotCleanMessageConstant             = "repository worktree is not clean"
+	stashFailureTemplateConstant                = "failed to stash local changes: %w"
+	stageFailureTemplateConstant                = "failed to stage local changes: %w"
+	commitFailureTemplateConstant               = "failed to commit local changes: %w"
+	commitMessageTemplateConstant               = "chore: checkpoint before refreshing %s"
 	gitFetchFailureTemplateConstant             = "failed to fetch updates: %w"
 	gitCheckoutFailureTemplateConstant          = "failed to checkout branch %q: %w"
 	gitPullFailureTemplateConstant              = "failed to pull latest changes: %w"
@@ -25,6 +29,14 @@ const (
 	gitCheckoutSubcommandConstant               = "checkout"
 	gitPullSubcommandConstant                   = "pull"
 	gitPullFastForwardFlagConstant              = "--ff-only"
+	gitPullRebaseFlagConstant                   = "--rebase"
+	gitAddSubcommandConstant                    = "add"
+	gitAddAllFlagConstant                       = "--all"
+	gitCommitSubcommandConstant                 = "commit"
+	gitCommitMessageFlagConstant                = "-m"
+	gitStashSubcommandConstant                  = "stash"
+	gitStashPushSubcommandConstant              = "push"
+	gitStashIncludeUntrackedFlagConstant        = "--include-untracked"
 	gitTerminalPromptEnvironmentNameConstant    = "GIT_TERMINAL_PROMPT"
 	gitTerminalPromptEnvironmentDisableConstant = "0"
 )
@@ -95,13 +107,33 @@ func (service *Service) Refresh(executionContext context.Context, options Option
 	}
 
 	requireClean := options.RequireClean
+	checkpointCommitCreated := false
 	if requireClean {
 		clean, cleanError := service.repositoryManager.CheckCleanWorktree(executionContext, trimmedRepositoryPath)
 		if cleanError != nil {
 			return Result{}, fmt.Errorf(cleanVerificationErrorTemplateConstant, cleanError)
 		}
 		if !clean {
-			return Result{}, ErrWorktreeNotClean
+			if options.StashChanges {
+				if stashError := service.stashLocalChanges(executionContext, trimmedRepositoryPath); stashError != nil {
+					return Result{}, stashError
+				}
+			} else if options.CommitChanges {
+				if commitError := service.commitLocalChanges(executionContext, trimmedRepositoryPath, trimmedBranchName); commitError != nil {
+					return Result{}, commitError
+				}
+				checkpointCommitCreated = true
+			} else {
+				return Result{}, ErrWorktreeNotClean
+			}
+
+			clean, cleanError = service.repositoryManager.CheckCleanWorktree(executionContext, trimmedRepositoryPath)
+			if cleanError != nil {
+				return Result{}, fmt.Errorf(cleanVerificationErrorTemplateConstant, cleanError)
+			}
+			if !clean {
+				return Result{}, ErrWorktreeNotClean
+			}
 		}
 	}
 
@@ -119,8 +151,12 @@ func (service *Service) Refresh(executionContext context.Context, options Option
 		return Result{}, fmt.Errorf(gitCheckoutFailureTemplateConstant, trimmedBranchName, checkoutError)
 	}
 
+	pullArguments := []string{gitPullSubcommandConstant, gitPullFastForwardFlagConstant}
+	if checkpointCommitCreated {
+		pullArguments = []string{gitPullSubcommandConstant, gitPullRebaseFlagConstant}
+	}
 	if pullError := service.executeGit(executionContext, execshell.CommandDetails{
-		Arguments:        []string{gitPullSubcommandConstant, gitPullFastForwardFlagConstant},
+		Arguments:        pullArguments,
 		WorkingDirectory: trimmedRepositoryPath,
 	}); pullError != nil {
 		return Result{}, fmt.Errorf(gitPullFailureTemplateConstant, pullError)
@@ -136,4 +172,33 @@ func (service *Service) executeGit(executionContext context.Context, details exe
 	details.EnvironmentVariables[gitTerminalPromptEnvironmentNameConstant] = gitTerminalPromptEnvironmentDisableConstant
 	_, executionError := service.executor.ExecuteGit(executionContext, details)
 	return executionError
+}
+
+func (service *Service) stashLocalChanges(executionContext context.Context, repositoryPath string) error {
+	if stashError := service.executeGit(executionContext, execshell.CommandDetails{
+		Arguments:        []string{gitStashSubcommandConstant, gitStashPushSubcommandConstant, gitStashIncludeUntrackedFlagConstant},
+		WorkingDirectory: repositoryPath,
+	}); stashError != nil {
+		return fmt.Errorf(stashFailureTemplateConstant, stashError)
+	}
+	return nil
+}
+
+func (service *Service) commitLocalChanges(executionContext context.Context, repositoryPath string, branchName string) error {
+	if stageError := service.executeGit(executionContext, execshell.CommandDetails{
+		Arguments:        []string{gitAddSubcommandConstant, gitAddAllFlagConstant},
+		WorkingDirectory: repositoryPath,
+	}); stageError != nil {
+		return fmt.Errorf(stageFailureTemplateConstant, stageError)
+	}
+
+	commitMessage := fmt.Sprintf(commitMessageTemplateConstant, branchName)
+	if commitError := service.executeGit(executionContext, execshell.CommandDetails{
+		Arguments:        []string{gitCommitSubcommandConstant, gitCommitMessageFlagConstant, commitMessage},
+		WorkingDirectory: repositoryPath,
+	}); commitError != nil {
+		return fmt.Errorf(commitFailureTemplateConstant, commitError)
+	}
+
+	return nil
 }
