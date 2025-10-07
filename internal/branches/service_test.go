@@ -15,6 +15,7 @@ import (
 
 	branches "github.com/temirov/gix/internal/branches"
 	"github.com/temirov/gix/internal/execshell"
+	"github.com/temirov/gix/internal/repos/shared"
 )
 
 const (
@@ -36,6 +37,7 @@ const (
 	skippingMissingLogMessageConstant      = "Skipping branch (already gone)"
 	skippingRemoteDryRunLogMessageConstant = "Skipping remote branch deletion (dry run)"
 	skippingLocalDryRunLogMessageConstant  = "Skipping local branch deletion (dry run)"
+	deletionDeclinedLogMessageConstant     = "Skipping branch deletion (user declined)"
 	pullRequestJSONFieldNameConstant       = "headRefName"
 	gitListRemoteSubcommandConstant        = "ls-remote"
 	gitHeadsFlagConstant                   = "--heads"
@@ -59,6 +61,29 @@ const (
 	pullRequestListErrorContainsConstant   = "unable to list closed pull requests"
 	pullRequestDecodeErrorContainsConstant = "unable to decode pull request response"
 )
+
+type stubBranchPrompter struct {
+	responses       []shared.ConfirmationResult
+	errors          []error
+	prompts         []string
+	defaultResponse shared.ConfirmationResult
+	defaultError    error
+	index           int
+}
+
+func (prompter *stubBranchPrompter) Confirm(prompt string) (shared.ConfirmationResult, error) {
+	prompter.prompts = append(prompter.prompts, prompt)
+	result := prompter.defaultResponse
+	if prompter.index < len(prompter.responses) {
+		result = prompter.responses[prompter.index]
+	}
+	err := prompter.defaultError
+	if prompter.index < len(prompter.errors) {
+		err = prompter.errors[prompter.index]
+	}
+	prompter.index++
+	return result, err
+}
 
 type fakeCommandExecutor struct {
 	responses           map[string]fakeCommandResponse
@@ -175,6 +200,8 @@ func TestServiceCleanupScenarios(testInstance *testing.T) {
 		expectedCommandKeys   []string
 		expectedLogMessages   []string
 		unexpectedLogMessages []string
+		prompter              *stubBranchPrompter
+		expectedPrompts       []string
 	}{
 		{
 			name:                "deletes_remote_and_local_branches",
@@ -257,6 +284,34 @@ func TestServiceCleanupScenarios(testInstance *testing.T) {
 			unexpectedLogMessages: []string{deletingRemoteLogMessageConstant, deletingLocalLogMessageConstant},
 		},
 		{
+			name:                "user_declines_branch_deletion",
+			remoteBranches:      []string{"feature/user-decline"},
+			pullRequestBranches: []string{"feature/user-decline"},
+			options: branches.CleanupOptions{
+				RemoteName:       testRemoteNameConstant,
+				PullRequestLimit: testPullRequestLimitConstant,
+				DryRun:           false,
+				WorkingDirectory: testWorkingDirectoryConstant,
+			},
+			expectedCommandKeys: []string{
+				buildCommandKey(gitCommandLabelConstant, []string{gitListRemoteSubcommandConstant, gitHeadsFlagConstant, testRemoteNameConstant}),
+				buildCommandKey(githubCommandLabelConstant, []string{
+					githubPullRequestSubcommandConstant,
+					githubListSubcommandConstant,
+					githubStateFlagConstant,
+					githubClosedStateConstant,
+					githubJSONFlagConstant,
+					pullRequestJSONFieldNameConstant,
+					githubLimitFlagConstant,
+					strconv.Itoa(testPullRequestLimitConstant),
+				}),
+			},
+			expectedLogMessages:   []string{deletionDeclinedLogMessageConstant},
+			unexpectedLogMessages: []string{deletingRemoteLogMessageConstant, deletingLocalLogMessageConstant},
+			prompter:              &stubBranchPrompter{defaultResponse: shared.ConfirmationResult{Confirmed: false}},
+			expectedPrompts:       []string{fmt.Sprintf("Delete pull request branch '%s' from remote '%s' and the local repository? [y/N] ", "feature/user-decline", testRemoteNameConstant)},
+		},
+		{
 			name:                "duplicates_are_processed_once",
 			remoteBranches:      []string{"feature/duplicate"},
 			pullRequestBranches: []string{"feature/duplicate", "feature/duplicate"},
@@ -322,11 +377,20 @@ func TestServiceCleanupScenarios(testInstance *testing.T) {
 			logCore, observedLogs := observer.New(zap.DebugLevel)
 			logger := zap.New(logCore)
 
-			service, serviceError := branches.NewService(logger, fakeExecutorInstance)
+			confirmationPrompter := testCase.prompter
+			if confirmationPrompter == nil {
+				confirmationPrompter = &stubBranchPrompter{defaultResponse: shared.ConfirmationResult{Confirmed: true}}
+			}
+
+			service, serviceError := branches.NewService(logger, fakeExecutorInstance, confirmationPrompter)
 			require.NoError(testInstance, serviceError)
 
 			cleanupError := service.Cleanup(context.Background(), testCase.options)
 			require.NoError(testInstance, cleanupError)
+
+			if testCase.expectedPrompts != nil {
+				require.Equal(testInstance, testCase.expectedPrompts, confirmationPrompter.prompts)
+			}
 
 			actualCommandKeys := make([]string, 0, len(fakeExecutorInstance.executedCommands))
 			for commandIndex := range fakeExecutorInstance.executedCommands {
@@ -461,7 +525,7 @@ func TestServiceCleanupFailures(testInstance *testing.T) {
 			logCore, _ := observer.New(zap.DebugLevel)
 			logger := zap.New(logCore)
 
-			service, serviceError := branches.NewService(logger, fakeExecutorInstance)
+			service, serviceError := branches.NewService(logger, fakeExecutorInstance, nil)
 			require.NoError(testInstance, serviceError)
 
 			cleanupError := service.Cleanup(context.Background(), testCase.options)
@@ -472,7 +536,7 @@ func TestServiceCleanupFailures(testInstance *testing.T) {
 }
 
 func TestNewServiceRequiresExecutor(testInstance *testing.T) {
-	service, serviceError := branches.NewService(zap.NewNop(), nil)
+	service, serviceError := branches.NewService(zap.NewNop(), nil, nil)
 	require.Error(testInstance, serviceError)
 	require.Nil(testInstance, service)
 	require.EqualError(testInstance, serviceError, executorNotConfiguredMessageConstant)

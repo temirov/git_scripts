@@ -16,6 +16,4 @@ Leave Features, BugFixes, Improvements, Maintenance sections empty when all fixe
 
 ## BugFixes
 
-- [ ] [GX-05] when running Repo PRS purge command it didnt ask for the confirmation. ensure that the dialog about any distructive operations is codined in one place and is present for all of the operations that perform actual changes, plan first
-
 ## Maintenance

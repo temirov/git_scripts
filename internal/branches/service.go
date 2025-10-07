@@ -12,6 +12,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/temirov/gix/internal/execshell"
+	"github.com/temirov/gix/internal/repos/shared"
 )
 
 const (
@@ -40,6 +41,8 @@ const (
 	logMessageSkippingLocalBranchDryRunConstant  = "Skipping local branch deletion (dry run)"
 	logMessageRemoteDeletionFailedConstant       = "Remote branch deletion failed"
 	logMessageLocalDeletionFailedConstant        = "Local branch deletion failed"
+	logMessageDeletionSkippedByUserConstant      = "Skipping branch deletion (user declined)"
+	logMessageDeletionPromptFailedConstant       = "Branch deletion confirmation failed"
 	logFieldBranchNameConstant                   = "branch"
 	logFieldRemoteNameConstant                   = "remote"
 	logFieldDryRunConstant                       = "dry_run"
@@ -53,6 +56,7 @@ const (
 	remoteNameRequiredMessageConstant            = "remote name must be provided"
 	limitPositiveRequirementMessageConstant      = "pull request limit must be greater than zero"
 	executorNotConfiguredMessageConstant         = "command executor not configured"
+	branchDeletionPromptTemplateConstant         = "Delete pull request branch '%s' from remote '%s' and the local repository? [y/N] "
 )
 
 // CommandExecutor coordinates git and GitHub CLI invocations required for cleanup.
@@ -67,12 +71,14 @@ type CleanupOptions struct {
 	PullRequestLimit int
 	DryRun           bool
 	WorkingDirectory string
+	AssumeYes        bool
 }
 
 // Service orchestrates removal of remote and local branches tied to closed pull requests.
 type Service struct {
 	logger   *zap.Logger
 	executor CommandExecutor
+	prompter shared.ConfirmationPrompter
 }
 
 var (
@@ -82,7 +88,7 @@ var (
 )
 
 // NewService constructs a Service instance.
-func NewService(logger *zap.Logger, executor CommandExecutor) (*Service, error) {
+func NewService(logger *zap.Logger, executor CommandExecutor, prompter shared.ConfirmationPrompter) (*Service, error) {
 	if executor == nil {
 		return nil, errExecutorNotConfigured
 	}
@@ -91,7 +97,7 @@ func NewService(logger *zap.Logger, executor CommandExecutor) (*Service, error) 
 		logger = zap.NewNop()
 	}
 
-	return &Service{logger: logger, executor: executor}, nil
+	return &Service{logger: logger, executor: executor, prompter: prompter}, nil
 }
 
 // Cleanup removes stale branches based on closed pull requests.
@@ -115,7 +121,8 @@ func (service *Service) Cleanup(executionContext context.Context, options Cleanu
 		return fmt.Errorf(pullRequestListErrorTemplateConstant, pullRequestsError)
 	}
 
-	service.processBranches(executionContext, trimmedRemoteName, remoteBranches, closedBranches, options)
+	confirmation := newBranchDeletionConfirmation(service.prompter, options.AssumeYes)
+	service.processBranches(executionContext, trimmedRemoteName, remoteBranches, closedBranches, confirmation, options)
 
 	return nil
 }
@@ -179,7 +186,7 @@ func (service *Service) fetchClosedPullRequestBranches(executionContext context.
 	return pullRequestBranches, nil
 }
 
-func (service *Service) processBranches(executionContext context.Context, remoteName string, remoteBranches map[string]struct{}, pullRequestBranches []string, options CleanupOptions) {
+func (service *Service) processBranches(executionContext context.Context, remoteName string, remoteBranches map[string]struct{}, pullRequestBranches []string, confirmation *branchDeletionConfirmation, options CleanupOptions) {
 	processedBranches := make(map[string]struct{})
 	for branchIndex := range pullRequestBranches {
 		branchName := strings.TrimSpace(pullRequestBranches[branchIndex])
@@ -193,7 +200,7 @@ func (service *Service) processBranches(executionContext context.Context, remote
 		processedBranches[branchName] = struct{}{}
 
 		if _, existsInRemote := remoteBranches[branchName]; existsInRemote {
-			service.deleteRemoteAndLocalBranch(executionContext, remoteName, branchName, options)
+			service.deleteRemoteAndLocalBranch(executionContext, remoteName, branchName, confirmation, options)
 			continue
 		}
 
@@ -205,7 +212,7 @@ func (service *Service) processBranches(executionContext context.Context, remote
 	}
 }
 
-func (service *Service) deleteRemoteAndLocalBranch(executionContext context.Context, remoteName string, branchName string, options CleanupOptions) {
+func (service *Service) deleteRemoteAndLocalBranch(executionContext context.Context, remoteName string, branchName string, confirmation *branchDeletionConfirmation, options CleanupOptions) {
 	baseFields := []zap.Field{
 		zap.String(logFieldBranchNameConstant, branchName),
 		zap.String(logFieldRemoteNameConstant, remoteName),
@@ -220,6 +227,20 @@ func (service *Service) deleteRemoteAndLocalBranch(executionContext context.Cont
 			append(baseFields, zap.Bool(logFieldDryRunConstant, true))...,
 		)
 		return
+	}
+
+	if confirmation != nil {
+		allowed, confirmationError := confirmation.Confirm(branchName, remoteName)
+		if confirmationError != nil {
+			service.logger.Warn(logMessageDeletionPromptFailedConstant,
+				append(baseFields, zap.Error(confirmationError))...,
+			)
+			return
+		}
+		if !allowed {
+			service.logger.Info(logMessageDeletionSkippedByUserConstant, baseFields...)
+			return
+		}
 	}
 
 	service.logger.Info(logMessageDeletingRemoteBranchConstant, baseFields...)
@@ -301,4 +322,30 @@ func decodePullRequestBranches(standardOutput string) ([]string, error) {
 		branches = append(branches, payload[payloadIndex].HeadRefName)
 	}
 	return branches, nil
+}
+
+type branchDeletionConfirmation struct {
+	prompter   shared.ConfirmationPrompter
+	assumeYes  bool
+	confirmAll bool
+}
+
+func newBranchDeletionConfirmation(prompter shared.ConfirmationPrompter, assumeYes bool) *branchDeletionConfirmation {
+	return &branchDeletionConfirmation{prompter: prompter, assumeYes: assumeYes}
+}
+
+func (confirmation *branchDeletionConfirmation) Confirm(branchName string, remoteName string) (bool, error) {
+	if confirmation == nil || confirmation.assumeYes || confirmation.confirmAll || confirmation.prompter == nil {
+		return true, nil
+	}
+
+	prompt := fmt.Sprintf(branchDeletionPromptTemplateConstant, branchName, remoteName)
+	result, promptError := confirmation.prompter.Confirm(prompt)
+	if promptError != nil {
+		return false, promptError
+	}
+	if result.ApplyToAll {
+		confirmation.confirmAll = true
+	}
+	return result.Confirmed, nil
 }

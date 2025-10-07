@@ -15,6 +15,7 @@ import (
 
 	branches "github.com/temirov/gix/internal/branches"
 	"github.com/temirov/gix/internal/execshell"
+	"github.com/temirov/gix/internal/repos/shared"
 	flagutils "github.com/temirov/gix/internal/utils/flags"
 	rootutils "github.com/temirov/gix/internal/utils/roots"
 )
@@ -44,6 +45,29 @@ const (
 	invalidLimitArgumentValueConstant    = "0"
 	whitespaceRemoteArgumentConstant     = "   "
 )
+
+type stubConfirmationPrompter struct {
+	responses       []shared.ConfirmationResult
+	errors          []error
+	prompts         []string
+	defaultResponse shared.ConfirmationResult
+	defaultError    error
+	index           int
+}
+
+func (prompter *stubConfirmationPrompter) Confirm(prompt string) (shared.ConfirmationResult, error) {
+	prompter.prompts = append(prompter.prompts, prompt)
+	result := prompter.defaultResponse
+	if prompter.index < len(prompter.responses) {
+		result = prompter.responses[prompter.index]
+	}
+	err := prompter.defaultError
+	if prompter.index < len(prompter.errors) {
+		err = prompter.errors[prompter.index]
+	}
+	prompter.index++
+	return result, err
+}
 
 type fakeRepositoryDiscoverer struct {
 	repositories   []string
@@ -87,6 +111,8 @@ func TestCommandRunScenarios(testInstance *testing.T) {
 		expectedRepositories        []string
 		expectedWarningRepositories []string
 		verify                      func(*testing.T, *fakeCommandExecutor, []observer.LoggedEntry)
+		prompter                    *stubConfirmationPrompter
+		expectedPrompts             []string
 	}{
 		{
 			name: "processes_multiple_repositories",
@@ -136,6 +162,40 @@ func TestCommandRunScenarios(testInstance *testing.T) {
 					require.NotEqual(t, gitPushSubcommandConstant, executedCommand.arguments[0])
 					require.NotEqual(t, gitBranchSubcommandConstant, executedCommand.arguments[0])
 				}
+			},
+		},
+		{
+			name: "user_declines_branch_deletion",
+			arguments: []string{
+				commandRemoteFlagConstant,
+				testRemoteNameConstant,
+				commandLimitFlagConstant,
+				commandLimitValueConstant,
+				commandRootFlagConstant,
+				defaultRootArgumentConstant,
+			},
+			discoveredRepositories: []string{repositoryOnePathConstant},
+			expectedRoots:          []string{defaultRootArgumentConstant},
+			setup: func(t *testing.T, executor *fakeCommandExecutor) {
+				registerResponse(executor, gitCommandLabelConstant, gitListArguments, execshell.ExecutionResult{StandardOutput: remoteOutput, ExitCode: 0}, nil)
+				registerResponse(executor, githubCommandLabelConstant, githubListArguments, execshell.ExecutionResult{StandardOutput: pullRequestJSON, ExitCode: 0}, nil)
+			},
+			expectedRepositories:        []string{repositoryOnePathConstant},
+			expectedWarningRepositories: nil,
+			prompter:                    &stubConfirmationPrompter{defaultResponse: shared.ConfirmationResult{Confirmed: false}},
+			expectedPrompts:             []string{fmt.Sprintf("Delete pull request branch '%s' from remote '%s' and the local repository? [y/N] ", cleanupBranchNameConstant, testRemoteNameConstant)},
+			verify: func(t *testing.T, executor *fakeCommandExecutor, logs []observer.LoggedEntry) {
+				for _, executedCommand := range executor.executedCommands {
+					require.NotEqual(t, gitPushSubcommandConstant, executedCommand.arguments[0])
+					require.NotEqual(t, gitBranchSubcommandConstant, executedCommand.arguments[0])
+				}
+				deletionLogged := false
+				for _, entry := range logs {
+					if entry.Message == "Skipping branch deletion (user declined)" {
+						deletionLogged = true
+					}
+				}
+				require.True(t, deletionLogged)
 			},
 		},
 		{
@@ -197,10 +257,16 @@ func TestCommandRunScenarios(testInstance *testing.T) {
 			logCore, observedLogs := observer.New(zap.DebugLevel)
 			logger := zap.New(logCore)
 
+			confirmationPrompter := testCase.prompter
+			if confirmationPrompter == nil {
+				confirmationPrompter = &stubConfirmationPrompter{defaultResponse: shared.ConfirmationResult{Confirmed: true}}
+			}
+
 			builder := branches.CommandBuilder{
 				LoggerProvider:       func() *zap.Logger { return logger },
 				Executor:             fakeExecutorInstance,
 				RepositoryDiscoverer: fakeDiscoverer,
+				PrompterFactory:      func(*cobra.Command) shared.ConfirmationPrompter { return confirmationPrompter },
 			}
 
 			command, buildError := builder.Build()
@@ -222,6 +288,10 @@ func TestCommandRunScenarios(testInstance *testing.T) {
 				verifyWarnings(subTest, observedLogs.All(), testCase.expectedWarningRepositories)
 			} else {
 				verifyWarnings(subTest, observedLogs.All(), []string{})
+			}
+
+			if testCase.expectedPrompts != nil {
+				require.Equal(subTest, testCase.expectedPrompts, confirmationPrompter.prompts)
 			}
 
 			if testCase.verify != nil {
@@ -418,6 +488,9 @@ func TestCommandConfigurationPrecedence(testInstance *testing.T) {
 				LoggerProvider:       func() *zap.Logger { return zap.NewNop() },
 				Executor:             fakeExecutorInstance,
 				RepositoryDiscoverer: fakeDiscoverer,
+				PrompterFactory: func(*cobra.Command) shared.ConfirmationPrompter {
+					return &stubConfirmationPrompter{defaultResponse: shared.ConfirmationResult{Confirmed: true}}
+				},
 			}
 
 			if testCase.useConfiguration {

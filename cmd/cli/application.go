@@ -23,6 +23,8 @@ import (
 	"github.com/temirov/gix/internal/migrate"
 	"github.com/temirov/gix/internal/packages"
 	reposdeps "github.com/temirov/gix/internal/repos/dependencies"
+	"github.com/temirov/gix/internal/repos/prompt"
+	"github.com/temirov/gix/internal/repos/shared"
 	"github.com/temirov/gix/internal/utils"
 	flagutils "github.com/temirov/gix/internal/utils/flags"
 	"github.com/temirov/gix/internal/version"
@@ -400,6 +402,12 @@ func NewApplication() *Application {
 		},
 		HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
 		ConfigurationProvider:        application.branchCleanupConfiguration,
+		PrompterFactory: func(command *cobra.Command) shared.ConfirmationPrompter {
+			if command == nil {
+				return nil
+			}
+			return prompt.NewIOConfirmationPrompter(command.InOrStdin(), command.OutOrStdout())
+		},
 	}
 	branchCleanupCommand, branchCleanupBuildError := branchCleanupBuilder.Build()
 	if branchCleanupBuildError == nil {
@@ -739,6 +747,9 @@ func (application *Application) branchCleanupConfiguration() branches.CommandCon
 	options, optionsExist := application.lookupOperationOptions(branchCleanupOperationNameConstant)
 	if !optionsExist || !optionExists(options, dryRunOptionKeyConstant) {
 		configuration.DryRun = application.configuration.Common.DryRun
+	}
+	if !optionsExist || !optionExists(options, assumeYesOptionKeyConstant) {
+		configuration.AssumeYes = application.configuration.Common.AssumeYes
 	}
 
 	return configuration

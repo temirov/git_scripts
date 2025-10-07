@@ -11,11 +11,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
 	"github.com/temirov/gix/internal/branches"
 	"github.com/temirov/gix/internal/execshell"
+	"github.com/temirov/gix/internal/repos/shared"
 	flagutils "github.com/temirov/gix/internal/utils/flags"
 )
 
@@ -48,6 +50,12 @@ const (
 	integrationExpectationMessageTemplateConstant = "expected branch state: %s"
 	prCleanupSubtestNameTemplateConstant          = "%d_%s"
 )
+
+type automaticConfirmationPrompter struct{}
+
+func (automaticConfirmationPrompter) Confirm(string) (shared.ConfirmationResult, error) {
+	return shared.ConfirmationResult{Confirmed: true}, nil
+}
 
 func TestPullRequestCleanupIntegration(testInstance *testing.T) {
 	temporaryRoot := testInstance.TempDir()
@@ -102,6 +110,9 @@ func TestPullRequestCleanupIntegration(testInstance *testing.T) {
 			return zap.NewNop()
 		},
 		Executor: shellExecutor,
+		PrompterFactory: func(*cobra.Command) shared.ConfirmationPrompter {
+			return automaticConfirmationPrompter{}
+		},
 	}
 
 	cleanupCommand, buildError := cleanupCommandBuilder.Build()
