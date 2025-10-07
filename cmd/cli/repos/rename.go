@@ -1,7 +1,10 @@
 package repos
 
 import (
+	"context"
 	"errors"
+	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -14,13 +17,15 @@ import (
 )
 
 const (
-	renameUseConstant             = "repo-folders-rename"
-	renameShortDescription        = "Rename repository directories to match canonical GitHub names"
-	renameLongDescription         = "repo-folders-rename normalizes repository directory names to match canonical GitHub repositories."
-	renameRequireCleanFlagName    = "require-clean"
-	renameRequireCleanDescription = "Require clean worktrees before applying renames"
-	renameIncludeOwnerFlagName    = "owner"
-	renameIncludeOwnerDescription = "Include repository owner in the target directory path"
+	renameUseConstant                 = "repo-folders-rename"
+	renameShortDescription            = "Rename repository directories to match canonical GitHub names"
+	renameLongDescription             = "repo-folders-rename normalizes repository directory names to match canonical GitHub repositories."
+	renameRequireCleanFlagName        = "require-clean"
+	renameRequireCleanDescription     = "Require clean worktrees before applying renames"
+	renameIncludeOwnerFlagName        = "owner"
+	renameIncludeOwnerDescription     = "Include repository owner in the target directory path"
+	pathSeparatorForwardSlashConstant = "/"
+	parentDirectoryTokenConstant      = ".."
 )
 
 // RenameCommandBuilder assembles the repo-folders-rename command.
@@ -136,26 +141,15 @@ func (builder *RenameCommandBuilder) run(command *cobra.Command, arguments []str
 	}
 
 	directoryPlanner := rename.NewDirectoryPlanner()
-	for _, inspection := range inspections {
-		plan := directoryPlanner.Plan(includeOwner, inspection.FinalOwnerRepo, inspection.DesiredFolderName)
-		if plan.IsNoop(inspection.Path, inspection.FolderName) {
-			continue
+	renameRequests := prepareRenameRequests(inspections, directoryPlanner, includeOwner, dryRun, requireClean)
+	relaxedRepositories := determineCleanRelaxations(command.Context(), gitManager, renameRequests, requireClean)
+	for _, request := range renameRequests {
+		options := request.options
+		if relaxedRepositories[options.RepositoryPath] {
+			options.RequireCleanWorktree = false
 		}
-		if len(strings.TrimSpace(plan.FolderName)) == 0 {
-			continue
-		}
-
-		renameOptions := rename.Options{
-			RepositoryPath:          inspection.Path,
-			DesiredFolderName:       plan.FolderName,
-			DryRun:                  dryRun,
-			RequireCleanWorktree:    requireClean,
-			AssumeYes:               trackingPrompter.AssumeYes(),
-			IncludeOwner:            plan.IncludeOwner,
-			EnsureParentDirectories: plan.IncludeOwner,
-		}
-
-		rename.Execute(command.Context(), renameDependencies, renameOptions)
+		options.AssumeYes = trackingPrompter.AssumeYes()
+		rename.Execute(command.Context(), renameDependencies, options)
 	}
 
 	return nil
@@ -169,4 +163,116 @@ func (builder *RenameCommandBuilder) resolveConfiguration() RenameConfiguration 
 
 	provided := builder.ConfigurationProvider()
 	return provided.sanitize()
+}
+
+type renameRequest struct {
+	options   rename.Options
+	pathDepth int
+}
+
+func prepareRenameRequests(
+	inspections []audit.RepositoryInspection,
+	directoryPlanner rename.DirectoryPlanner,
+	includeOwner bool,
+	dryRun bool,
+	requireClean bool,
+) []renameRequest {
+	renameRequests := make([]renameRequest, 0, len(inspections))
+
+	for _, inspection := range inspections {
+		plan := directoryPlanner.Plan(includeOwner, inspection.FinalOwnerRepo, inspection.DesiredFolderName)
+		if plan.IsNoop(inspection.Path, inspection.FolderName) {
+			continue
+		}
+		trimmedFolderName := strings.TrimSpace(plan.FolderName)
+		if len(trimmedFolderName) == 0 {
+			continue
+		}
+
+		request := renameRequest{
+			options: rename.Options{
+				RepositoryPath:          inspection.Path,
+				DesiredFolderName:       plan.FolderName,
+				DryRun:                  dryRun,
+				RequireCleanWorktree:    requireClean,
+				IncludeOwner:            plan.IncludeOwner,
+				EnsureParentDirectories: plan.IncludeOwner,
+			},
+			pathDepth: calculatePathDepth(inspection.Path),
+		}
+
+		renameRequests = append(renameRequests, request)
+	}
+
+	sort.SliceStable(renameRequests, func(firstIndex int, secondIndex int) bool {
+		firstRequest := renameRequests[firstIndex]
+		secondRequest := renameRequests[secondIndex]
+		if firstRequest.pathDepth == secondRequest.pathDepth {
+			return firstRequest.options.RepositoryPath < secondRequest.options.RepositoryPath
+		}
+		return firstRequest.pathDepth > secondRequest.pathDepth
+	})
+
+	return renameRequests
+}
+
+func calculatePathDepth(path string) int {
+	cleanedPath := filepath.Clean(path)
+	if len(cleanedPath) == 0 || cleanedPath == "." {
+		return 0
+	}
+	normalizedPath := filepath.ToSlash(cleanedPath)
+	return strings.Count(normalizedPath, pathSeparatorForwardSlashConstant)
+}
+
+func determineCleanRelaxations(
+	executionContext context.Context,
+	gitManager shared.GitRepositoryManager,
+	renameRequests []renameRequest,
+	requireClean bool,
+) map[string]bool {
+	relaxed := make(map[string]bool)
+	if !requireClean || gitManager == nil {
+		return relaxed
+	}
+
+	ancestorRepositories := identifyAncestorRepositories(renameRequests)
+	for repositoryPath := range ancestorRepositories {
+		clean, cleanError := gitManager.CheckCleanWorktree(executionContext, repositoryPath)
+		if cleanError != nil {
+			continue
+		}
+		if clean {
+			relaxed[repositoryPath] = true
+		}
+	}
+	return relaxed
+}
+
+func identifyAncestorRepositories(renameRequests []renameRequest) map[string]struct{} {
+	ancestors := make(map[string]struct{})
+	for firstIndex := range renameRequests {
+		firstPath := renameRequests[firstIndex].options.RepositoryPath
+		for secondIndex := range renameRequests {
+			if firstIndex == secondIndex {
+				continue
+			}
+			secondPath := renameRequests[secondIndex].options.RepositoryPath
+			if isAncestorPath(firstPath, secondPath) {
+				ancestors[firstPath] = struct{}{}
+			}
+		}
+	}
+	return ancestors
+}
+
+func isAncestorPath(potentialAncestor string, potentialDescendant string) bool {
+	relativePath, relativeError := filepath.Rel(potentialAncestor, potentialDescendant)
+	if relativeError != nil {
+		return false
+	}
+	if relativePath == "." {
+		return false
+	}
+	return !strings.HasPrefix(relativePath, parentDirectoryTokenConstant)
 }
