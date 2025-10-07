@@ -43,6 +43,14 @@ const (
 	reposIntegrationRenameCaseName              = "rename_plan"
 	reposIntegrationRenameOwnerPlanCaseName     = "rename_plan_with_owner"
 	reposIntegrationRenameOwnerExecuteCaseName  = "rename_execute_with_owner"
+	reposIntegrationNestedRenameCaseName        = "rename_nested_repositories"
+	reposIntegrationNestedToolsDirectoryName    = "tools"
+	reposIntegrationNestedRepositoryName        = "svg_tools"
+	reposIntegrationNestedOriginURL             = "https://github.com/temirov/svg_tools.git"
+	reposIntegrationGitUserName                 = "Integration Test"
+	reposIntegrationGitUserEmail                = "integration@example.com"
+	reposIntegrationNestedIgnoreEntry           = "tools/"
+	reposIntegrationNestedIgnoreCommitMessage   = "Add nested ignore"
 	reposIntegrationRemoteCaseName              = "update_canonical_remote"
 	reposIntegrationRemoteConfigCaseName        = "update_canonical_remote_config"
 	reposIntegrationRemoteTildeCaseName         = "update_canonical_remote_tilde_flag"
@@ -160,6 +168,68 @@ func TestReposCommandIntegration(testInstance *testing.T) {
 			prepare: func(testInstance *testing.T, repositoryPath string, arguments *[]string) {
 				ownerDirectory := filepath.Join(filepath.Dir(repositoryPath), reposIntegrationOwnerDirectoryName)
 				require.NoError(testInstance, os.MkdirAll(ownerDirectory, 0o755))
+			},
+		},
+		{
+			name: reposIntegrationNestedRenameCaseName,
+			setup: func(testInstance *testing.T) (string, string) {
+				repositoryPath, extendedPath := initializeRepositoryWithStub(testInstance)
+				configNameCommand := exec.Command(reposIntegrationGitExecutable, "-C", repositoryPath, "config", "user.name", reposIntegrationGitUserName)
+				configNameCommand.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+				require.NoError(testInstance, configNameCommand.Run())
+				configEmailCommand := exec.Command(reposIntegrationGitExecutable, "-C", repositoryPath, "config", "user.email", reposIntegrationGitUserEmail)
+				configEmailCommand.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+				require.NoError(testInstance, configEmailCommand.Run())
+				ignorePath := filepath.Join(repositoryPath, ".gitignore")
+				require.NoError(testInstance, os.WriteFile(ignorePath, []byte(reposIntegrationNestedIgnoreEntry+"\n"), 0o644))
+				addIgnoreCommand := exec.Command(reposIntegrationGitExecutable, "-C", repositoryPath, "add", ".gitignore")
+				addIgnoreCommand.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+				require.NoError(testInstance, addIgnoreCommand.Run())
+				commitIgnoreCommand := exec.Command(reposIntegrationGitExecutable, "-C", repositoryPath, "commit", "-m", reposIntegrationNestedIgnoreCommitMessage)
+				commitIgnoreCommand.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+				require.NoError(testInstance, commitIgnoreCommand.Run())
+				nestedParentPath := filepath.Join(repositoryPath, reposIntegrationNestedToolsDirectoryName)
+				require.NoError(testInstance, os.MkdirAll(nestedParentPath, 0o755))
+				nestedRepositoryPath := filepath.Join(nestedParentPath, reposIntegrationNestedRepositoryName)
+				initCommand := exec.Command(reposIntegrationGitExecutable, reposIntegrationInitFlag, reposIntegrationInitialBranchFlag, nestedRepositoryPath)
+				initCommand.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+				require.NoError(testInstance, initCommand.Run())
+				remoteCommand := exec.Command(reposIntegrationGitExecutable, "-C", nestedRepositoryPath, reposIntegrationRemoteSubcommand, reposIntegrationAddSubcommand, reposIntegrationOriginRemoteName, reposIntegrationNestedOriginURL)
+				remoteCommand.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+				require.NoError(testInstance, remoteCommand.Run())
+				return repositoryPath, extendedPath
+			},
+			arguments: []string{
+				reposIntegrationRunSubcommand,
+				reposIntegrationModulePathConstant,
+				reposIntegrationLogLevelFlag,
+				reposIntegrationErrorLevel,
+				reposIntegrationRenameCommand,
+				reposIntegrationYesFlag,
+				reposIntegrationOwnerFlag,
+			},
+			expectedOutput: func(repositoryPath string) string {
+				absolutePath, absError := filepath.Abs(repositoryPath)
+				require.NoError(testInstance, absError)
+				nestedOriginalPath := filepath.Join(absolutePath, reposIntegrationNestedToolsDirectoryName, reposIntegrationNestedRepositoryName)
+				nestedTargetPath := filepath.Join(absolutePath, reposIntegrationNestedToolsDirectoryName, reposIntegrationOwnerDirectoryName, reposIntegrationRepositoryName)
+				parentTargetPath := filepath.Join(filepath.Dir(absolutePath), reposIntegrationOwnerDirectoryName, reposIntegrationRepositoryName)
+				return fmt.Sprintf("Renamed %s → %s\nRenamed %s → %s\n", nestedOriginalPath, nestedTargetPath, absolutePath, parentTargetPath)
+			},
+			verify: func(testInstance *testing.T, repositoryPath string) {
+				absolutePath, absError := filepath.Abs(repositoryPath)
+				require.NoError(testInstance, absError)
+				parentTargetPath := filepath.Join(filepath.Dir(absolutePath), reposIntegrationOwnerDirectoryName, reposIntegrationRepositoryName)
+				_, parentTargetError := os.Stat(parentTargetPath)
+				require.NoError(testInstance, parentTargetError)
+				_, originalParentError := os.Stat(repositoryPath)
+				require.Error(testInstance, originalParentError)
+				nestedTargetPath := filepath.Join(parentTargetPath, reposIntegrationNestedToolsDirectoryName, reposIntegrationOwnerDirectoryName, reposIntegrationRepositoryName)
+				_, nestedTargetError := os.Stat(nestedTargetPath)
+				require.NoError(testInstance, nestedTargetError)
+				nestedOriginalPath := filepath.Join(absolutePath, reposIntegrationNestedToolsDirectoryName, reposIntegrationNestedRepositoryName)
+				_, nestedOriginalError := os.Stat(nestedOriginalPath)
+				require.Error(testInstance, nestedOriginalError)
 			},
 		},
 		{
