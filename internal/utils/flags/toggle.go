@@ -9,32 +9,31 @@ import (
 )
 
 const (
-	toggleTypeName            = "toggle"
-	toggleTrueCanonicalValue  = "true"
-	toggleFalseCanonicalValue = "false"
-	toggleYesLiteral          = "yes"
-	toggleNoLiteral           = "no"
-	toggleOnLiteral           = "on"
-	toggleOffLiteral          = "off"
-	toggleOneLiteral          = "1"
-	toggleZeroLiteral         = "0"
-	toggleTLiteral            = "t"
-	toggleFLiteral            = "f"
-	toggleYLiteral            = "y"
-	toggleNLiteral            = "n"
-	toggleImplicitTrueLiteral = "__toggle_true__"
-	toggleParseErrorTemplate  = "invalid toggle value %q"
+	toggleTrueCanonicalValue               = "true"
+	toggleFalseCanonicalValue              = "false"
+	toggleYesLiteral                       = "yes"
+	toggleNoLiteral                        = "no"
+	toggleOnLiteral                        = "on"
+	toggleOffLiteral                       = "off"
+	toggleOneLiteral                       = "1"
+	toggleZeroLiteral                      = "0"
+	toggleTLiteral                         = "t"
+	toggleFLiteral                         = "f"
+	toggleYLiteral                         = "y"
+	toggleNLiteral                         = "n"
+	toggleParseErrorTemplate               = "invalid toggle value %q"
+	toggleArgumentTruePlaceholderConstant  = "<YES|no>"
+	toggleArgumentFalsePlaceholderConstant = "<yes|NO>"
 )
 
 var (
 	trueLiteralSet = map[string]struct{}{
-		toggleTrueCanonicalValue:  {},
-		toggleYesLiteral:          {},
-		toggleOnLiteral:           {},
-		toggleOneLiteral:          {},
-		toggleTLiteral:            {},
-		toggleYLiteral:            {},
-		toggleImplicitTrueLiteral: {},
+		toggleTrueCanonicalValue: {},
+		toggleYesLiteral:         {},
+		toggleOnLiteral:          {},
+		toggleOneLiteral:         {},
+		toggleTLiteral:           {},
+		toggleYLiteral:           {},
 	}
 	falseLiteralSet = map[string]struct{}{
 		toggleFalseCanonicalValue: {},
@@ -70,9 +69,22 @@ func AddToggleFlag(flagSet *pflag.FlagSet, target *bool, name string, shorthand 
 	if flag == nil {
 		return
 	}
-	flag.NoOptDefVal = toggleImplicitTrueLiteral
+	flag.NoOptDefVal = toggleTrueCanonicalValue
+	flag.Usage = formatToggleUsage(usage, defaultValue)
 
 	registerToggleFlag(name, shorthand)
+}
+
+func formatToggleUsage(description string, defaultValue bool) string {
+	placeholder := toggleArgumentFalsePlaceholderConstant
+	if defaultValue {
+		placeholder = toggleArgumentTruePlaceholderConstant
+	}
+	trimmed := strings.TrimSpace(description)
+	if len(trimmed) == 0 {
+		return fmt.Sprintf("`%s`", placeholder)
+	}
+	return fmt.Sprintf("`%s` %s", placeholder, trimmed)
 }
 
 // NormalizeToggleArguments rewrites toggle flag arguments so "--flag value" becomes "--flag=value" before parsing.
@@ -146,7 +158,7 @@ func (value *toggleFlagValue) String() string {
 }
 
 func (value *toggleFlagValue) Type() string {
-	return toggleTypeName
+	return "bool"
 }
 
 func parseToggleValue(rawValue string) (bool, error) {

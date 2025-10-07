@@ -123,3 +123,13 @@ func TestInitializeConfigurationAttachesBranchContext(t *testing.T) {
 	require.True(t, executionFlags.AssumeYes)
 	require.Equal(t, "custom-remote", executionFlags.Remote)
 }
+
+func TestRootCommandToggleHelpFormatting(t *testing.T) {
+	application := NewApplication()
+	usage := application.rootCommand.PersistentFlags().FlagUsages()
+
+	require.Contains(t, usage, "--dry-run <yes|NO>")
+	require.Contains(t, usage, "--yes <yes|NO>")
+	require.NotContains(t, usage, "__toggle_true__")
+	require.NotContains(t, usage, "toggle[")
+}
