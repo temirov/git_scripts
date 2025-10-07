@@ -38,6 +38,10 @@ operations:
     with:
       roots:
         - .
+  - operation: branch-refresh
+    with:
+      roots:
+        - .
   - operation: branch-migrate
     with:
       roots:

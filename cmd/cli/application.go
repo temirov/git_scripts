@@ -19,10 +19,15 @@ import (
 	workflowcmd "github.com/temirov/gix/cmd/cli/workflow"
 	"github.com/temirov/gix/internal/audit"
 	"github.com/temirov/gix/internal/branches"
+	branchrefresh "github.com/temirov/gix/internal/branches/refresh"
 	"github.com/temirov/gix/internal/migrate"
 	"github.com/temirov/gix/internal/packages"
+	reposdeps "github.com/temirov/gix/internal/repos/dependencies"
+	"github.com/temirov/gix/internal/repos/prompt"
+	"github.com/temirov/gix/internal/repos/shared"
 	"github.com/temirov/gix/internal/utils"
 	flagutils "github.com/temirov/gix/internal/utils/flags"
+	"github.com/temirov/gix/internal/version"
 )
 
 const (
@@ -91,7 +96,11 @@ const (
 	reposRemotesOperationNameConstant                                = "repo-remote-update"
 	reposProtocolOperationNameConstant                               = "repo-protocol-convert"
 	workflowCommandOperationNameConstant                             = "workflow"
+	branchRefreshOperationNameConstant                               = "branch-refresh"
 	branchMigrateOperationNameConstant                               = "branch-migrate"
+	versionFlagNameConstant                                          = "version"
+	versionFlagUsageConstant                                         = "Print the application version and exit"
+	versionOutputTemplateConstant                                    = "gix version: %s\n"
 	operationDecodeErrorMessageConstant                              = "unable to decode operation defaults"
 	operationNameLogFieldConstant                                    = "operation"
 	operationErrorLogFieldConstant                                   = "error"
@@ -114,6 +123,7 @@ var commandOperationRequirements = map[string][]string{
 	reposRemotesOperationNameConstant:    {reposRemotesOperationNameConstant},
 	reposProtocolOperationNameConstant:   {reposProtocolOperationNameConstant},
 	workflowCommandOperationNameConstant: {workflowCommandOperationNameConstant},
+	branchRefreshOperationNameConstant:   {branchRefreshOperationNameConstant},
 	branchMigrateOperationNameConstant:   {branchMigrateOperationNameConstant},
 }
 
@@ -271,6 +281,9 @@ type Application struct {
 	branchFlagValues                  *flagutils.BranchFlagValues
 	configurationInitializationScope  string
 	configurationInitializationForced bool
+	versionFlag                       bool
+	versionResolver                   func(context.Context) string
+	exitFunction                      func(int)
 }
 
 // NewApplication assembles a fully wired CLI application instance.
@@ -281,6 +294,8 @@ func NewApplication() *Application {
 		consoleLogger:          zap.NewNop(),
 		commandContextAccessor: utils.NewCommandContextAccessor(),
 	}
+	application.versionResolver = application.resolveVersion
+	application.exitFunction = os.Exit
 
 	application.configurationLoader = utils.NewConfigurationLoader(
 		configurationNameConstant,
@@ -299,7 +314,24 @@ func NewApplication() *Application {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		PersistentPreRunE: func(command *cobra.Command, arguments []string) error {
-			return application.initializeConfiguration(command)
+			if initializationError := application.initializeConfiguration(command); initializationError != nil {
+				return initializationError
+			}
+
+			versionRequested := application.versionFlag
+			if command != nil {
+				if flagValue, flagChanged, flagError := flagutils.BoolFlag(command, versionFlagNameConstant); flagError == nil && flagChanged {
+					versionRequested = flagValue
+				}
+			}
+
+			if versionRequested {
+				versionString := application.versionResolver(command.Context())
+				fmt.Printf(versionOutputTemplateConstant, versionString)
+				application.exitFunction(0)
+			}
+
+			return nil
 		},
 		RunE: func(command *cobra.Command, arguments []string) error {
 			return application.runRootCommand(command, arguments)
@@ -350,6 +382,8 @@ func NewApplication() *Application {
 		flagutils.BranchFlagDefinition{Name: branchFlagNameConstant, Usage: branchFlagUsageConstant, Enabled: true},
 	)
 
+	cobraCommand.PersistentFlags().BoolVar(&application.versionFlag, versionFlagNameConstant, false, versionFlagUsageConstant)
+
 	auditBuilder := audit.CommandBuilder{
 		LoggerProvider: func() *zap.Logger {
 			return application.logger
@@ -368,10 +402,28 @@ func NewApplication() *Application {
 		},
 		HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
 		ConfigurationProvider:        application.branchCleanupConfiguration,
+		PrompterFactory: func(command *cobra.Command) shared.ConfirmationPrompter {
+			if command == nil {
+				return nil
+			}
+			return prompt.NewIOConfirmationPrompter(command.InOrStdin(), command.OutOrStdout())
+		},
 	}
 	branchCleanupCommand, branchCleanupBuildError := branchCleanupBuilder.Build()
 	if branchCleanupBuildError == nil {
 		cobraCommand.AddCommand(branchCleanupCommand)
+	}
+
+	branchRefreshBuilder := branchrefresh.CommandBuilder{
+		LoggerProvider: func() *zap.Logger {
+			return application.logger
+		},
+		HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
+		ConfigurationProvider:        application.branchRefreshConfiguration,
+	}
+	branchRefreshCommand, branchRefreshBuildError := branchRefreshBuilder.Build()
+	if branchRefreshBuildError == nil {
+		cobraCommand.AddCommand(branchRefreshCommand)
 	}
 
 	branchMigrationBuilder := migrate.CommandBuilder{
@@ -696,8 +748,32 @@ func (application *Application) branchCleanupConfiguration() branches.CommandCon
 	if !optionsExist || !optionExists(options, dryRunOptionKeyConstant) {
 		configuration.DryRun = application.configuration.Common.DryRun
 	}
+	if !optionsExist || !optionExists(options, assumeYesOptionKeyConstant) {
+		configuration.AssumeYes = application.configuration.Common.AssumeYes
+	}
 
 	return configuration
+}
+
+func (application *Application) branchRefreshConfiguration() branchrefresh.CommandConfiguration {
+	configuration := branchrefresh.DefaultCommandConfiguration()
+	application.decodeOperationConfiguration(branchRefreshOperationNameConstant, &configuration)
+	return configuration.Sanitize()
+}
+
+func (application *Application) resolveVersion(executionContext context.Context) string {
+	dependencies := version.Dependencies{}
+	gitExecutor, executorError := reposdeps.ResolveGitExecutor(nil, application.logger, application.humanReadableLoggingEnabled())
+	if executorError == nil {
+		dependencies.GitExecutor = gitExecutor
+	}
+
+	resolved := version.Detect(executionContext, dependencies)
+	trimmed := strings.TrimSpace(resolved)
+	if len(trimmed) == 0 {
+		return resolved
+	}
+	return trimmed
 }
 
 func (application *Application) reposRenameConfiguration() repos.RenameConfiguration {

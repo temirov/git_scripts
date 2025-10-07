@@ -57,6 +57,11 @@ operations:
       dry_run: false
       assume_yes: false
 
+  - operation: branch-refresh
+    with: &branch_refresh_defaults
+      roots:
+        - ~/Development
+
   - operation: branch-migrate
     with: &branch_migrate_defaults
       debug: false

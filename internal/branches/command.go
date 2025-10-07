@@ -11,6 +11,8 @@ import (
 
 	"github.com/temirov/gix/internal/execshell"
 	"github.com/temirov/gix/internal/repos/discovery"
+	"github.com/temirov/gix/internal/repos/prompt"
+	"github.com/temirov/gix/internal/repos/shared"
 	flagutils "github.com/temirov/gix/internal/utils/flags"
 	rootutils "github.com/temirov/gix/internal/utils/roots"
 )
@@ -47,6 +49,7 @@ type CommandBuilder struct {
 	RepositoryDiscoverer         RepositoryDiscoverer
 	HumanReadableLoggingProvider func() bool
 	ConfigurationProvider        func() CommandConfiguration
+	PrompterFactory              func(*cobra.Command) shared.ConfirmationPrompter
 }
 
 // Build constructs the repo-prs-purge command.
@@ -76,6 +79,8 @@ func (builder *CommandBuilder) run(command *cobra.Command, arguments []string) e
 		return executorError
 	}
 
+	prompter := builder.resolvePrompter(command)
+
 	repositoryDiscoverer := builder.resolveRepositoryDiscoverer()
 	repositories, discoveryError := repositoryDiscoverer.DiscoverRepositories(options.RepositoryRoots)
 	if discoveryError != nil {
@@ -86,7 +91,7 @@ func (builder *CommandBuilder) run(command *cobra.Command, arguments []string) e
 		return fmt.Errorf(repositoryDiscoveryErrorTemplateConstant, discoveryError)
 	}
 
-	service, serviceError := NewService(logger, executor)
+	service, serviceError := NewService(logger, executor, prompter)
 	if serviceError != nil {
 		return serviceError
 	}
@@ -163,10 +168,16 @@ func (builder *CommandBuilder) parseOptions(command *cobra.Command, arguments []
 		dryRunValue = executionFlags.DryRun
 	}
 
+	assumeYesValue := configuration.AssumeYes
+	if executionFlagsAvailable && executionFlags.AssumeYesSet {
+		assumeYesValue = executionFlags.AssumeYes
+	}
+
 	cleanupOptions := CleanupOptions{
 		RemoteName:       trimmedRemoteName,
 		PullRequestLimit: limitValue,
 		DryRun:           dryRunValue,
+		AssumeYes:        assumeYesValue,
 	}
 
 	repositoryRoots, rootsError := rootutils.Resolve(command, arguments, configuration.RepositoryRoots)
@@ -214,6 +225,20 @@ func (builder *CommandBuilder) resolveRepositoryDiscoverer() RepositoryDiscovere
 	}
 
 	return discovery.NewFilesystemRepositoryDiscoverer()
+}
+
+func (builder *CommandBuilder) resolvePrompter(command *cobra.Command) shared.ConfirmationPrompter {
+	if builder.PrompterFactory != nil {
+		if prompter := builder.PrompterFactory(command); prompter != nil {
+			return prompter
+		}
+	}
+
+	if command == nil {
+		return nil
+	}
+
+	return prompt.NewIOConfirmationPrompter(command.InOrStdin(), command.OutOrStdout())
 }
 
 func (builder *CommandBuilder) resolveConfiguration() CommandConfiguration {
