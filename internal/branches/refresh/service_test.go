@@ -3,6 +3,7 @@ package refresh
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -33,12 +34,24 @@ func (executor *stubGitExecutor) ExecuteGitHubCLI(_ context.Context, _ execshell
 }
 
 type stubRepositoryManager struct {
-	cleanState     bool
+	cleanStates    []bool
 	executionError error
 }
 
-func (manager stubRepositoryManager) CheckCleanWorktree(context.Context, string) (bool, error) {
-	return manager.cleanState, manager.executionError
+func (manager *stubRepositoryManager) CheckCleanWorktree(context.Context, string) (bool, error) {
+	if manager.executionError != nil {
+		return false, manager.executionError
+	}
+	if len(manager.cleanStates) == 0 {
+		return true, nil
+	}
+	state := manager.cleanStates[0]
+	if len(manager.cleanStates) == 1 {
+		manager.cleanStates = nil
+	} else {
+		manager.cleanStates = manager.cleanStates[1:]
+	}
+	return state, nil
 }
 
 func (stubRepositoryManager) GetCurrentBranch(context.Context, string) (string, error) {
@@ -61,7 +74,7 @@ func TestNewServiceValidatesDependencies(t *testing.T) {
 	}{
 		{
 			name:         "MissingGitExecutor",
-			dependencies: Dependencies{RepositoryManager: stubRepositoryManager{cleanState: true}},
+			dependencies: Dependencies{RepositoryManager: &stubRepositoryManager{cleanStates: []bool{true}}},
 			expectedErr:  ErrGitExecutorNotConfigured,
 		},
 		{
@@ -80,14 +93,14 @@ func TestNewServiceValidatesDependencies(t *testing.T) {
 		})
 	}
 
-	service, creationError := NewService(Dependencies{GitExecutor: &stubGitExecutor{}, RepositoryManager: stubRepositoryManager{cleanState: true}})
+	service, creationError := NewService(Dependencies{GitExecutor: &stubGitExecutor{}, RepositoryManager: &stubRepositoryManager{cleanStates: []bool{true}}})
 	require.NoError(t, creationError)
 	require.NotNil(t, service)
 }
 
 func TestRefreshValidatesInputs(t *testing.T) {
 	executor := &stubGitExecutor{}
-	service, creationError := NewService(Dependencies{GitExecutor: executor, RepositoryManager: stubRepositoryManager{cleanState: true}})
+	service, creationError := NewService(Dependencies{GitExecutor: executor, RepositoryManager: &stubRepositoryManager{cleanStates: []bool{true}}})
 	require.NoError(t, creationError)
 
 	_, err := service.Refresh(context.Background(), Options{BranchName: "main", RequireClean: true})
@@ -99,7 +112,7 @@ func TestRefreshValidatesInputs(t *testing.T) {
 
 func TestRefreshPropagatesCleanCheckError(t *testing.T) {
 	executor := &stubGitExecutor{}
-	repositoryManager := stubRepositoryManager{cleanState: false, executionError: errors.New("status failed")}
+	repositoryManager := &stubRepositoryManager{cleanStates: []bool{false}, executionError: errors.New("status failed")}
 	service, creationError := NewService(Dependencies{GitExecutor: executor, RepositoryManager: repositoryManager})
 	require.NoError(t, creationError)
 
@@ -109,7 +122,7 @@ func TestRefreshPropagatesCleanCheckError(t *testing.T) {
 
 func TestRefreshFailsWhenWorktreeDirty(t *testing.T) {
 	executor := &stubGitExecutor{}
-	repositoryManager := stubRepositoryManager{cleanState: false}
+	repositoryManager := &stubRepositoryManager{cleanStates: []bool{false}}
 	service, creationError := NewService(Dependencies{GitExecutor: executor, RepositoryManager: repositoryManager})
 	require.NoError(t, creationError)
 
@@ -119,7 +132,7 @@ func TestRefreshFailsWhenWorktreeDirty(t *testing.T) {
 
 func TestRefreshExecutesGitCommandsInOrder(t *testing.T) {
 	executor := &stubGitExecutor{}
-	repositoryManager := stubRepositoryManager{cleanState: true}
+	repositoryManager := &stubRepositoryManager{cleanStates: []bool{true}}
 	service, creationError := NewService(Dependencies{GitExecutor: executor, RepositoryManager: repositoryManager})
 	require.NoError(t, creationError)
 
@@ -164,7 +177,7 @@ func TestRefreshSurfacesGitFailures(t *testing.T) {
 		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			executor := &stubGitExecutor{invocationErrors: append([]error{}, testCase.errors...)}
-			repositoryManager := stubRepositoryManager{cleanState: true}
+			repositoryManager := &stubRepositoryManager{cleanStates: []bool{true}}
 			service, creationError := NewService(Dependencies{GitExecutor: executor, RepositoryManager: repositoryManager})
 			require.NoError(t, creationError)
 
@@ -173,4 +186,32 @@ func TestRefreshSurfacesGitFailures(t *testing.T) {
 			require.Contains(t, err.Error(), testError.Error())
 		})
 	}
+}
+
+func TestRefreshStashesDirtyWorktreeWhenRequested(t *testing.T) {
+	executor := &stubGitExecutor{}
+	repositoryManager := &stubRepositoryManager{cleanStates: []bool{false, true}}
+	service, creationError := NewService(Dependencies{GitExecutor: executor, RepositoryManager: repositoryManager})
+	require.NoError(t, creationError)
+
+	result, err := service.Refresh(context.Background(), Options{RepositoryPath: "/tmp/repo", BranchName: "feature", RequireClean: true, StashChanges: true})
+	require.NoError(t, err)
+	require.Equal(t, Result{RepositoryPath: "/tmp/repo", BranchName: "feature"}, result)
+	require.Len(t, executor.recordedCommands, 4)
+	require.Equal(t, []string{gitStashSubcommandConstant, gitStashPushSubcommandConstant, gitStashIncludeUntrackedFlagConstant}, executor.recordedCommands[0].Arguments)
+}
+
+func TestRefreshCommitsDirtyWorktreeWhenRequested(t *testing.T) {
+	executor := &stubGitExecutor{}
+	repositoryManager := &stubRepositoryManager{cleanStates: []bool{false, true}}
+	service, creationError := NewService(Dependencies{GitExecutor: executor, RepositoryManager: repositoryManager})
+	require.NoError(t, creationError)
+
+	branchName := "release"
+	result, err := service.Refresh(context.Background(), Options{RepositoryPath: "/tmp/repo", BranchName: branchName, RequireClean: true, CommitChanges: true})
+	require.NoError(t, err)
+	require.Equal(t, Result{RepositoryPath: "/tmp/repo", BranchName: branchName}, result)
+	require.Len(t, executor.recordedCommands, 5)
+	require.Equal(t, []string{gitAddSubcommandConstant, gitAddAllFlagConstant}, executor.recordedCommands[0].Arguments)
+	require.Equal(t, []string{gitCommitSubcommandConstant, gitCommitMessageFlagConstant, fmt.Sprintf(commitMessageTemplateConstant, branchName)}, executor.recordedCommands[1].Arguments)
 }
