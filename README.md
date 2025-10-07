@@ -1,4 +1,4 @@
-# Git/GitHub helper CLI
+# gix, a Git/GitHub helper CLI
 
 A Go-based command-line interface that automates routine Git and GitHub maintenance.
 
