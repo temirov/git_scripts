@@ -19,6 +19,7 @@ import (
 	workflowcmd "github.com/temirov/gix/cmd/cli/workflow"
 	"github.com/temirov/gix/internal/audit"
 	"github.com/temirov/gix/internal/branches"
+	branchrefresh "github.com/temirov/gix/internal/branches/refresh"
 	"github.com/temirov/gix/internal/migrate"
 	"github.com/temirov/gix/internal/packages"
 	"github.com/temirov/gix/internal/utils"
@@ -34,6 +35,7 @@ const (
 	testConfigurationSearchPathEnvironmentName               = "GIX_CONFIG_SEARCH_PATH"
 	testPackagesCommandNameConstant                          = "repo-packages-purge"
 	testBranchMigrateCommandNameConstant                     = "branch-migrate"
+	testBranchRefreshCommandNameConstant                     = "branch-refresh"
 	testBranchCleanupCommandNameConstant                     = "repo-prs-purge"
 	testReposRemotesCommandNameConstant                      = "repo-remote-update"
 	testReposProtocolCommandNameConstant                     = "repo-protocol-convert"
@@ -46,6 +48,7 @@ const (
 	embeddedDefaultsReposProtocolTestNameConstant            = "ReposProtocolDefaults"
 	embeddedDefaultsReposRenameTestNameConstant              = "ReposRenameDefaults"
 	embeddedDefaultsWorkflowTestNameConstant                 = "WorkflowDefaults"
+	embeddedDefaultsBranchRefreshTestNameConstant            = "BranchRefreshDefaults"
 	embeddedDefaultsBranchMigrateTestNameConstant            = "BranchMigrateDefaults"
 	embeddedDefaultsAuditTestNameConstant                    = "AuditDefaults"
 	embeddedDefaultRootPathConstant                          = "."
@@ -86,6 +89,7 @@ var requiredOperationNames = []string{
 	"repo-remote-update",
 	"repo-protocol-convert",
 	"workflow",
+	"branch-refresh",
 	"branch-migrate",
 }
 
@@ -122,6 +126,7 @@ func TestApplicationInitializeConfiguration(t *testing.T) {
 				"repo-remote-update",
 				"repo-protocol-convert",
 				"workflow",
+				"branch-refresh",
 			},
 			commandUse: testBranchMigrateCommandNameConstant,
 		},
@@ -579,6 +584,22 @@ func TestApplicationEmbeddedDefaultsProvideCommandConfigurations(testInstance *t
 
 				assertions := require.New(assertionTarget)
 				assertions.Equal([]string{embeddedDefaultRootPathConstant}, sanitized.Roots)
+			},
+		},
+		{
+			name:          embeddedDefaultsBranchRefreshTestNameConstant,
+			commandUse:    testBranchRefreshCommandNameConstant,
+			operationName: testBranchRefreshCommandNameConstant,
+			assertion: func(assertionTarget testing.TB, options map[string]any) {
+				assertionTarget.Helper()
+
+				var configuration branchrefresh.CommandConfiguration
+				decodeOperationOptions(assertionTarget, options, &configuration)
+				sanitized := configuration.Sanitize()
+
+				assertions := require.New(assertionTarget)
+				assertions.Equal([]string{embeddedDefaultRootPathConstant}, sanitized.RepositoryRoots)
+				assertions.Empty(strings.TrimSpace(sanitized.BranchName))
 			},
 		},
 		{

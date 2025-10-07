@@ -19,6 +19,7 @@ import (
 	workflowcmd "github.com/temirov/gix/cmd/cli/workflow"
 	"github.com/temirov/gix/internal/audit"
 	"github.com/temirov/gix/internal/branches"
+	branchrefresh "github.com/temirov/gix/internal/branches/refresh"
 	"github.com/temirov/gix/internal/migrate"
 	"github.com/temirov/gix/internal/packages"
 	"github.com/temirov/gix/internal/utils"
@@ -91,6 +92,7 @@ const (
 	reposRemotesOperationNameConstant                                = "repo-remote-update"
 	reposProtocolOperationNameConstant                               = "repo-protocol-convert"
 	workflowCommandOperationNameConstant                             = "workflow"
+	branchRefreshOperationNameConstant                               = "branch-refresh"
 	branchMigrateOperationNameConstant                               = "branch-migrate"
 	operationDecodeErrorMessageConstant                              = "unable to decode operation defaults"
 	operationNameLogFieldConstant                                    = "operation"
@@ -114,6 +116,7 @@ var commandOperationRequirements = map[string][]string{
 	reposRemotesOperationNameConstant:    {reposRemotesOperationNameConstant},
 	reposProtocolOperationNameConstant:   {reposProtocolOperationNameConstant},
 	workflowCommandOperationNameConstant: {workflowCommandOperationNameConstant},
+	branchRefreshOperationNameConstant:   {branchRefreshOperationNameConstant},
 	branchMigrateOperationNameConstant:   {branchMigrateOperationNameConstant},
 }
 
@@ -372,6 +375,18 @@ func NewApplication() *Application {
 	branchCleanupCommand, branchCleanupBuildError := branchCleanupBuilder.Build()
 	if branchCleanupBuildError == nil {
 		cobraCommand.AddCommand(branchCleanupCommand)
+	}
+
+	branchRefreshBuilder := branchrefresh.CommandBuilder{
+		LoggerProvider: func() *zap.Logger {
+			return application.logger
+		},
+		HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
+		ConfigurationProvider:        application.branchRefreshConfiguration,
+	}
+	branchRefreshCommand, branchRefreshBuildError := branchRefreshBuilder.Build()
+	if branchRefreshBuildError == nil {
+		cobraCommand.AddCommand(branchRefreshCommand)
 	}
 
 	branchMigrationBuilder := migrate.CommandBuilder{
@@ -698,6 +713,12 @@ func (application *Application) branchCleanupConfiguration() branches.CommandCon
 	}
 
 	return configuration
+}
+
+func (application *Application) branchRefreshConfiguration() branchrefresh.CommandConfiguration {
+	configuration := branchrefresh.DefaultCommandConfiguration()
+	application.decodeOperationConfiguration(branchRefreshOperationNameConstant, &configuration)
+	return configuration.Sanitize()
 }
 
 func (application *Application) reposRenameConfiguration() repos.RenameConfiguration {
