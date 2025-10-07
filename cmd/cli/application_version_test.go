@@ -78,6 +78,6 @@ func TestApplicationVersionFlagPrintsVersionAndExits(t *testing.T) {
 	})
 
 	output := capture.Stop(t)
-	require.Equal(t, "app version: v2.0.0\n", output)
+	require.Equal(t, "gix version: v2.0.0\n", output)
 	require.Equal(t, 0, exitCode)
 }

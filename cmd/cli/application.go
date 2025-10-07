@@ -98,7 +98,7 @@ const (
 	branchMigrateOperationNameConstant                               = "branch-migrate"
 	versionFlagNameConstant                                          = "version"
 	versionFlagUsageConstant                                         = "Print the application version and exit"
-	versionOutputTemplateConstant                                    = "app version: %s\n"
+	versionOutputTemplateConstant                                    = "gix version: %s\n"
 	operationDecodeErrorMessageConstant                              = "unable to decode operation defaults"
 	operationNameLogFieldConstant                                    = "operation"
 	operationErrorLogFieldConstant                                   = "error"
