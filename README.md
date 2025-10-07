@@ -74,6 +74,23 @@ Global flags configure logging and optional configuration files:
 - `--log-level <debug|info|warn|error>` – override the configured log level.
 - `--log-format <structured|console>` – switch between JSON and human-readable logs.
 
+Configuration files are discovered automatically. gix checks the following locations in order and stops at the first match:
+
+1. A `config.yaml` file in the current working directory.
+2. `$XDG_CONFIG_HOME/gix/config.yaml` (or the OS-specific user configuration directory reported by `os.UserConfigDir`).
+3. `$HOME/.gix/config.yaml`.
+
+Provide `--config path/to/override.yaml` when you need to load a file outside of the search paths.
+
+#### Initializing configuration defaults
+
+Run `gix --init` to write the embedded defaults into `./config.yaml`. Pass a scope to control the destination:
+
+- `gix --init local` (default) writes to the current working directory.
+- `gix --init user` writes to the persistent user location (`$XDG_CONFIG_HOME/gix/config.yaml` or `$HOME/.gix/config.yaml`).
+
+Append `--force` when you want to overwrite an existing configuration file in the selected scope.
+
 Configuration keys mirror the flags (`common.log_level`, `common.log_format`) and can also be provided via environment
 variables prefixed with
 `GIX_` (for example, `GIX_COMMON_LOG_LEVEL=error`).
