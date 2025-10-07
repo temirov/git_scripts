@@ -23,7 +23,7 @@ const (
 	errorParentMissingMessage         = "ERROR: target parent missing: %s\n"
 	errorParentNotDirectoryMessage    = "ERROR: target parent is not a directory: %s\n"
 	errorTargetExistsMessage          = "ERROR: target exists: %s\n"
-	promptTemplate                    = "Rename '%s' → '%s'? [y/N] "
+	promptTemplate                    = "Rename '%s' → '%s'? [a/N/y] "
 	skipMessage                       = "SKIP: %s\n"
 	skipDirtyMessage                  = "SKIP (dirty worktree): %s\n"
 	successMessage                    = "Renamed %s → %s\n"

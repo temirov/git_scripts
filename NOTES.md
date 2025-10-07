@@ -14,7 +14,10 @@ Leave Features, BugFixes, Improvements, Maintenance sections empty when all fixe
 
 ## Improvements
 
-
 ## BugFixes
+
+
+- [ ] [GS-02] Fix non-humane readabel command help. --dry-run toggle[=__toggle_true__] is nonsensical, we shall have <yes|no> instead of toggle[=__toggle_true__], --dry-run <yes|no>, indicating the default as well (<yes|NO> or some way or showing the default). The same represewntation must be applied to all boolean switches
+
 
 ## Maintenance

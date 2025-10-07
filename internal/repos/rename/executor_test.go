@@ -97,13 +97,18 @@ func (manager stubGitManager) SetRemoteURL(ctx context.Context, repositoryPath s
 }
 
 type stubPrompter struct {
-	result shared.ConfirmationResult
-	err    error
+	result          shared.ConfirmationResult
+	callError       error
+	recordedPrompts []string
 }
 
-func (prompter stubPrompter) Confirm(prompt string) (shared.ConfirmationResult, error) {
-	if prompter.err != nil {
-		return shared.ConfirmationResult{}, prompter.err
+func (prompter *stubPrompter) Confirm(prompt string) (shared.ConfirmationResult, error) {
+	if prompter == nil {
+		return shared.ConfirmationResult{}, nil
+	}
+	prompter.recordedPrompts = append(prompter.recordedPrompts, prompt)
+	if prompter.callError != nil {
+		return shared.ConfirmationResult{}, prompter.callError
 	}
 	return prompter.result, nil
 }
@@ -206,7 +211,7 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 				},
 			},
 			gitManager:      stubGitManager{clean: true},
-			prompter:        stubPrompter{result: shared.ConfirmationResult{Confirmed: false}},
+			prompter:        &stubPrompter{result: shared.ConfirmationResult{Confirmed: false}},
 			expectedOutput:  fmt.Sprintf("SKIP: %s\n", renameTestProjectFolderPath),
 			expectedErrors:  "",
 			expectedRenames: 0,
@@ -224,7 +229,7 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 				},
 			},
 			gitManager:      stubGitManager{clean: true},
-			prompter:        stubPrompter{result: shared.ConfirmationResult{Confirmed: true}},
+			prompter:        &stubPrompter{result: shared.ConfirmationResult{Confirmed: true}},
 			expectedOutput:  fmt.Sprintf("Renamed %s → %s\n", renameTestProjectFolderPath, renameTestTargetFolderPath),
 			expectedErrors:  "",
 			expectedRenames: 1,
@@ -242,7 +247,7 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 				},
 			},
 			gitManager:      stubGitManager{clean: true},
-			prompter:        stubPrompter{result: shared.ConfirmationResult{Confirmed: true, ApplyToAll: true}},
+			prompter:        &stubPrompter{result: shared.ConfirmationResult{Confirmed: true, ApplyToAll: true}},
 			expectedOutput:  fmt.Sprintf("Renamed %s → %s\n", renameTestProjectFolderPath, renameTestTargetFolderPath),
 			expectedErrors:  "",
 			expectedRenames: 1,
@@ -260,7 +265,7 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 				},
 			},
 			gitManager:      stubGitManager{clean: true},
-			prompter:        stubPrompter{err: errors.New("read failure")},
+			prompter:        &stubPrompter{callError: errors.New("read failure")},
 			expectedOutput:  "",
 			expectedErrors:  fmt.Sprintf("ERROR: rename failed for %s → %s\n", renameTestProjectFolderPath, renameTestTargetFolderPath),
 			expectedRenames: 0,
@@ -363,4 +368,23 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 			require.Equal(testingInstance, testCase.expectedCreatedDirectories, testCase.fileSystem.createdDirectories)
 		})
 	}
+}
+
+func TestExecutorPromptsAdvertiseApplyAll(testInstance *testing.T) {
+	commandPrompter := &stubPrompter{}
+	fileSystem := &stubFileSystem{existingPaths: map[string]bool{
+		renameTestRootDirectory:     true,
+		renameTestProjectFolderPath: true,
+		renameTestTargetFolderPath:  false,
+	}}
+	dependencies := rename.Dependencies{
+		FileSystem: fileSystem,
+		GitManager: stubGitManager{clean: true},
+		Prompter:   commandPrompter,
+		Output:     &bytes.Buffer{},
+		Errors:     &bytes.Buffer{},
+	}
+	renamer := rename.NewExecutor(dependencies)
+	renamer.Execute(context.Background(), rename.Options{RepositoryPath: renameTestProjectFolderPath, DesiredFolderName: renameTestDesiredFolderName})
+	require.Equal(testInstance, []string{fmt.Sprintf("Rename '%s' → '%s'? [a/N/y] ", renameTestProjectFolderPath, renameTestTargetFolderPath)}, commandPrompter.recordedPrompts)
 }
