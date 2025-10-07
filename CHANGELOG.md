@@ -1,3 +1,40 @@
+# Changelog
+
+## [v0.0.8] - 2025-10-07
+
+### Features ✨
+- Added a `branch-refresh` command that fetches, checks out, and pulls branches with optional recovery strategies and clean-worktree enforcement.
+- Introduced a root `--version` flag that prints the detected gix version and exits before executing subcommands.
+
+### Improvements ⚙️
+- Branch refresh now survives intermediate rebase checkpoints by attempting to recover from checkpoint commits.
+- Version output messages use the `gix` prefix for consistent CLI presentation.
+
+### Bug Fixes 🐛
+- `repo-prs-purge` prompts before deleting branches, respecting `--yes`, apply-to-all decisions, and reuse of confirmations during batch cleanup.
+- Nested Git repositories are renamed before their parents during directory normalization to avoid conflicting rename sequences.
+
+## [v0.0.7] - 2025-10-06
+
+### Improvements ⚙️
+- Guarded destructive repo-prs-purge operations behind confirmation prompts, centralizing apply-all handling and `--yes` defaults.
+- Updated AGENTS and configuration guidance to minimize unnecessary output streaming.
+
+### Testing 🧪
+- Expanded coverage for nested rename ordering, branch cleanup prompting, and integration workflows.
+
+### Features ✨
+- Added a `branch-refresh` command that fetches, checks out, and pulls branches with optional recovery strategies and clean-worktree enforcement.
+- Introduced a root `--version` flag that prints the detected gix version and exits before executing subcommands.
+
+### Improvements ⚙️
+- Branch refresh now survives intermediate rebase checkpoints by attempting to recover from checkpoint commits.
+- Version output messages use the `gix` prefix for consistent CLI presentation.
+
+### Bug Fixes 🐛
+- `repo-prs-purge` prompts before deleting branches, respecting `--yes`, apply-to-all decisions, and reuse of confirmations during batch cleanup.
+- Nested Git repositories are renamed before their parents during directory normalization to avoid conflicting rename sequences.
+
 ## [v0.0.6] - 2025-10-06
 
 ### Highlights
