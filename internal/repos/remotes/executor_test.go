@@ -38,13 +38,18 @@ func (manager *stubGitManager) SetRemoteURL(ctx context.Context, repositoryPath 
 }
 
 type stubPrompter struct {
-	result shared.ConfirmationResult
-	err    error
+	result          shared.ConfirmationResult
+	callError       error
+	recordedPrompts []string
 }
 
-func (prompter stubPrompter) Confirm(prompt string) (shared.ConfirmationResult, error) {
-	if prompter.err != nil {
-		return shared.ConfirmationResult{}, prompter.err
+func (prompter *stubPrompter) Confirm(prompt string) (shared.ConfirmationResult, error) {
+	if prompter == nil {
+		return shared.ConfirmationResult{}, nil
+	}
+	prompter.recordedPrompts = append(prompter.recordedPrompts, prompt)
+	if prompter.callError != nil {
+		return shared.ConfirmationResult{}, prompter.callError
 	}
 	return prompter.result, nil
 }
@@ -123,7 +128,7 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 				RemoteProtocol:           shared.RemoteProtocolHTTPS,
 			},
 			gitManager:      &stubGitManager{},
-			prompter:        stubPrompter{result: shared.ConfirmationResult{Confirmed: false}},
+			prompter:        &stubPrompter{result: shared.ConfirmationResult{Confirmed: false}},
 			expectedOutput:  fmt.Sprintf(remotesTestDeclinedMessage, remotesTestRepositoryPath),
 			expectedUpdates: 0,
 		},
@@ -137,7 +142,7 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 				RemoteProtocol:           shared.RemoteProtocolHTTPS,
 			},
 			gitManager:      &stubGitManager{},
-			prompter:        stubPrompter{result: shared.ConfirmationResult{Confirmed: true}},
+			prompter:        &stubPrompter{result: shared.ConfirmationResult{Confirmed: true}},
 			expectedOutput:  fmt.Sprintf(remotesTestSuccessMessage, remotesTestRepositoryPath, remotesTestCanonicalURL),
 			expectedUpdates: 1,
 		},
@@ -151,7 +156,7 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 				RemoteProtocol:           shared.RemoteProtocolHTTPS,
 			},
 			gitManager:      &stubGitManager{},
-			prompter:        stubPrompter{result: shared.ConfirmationResult{Confirmed: true, ApplyToAll: true}},
+			prompter:        &stubPrompter{result: shared.ConfirmationResult{Confirmed: true, ApplyToAll: true}},
 			expectedOutput:  fmt.Sprintf(remotesTestSuccessMessage, remotesTestRepositoryPath, remotesTestCanonicalURL),
 			expectedUpdates: 1,
 		},
@@ -165,7 +170,7 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 				RemoteProtocol:           shared.RemoteProtocolHTTPS,
 			},
 			gitManager:      &stubGitManager{},
-			prompter:        stubPrompter{err: fmt.Errorf("prompt failed")},
+			prompter:        &stubPrompter{callError: fmt.Errorf("prompt failed")},
 			expectedOutput:  fmt.Sprintf(remotesTestPromptErrorMessage, remotesTestRepositoryPath),
 			expectedUpdates: 0,
 		},
@@ -228,4 +233,21 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 			require.Len(testingInstance, testCase.gitManager.urlsSet, testCase.expectedUpdates)
 		})
 	}
+}
+
+func TestExecutorPromptsAdvertiseApplyAll(testInstance *testing.T) {
+	commandPrompter := &stubPrompter{result: shared.ConfirmationResult{Confirmed: false}}
+	gitManager := &stubGitManager{}
+	outputBuffer := &bytes.Buffer{}
+	dependencies := remotes.Dependencies{GitManager: gitManager, Prompter: commandPrompter, Output: outputBuffer}
+	options := remotes.Options{
+		RepositoryPath:           remotesTestRepositoryPath,
+		CurrentOriginURL:         remotesTestCurrentOriginURL,
+		OriginOwnerRepository:    remotesTestOriginOwnerRepository,
+		CanonicalOwnerRepository: remotesTestCanonicalOwnerRepo,
+		RemoteProtocol:           shared.RemoteProtocolHTTPS,
+	}
+	executor := remotes.NewExecutor(dependencies)
+	executor.Execute(context.Background(), options)
+	require.Equal(testInstance, []string{fmt.Sprintf("Update 'origin' in '%s' to canonical (%s → %s)? [a/N/y] ", remotesTestRepositoryPath, remotesTestOriginOwnerRepository, remotesTestCanonicalOwnerRepo)}, commandPrompter.recordedPrompts)
 }

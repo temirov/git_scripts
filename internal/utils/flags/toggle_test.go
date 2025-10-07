@@ -1,6 +1,7 @@
 package flags
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -75,4 +76,35 @@ func TestNormalizeToggleArgumentsHandlesShorthand(t *testing.T) {
 	flag := command.Flags().Lookup("toggle")
 	require.NotNil(t, flag)
 	require.True(t, flag.Changed)
+}
+
+func TestToggleFlagUsageFormatting(t *testing.T) {
+	testCases := []struct {
+		name                string
+		defaultValue        bool
+		expectedPlaceholder string
+	}{
+		{name: "DefaultFalse", defaultValue: false, expectedPlaceholder: "<yes|NO>"},
+		{name: "DefaultTrue", defaultValue: true, expectedPlaceholder: "<YES|no>"},
+	}
+
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			command := &cobra.Command{}
+
+			var toggleValue bool
+			AddToggleFlag(command.Flags(), &toggleValue, "toggle", "", testCase.defaultValue, "Toggle flag")
+
+			flag := command.Flags().Lookup("toggle")
+			require.NotNil(t, flag)
+			require.Equal(t, fmt.Sprintf("`%s` Toggle flag", testCase.expectedPlaceholder), flag.Usage)
+			require.Equal(t, "true", flag.NoOptDefVal)
+
+			usages := command.Flags().FlagUsages()
+			require.Contains(t, usages, fmt.Sprintf("--toggle %s", testCase.expectedPlaceholder))
+			require.NotContains(t, usages, "__toggle_true__")
+			require.NotContains(t, usages, "toggle[")
+		})
+	}
 }

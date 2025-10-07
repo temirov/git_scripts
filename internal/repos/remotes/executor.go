@@ -16,7 +16,7 @@ const (
 	skipTargetMessage                = "UPDATE-REMOTE-SKIP: %s (error: could not construct target URL)\n"
 	skipOwnerConstraintMessage       = "UPDATE-REMOTE-SKIP: %s (owner constraint mismatch: expected %s, actual %s)\n"
 	planMessage                      = "PLAN-UPDATE-REMOTE: %s origin %s → %s\n"
-	promptTemplate                   = "Update 'origin' in '%s' to canonical (%s → %s)? [y/N] "
+	promptTemplate                   = "Update 'origin' in '%s' to canonical (%s → %s)? [a/N/y] "
 	declinedMessage                  = "UPDATE-REMOTE-SKIP: user declined for %s\n"
 	successMessage                   = "UPDATE-REMOTE-DONE: %s origin now %s\n"
 	failureMessage                   = "UPDATE-REMOTE-SKIP: %s (error: failed to set origin URL)\n"

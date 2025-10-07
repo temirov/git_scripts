@@ -14,7 +14,7 @@ const (
 	ownerRepoErrorMessage = "ERROR: cannot derive owner/repo for protocol conversion in %s\n"
 	targetErrorMessage    = "ERROR: cannot build target URL for protocol '%s' in %s\n"
 	planMessage           = "PLAN-CONVERT: %s origin %s → %s\n"
-	promptTemplate        = "Convert 'origin' in '%s' (%s → %s)? [y/N] "
+	promptTemplate        = "Convert 'origin' in '%s' (%s → %s)? [a/N/y] "
 	declinedMessage       = "CONVERT-SKIP: user declined for %s\n"
 	successMessage        = "CONVERT-DONE: %s origin now %s\n"
 	failureMessage        = "ERROR: failed to set origin to %s in %s\n"

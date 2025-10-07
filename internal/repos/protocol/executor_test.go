@@ -43,13 +43,18 @@ func (manager *stubGitManager) SetRemoteURL(ctx context.Context, repositoryPath 
 }
 
 type stubPrompter struct {
-	result shared.ConfirmationResult
-	err    error
+	result          shared.ConfirmationResult
+	callError       error
+	recordedPrompts []string
 }
 
-func (prompter stubPrompter) Confirm(prompt string) (shared.ConfirmationResult, error) {
-	if prompter.err != nil {
-		return shared.ConfirmationResult{}, prompter.err
+func (prompter *stubPrompter) Confirm(prompt string) (shared.ConfirmationResult, error) {
+	if prompter == nil {
+		return shared.ConfirmationResult{}, nil
+	}
+	prompter.recordedPrompts = append(prompter.recordedPrompts, prompt)
+	if prompter.callError != nil {
+		return shared.ConfirmationResult{}, prompter.callError
 	}
 	return prompter.result, nil
 }
@@ -112,7 +117,7 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 				TargetProtocol:           shared.RemoteProtocolSSH,
 			},
 			gitManager:     &stubGitManager{currentURL: protocolTestOriginURL},
-			prompter:       stubPrompter{result: shared.ConfirmationResult{Confirmed: false}},
+			prompter:       &stubPrompter{result: shared.ConfirmationResult{Confirmed: false}},
 			expectedOutput: fmt.Sprintf(protocolTestDeclinedMessage, protocolTestRepositoryPath),
 		},
 		{
@@ -125,7 +130,7 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 				TargetProtocol:           shared.RemoteProtocolSSH,
 			},
 			gitManager:      &stubGitManager{currentURL: protocolTestOriginURL},
-			prompter:        stubPrompter{result: shared.ConfirmationResult{Confirmed: true}},
+			prompter:        &stubPrompter{result: shared.ConfirmationResult{Confirmed: true}},
 			expectedOutput:  fmt.Sprintf(protocolTestSuccessMessage, protocolTestRepositoryPath, protocolTestTargetURL),
 			expectedUpdates: 1,
 		},
@@ -139,7 +144,7 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 				TargetProtocol:           shared.RemoteProtocolSSH,
 			},
 			gitManager:      &stubGitManager{currentURL: protocolTestOriginURL},
-			prompter:        stubPrompter{result: shared.ConfirmationResult{Confirmed: true, ApplyToAll: true}},
+			prompter:        &stubPrompter{result: shared.ConfirmationResult{Confirmed: true, ApplyToAll: true}},
 			expectedOutput:  fmt.Sprintf(protocolTestSuccessMessage, protocolTestRepositoryPath, protocolTestTargetURL),
 			expectedUpdates: 1,
 		},
@@ -153,7 +158,7 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 				TargetProtocol:           shared.RemoteProtocolSSH,
 			},
 			gitManager:      &stubGitManager{currentURL: protocolTestOriginURL},
-			prompter:        stubPrompter{err: fmt.Errorf("prompt failure")},
+			prompter:        &stubPrompter{callError: fmt.Errorf("prompt failure")},
 			expectedErrors:  fmt.Sprintf(protocolTestFailureMessage, protocolTestTargetURL, protocolTestRepositoryPath),
 			expectedUpdates: 0,
 		},
@@ -191,4 +196,22 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 			require.Len(testingInstance, testCase.gitManager.setURLs, testCase.expectedUpdates)
 		})
 	}
+}
+
+func TestExecutorPromptsAdvertiseApplyAll(testInstance *testing.T) {
+	commandPrompter := &stubPrompter{result: shared.ConfirmationResult{Confirmed: false}}
+	gitManager := &stubGitManager{currentURL: protocolTestOriginURL}
+	outputBuffer := &bytes.Buffer{}
+	errorBuffer := &bytes.Buffer{}
+	dependencies := protocol.Dependencies{GitManager: gitManager, Prompter: commandPrompter, Output: outputBuffer, Errors: errorBuffer}
+	options := protocol.Options{
+		RepositoryPath:           protocolTestRepositoryPath,
+		OriginOwnerRepository:    protocolTestOriginOwnerRepo,
+		CanonicalOwnerRepository: protocolTestCanonicalOwnerRepo,
+		CurrentProtocol:          shared.RemoteProtocolHTTPS,
+		TargetProtocol:           shared.RemoteProtocolSSH,
+	}
+	executor := protocol.NewExecutor(dependencies)
+	executor.Execute(context.Background(), options)
+	require.Equal(testInstance, []string{fmt.Sprintf("Convert 'origin' in '%s' (%s → %s)? [a/N/y] ", protocolTestRepositoryPath, shared.RemoteProtocolHTTPS, shared.RemoteProtocolSSH)}, commandPrompter.recordedPrompts)
 }
