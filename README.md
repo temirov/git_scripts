@@ -1,5 +1,7 @@
 # gix, a Git/GitHub helper CLI
 
+[![GitHub release](https://img.shields.io/github/release/temirov/gix.svg)](https://github.com/temirov/gix/releases)
+
 A Go-based command-line interface that automates routine Git and GitHub maintenance.
 
 ### Execution modes at a glance
