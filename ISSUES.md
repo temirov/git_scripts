@@ -4,7 +4,7 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
 
 ## Features
 
-    - [ ] [GI-02] Add an ability to run git/file related tasks across folders
+    - [ ] [GX-02] Add an ability to run git/file related tasks across folders
         1. Develop a syntax that describes a task
         2. Allow for templating in the files to be changed
         3. Ensure the reversability and idempotency of the execution
@@ -31,9 +31,9 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
                     open a PR
                 condition: if NOTES.md already exists, skip the task.
         5. Employ workflow runner for the tasks. Generalize workflow runner, if needed
-    - [ ] [GI-03] Add an ability to prepare commit messages based on the file changes. Use @tools/llm-tasks for inspiration and code examples. Extract AI communication to pkg/ package and imake it universal enough to be used by other programs
-    - [ ] [GI-04] Add an ability to prepare changelog messages based on the changes since given time, version or the last version found in git tags. Use @tools/llm-tasks for inspiration and code examples. Extract AI communication to pkg/ package and imake it universal enough to be used by other programs
-    - [ ] [GI-05] Add `b cd` command to change between branches, e.g. `b cd feature/qqq` changes the current branch to `feature/qqq`. make logic similar to
+    - [ ] [GX-03] Add an ability to prepare commit messages based on the file changes. Use @tools/llm-tasks for inspiration and code examples. Extract AI communication to pkg/ package and imake it universal enough to be used by other programs
+    - [ ] [GX-04] Add an ability to prepare changelog messages based on the changes since given time, version or the last version found in git tags. Use @tools/llm-tasks for inspiration and code examples. Extract AI communication to pkg/ package and imake it universal enough to be used by other programs
+    - [ ] [GX-05] Add `b cd` command to change between branches, e.g. `b cd feature/qqq` changes the current branch to `feature/qqq`. make logic similar to
             cd = "!f() { \
                 branch=\"${1:-master}\"; \
                 git fetch -a --prune && \
@@ -41,7 +41,7 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
                 git pull --rebase; \
             }; f"
             NB: the command shall work across repos
-    - [ ] [GI-06] Add `r release` command to release new versions, e.g. `r relase v0.1.3` tags the barnch and pushes to remote. Make logic similar to
+    - [ ] [GX-06] Add `r release` command to release new versions, e.g. `r relase v0.1.3` tags the barnch and pushes to remote. Make logic similar to
             release = "!f() { \
                 tag_name=\"$1\"; \
                 if [ -z \"$tag_name\" ]; then \
@@ -56,7 +56,7 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
 
 ## Improvements
 
-    - [ ] [GI-01] Refactor the command line syntax
+    - [ ] [GX-01] Refactor the command line syntax
         Command	Short Command	subcommand	action	filter	Summary	Key flags / example
         audit	a				Audit and reconcile local GitHub repositories	Flags: --root, --log-level. Example: go run . audit --log-level=debug --root ~/Development
         repo-folders-rename	r	folder	rename		Rename repository directories to match canonical GitHub names	Flags: --dry-run, --yes, --require-clean, --owner. Example: go run . repo-folders-rename --yes --require-clean --owner --root ~/Development
