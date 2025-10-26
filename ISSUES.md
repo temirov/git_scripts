@@ -80,6 +80,7 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
 INFO    configuration initialized | log level=info | log format=console | config file=/home/tyemirov/Development/gix/config.yaml
 gix version: v0.0.8
     ```
+    - [ ] [GX-13] `commit message` subcommand belongs to the `branch` command and the `changelog` subcommand commands belongs to the `repo` command
 
 ## BugFixes
 
