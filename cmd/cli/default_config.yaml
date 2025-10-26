@@ -56,3 +56,12 @@ operations:
       max_completion_tokens: 256
       temperature: 0.2
       timeout_seconds: 60
+  - operation: changelog-message
+    with:
+      roots:
+        - .
+      api_key_env: OPENAI_API_KEY
+      model: gpt-4.1-mini
+      max_completion_tokens: 1200
+      temperature: 0.3
+      timeout_seconds: 60

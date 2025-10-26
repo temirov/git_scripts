@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/pflag"
 	"go.uber.org/zap"
 
+	changelogcmd "github.com/temirov/gix/cmd/cli/changelog"
 	commitcmd "github.com/temirov/gix/cmd/cli/commit"
 	"github.com/temirov/gix/cmd/cli/repos"
 	workflowcmd "github.com/temirov/gix/cmd/cli/workflow"
@@ -100,6 +101,7 @@ const (
 	branchRefreshOperationNameConstant                               = "branch-refresh"
 	branchMigrateOperationNameConstant                               = "branch-migrate"
 	commitMessageOperationNameConstant                               = "commit-message"
+	changelogMessageOperationNameConstant                            = "changelog-message"
 	auditCommandAliasConstant                                        = "a"
 	workflowCommandAliasConstant                                     = "w"
 	repoNamespaceUseNameConstant                                     = "repo"
@@ -134,9 +136,16 @@ const (
 	commitMessageUseNameConstant                                     = "message"
 	commitMessageAliasConstant                                       = "msg"
 	commitMessageLongDescriptionConstant                             = "commit message drafts Conventional Commit subjects and optional bullets using the configured language model."
+	changelogNamespaceUseNameConstant                                = "changelog"
+	changelogNamespaceAliasConstant                                  = "l"
+	changelogNamespaceShortDescriptionConstant                       = "Changelog assistance commands"
+	changelogMessageUseNameConstant                                  = "message"
+	changelogMessageAliasConstant                                    = "section"
+	changelogMessageLongDescriptionConstant                          = "changelog message summarizes recent history into Markdown release notes using the configured language model."
 	repoPullRequestsDeleteCompositeKeyConstant                       = repoPullRequestsNamespaceUseNameConstant + "/" + prsDeleteCommandUseNameConstant
 	repoPackagesDeleteCompositeKeyConstant                           = repoPackagesNamespaceUseNameConstant + "/" + packagesDeleteCommandUseNameConstant
 	commitMessageCompositeKeyConstant                                = commitNamespaceUseNameConstant + "/" + commitMessageUseNameConstant
+	changelogMessageCompositeKeyConstant                             = changelogNamespaceUseNameConstant + "/" + changelogMessageUseNameConstant
 	renameNestedLongDescriptionConstant                              = "repo folder rename normalizes repository directory names to match canonical GitHub repositories."
 	updateRemoteCanonicalLongDescriptionConstant                     = "repo remote update-to-canonical adjusts origin remotes to match canonical GitHub repositories."
 	updateProtocolLongDescriptionConstant                            = "repo remote update-protocol converts origin URLs to a desired protocol."
@@ -167,6 +176,7 @@ var commandOperationRequirements = map[string][]string{
 	branchMigrateOperationNameConstant:         {branchMigrateOperationNameConstant},
 	branchRefreshOperationNameConstant:         {branchRefreshOperationNameConstant},
 	commitMessageCompositeKeyConstant:          {commitMessageOperationNameConstant},
+	changelogMessageCompositeKeyConstant:       {changelogMessageOperationNameConstant},
 	migrateCommandUseNameConstant:              {branchMigrateOperationNameConstant},
 	packagesPurgeOperationNameConstant:         {packagesPurgeOperationNameConstant},
 	repoPackagesDeleteCompositeKeyConstant:     {packagesPurgeOperationNameConstant},
@@ -523,6 +533,21 @@ func NewApplication() *Application {
 	if workflowBuildError == nil {
 		workflowCommand.Aliases = appendUnique(workflowCommand.Aliases, workflowCommandAliasConstant)
 		cobraCommand.AddCommand(workflowCommand)
+	}
+
+	changelogMessageBuilder := changelogcmd.MessageCommandBuilder{
+		LoggerProvider: func() *zap.Logger {
+			return application.logger
+		},
+		HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
+		ConfigurationProvider:        application.changelogMessageConfiguration,
+	}
+	changelogMessageCommand, changelogMessageBuildError := changelogMessageBuilder.Build()
+	if changelogMessageBuildError == nil {
+		changelogNamespaceCommand := newNamespaceCommand(changelogNamespaceUseNameConstant, changelogNamespaceShortDescriptionConstant, changelogNamespaceAliasConstant)
+		configureCommandMetadata(changelogMessageCommand, changelogMessageUseNameConstant, changelogMessageCommand.Short, changelogMessageLongDescriptionConstant, changelogMessageAliasConstant)
+		changelogNamespaceCommand.AddCommand(changelogMessageCommand)
+		cobraCommand.AddCommand(changelogNamespaceCommand)
 	}
 
 	commitMessageBuilder := commitcmd.MessageCommandBuilder{
@@ -942,6 +967,12 @@ func (application *Application) workflowCommandConfiguration() workflowcmd.Comma
 	}
 
 	return configuration
+}
+
+func (application *Application) changelogMessageConfiguration() changelogcmd.MessageConfiguration {
+	configuration := changelogcmd.DefaultMessageConfiguration()
+	application.decodeOperationConfiguration(changelogMessageOperationNameConstant, &configuration)
+	return configuration.Sanitize()
 }
 
 func (application *Application) commitMessageConfiguration() commitcmd.MessageConfiguration {
