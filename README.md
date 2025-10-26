@@ -122,6 +122,7 @@ with the registered command names and flags.
 | `repo packages delete`             | `r packages delete`         | `repo-packages-purge`  | Delete untagged GHCR versions                                 | `go run . r packages delete --dry-run --roots ~/Development`                                            |
 | `branch migrate`                   | `b migrate`                 | `branch-migrate`       | Migrate repository defaults from main to master               | `go run . b migrate --from main --to master --roots ~/Development/project-repo`                         |
 | `branch refresh`                   | `b refresh`                 | `branch-refresh`       | Fetch, checkout, and pull a branch with recovery options      | `go run . b refresh --branch main --roots ~/Development/project-repo --stash`                           |
+| `commit message`                   | `c message`                 | `commit-message`       | Draft a Conventional Commit message from staged or worktree changes | `go run . c message --roots . --dry-run`                                                             |
 | `workflow`                         | `w`                         | `workflow`             | Run a workflow configuration file                             | `go run . w config.yaml --roots ~/Development --dry-run`                                                |
 
 Former command names are listed for reference only; the previous hyphenated invocations have been removed and now serve solely as `operations[].operation` identifiers in configuration files.
@@ -315,6 +316,34 @@ workflow:
 
 Dry runs surface `TASK-PLAN` entries summarizing the branch, base, and per-file actions, making it easy to preview
 changes before letting the executor materialize commits and pull requests.
+
+#### Commit message assistant (`commit message`)
+
+Use `commit message` to turn the current repository changes into a ready-to-paste Conventional Commit draft. The
+command shells out to git, composes a structured prompt, and delegates to the configured LLM provider.
+
+- Defaults expect `OPENAI_API_KEY` to hold your token, but you can override the lookup with `api_key_env` in the
+  configuration or `--api-key-env` on the command line.
+- `diff_source` controls whether the generator inspects staged changes (`staged`, default) or the full working tree
+  (`worktree`).
+- `max_completion_tokens`, `temperature`, `model`, and `timeout_seconds` mirror the options accepted by
+  `pkg/llm`—override them globally in `config.yaml` or per invocation via flags.
+- Provide `--dry-run` to print the system and user prompts without contacting the model, useful for verifying the
+  gathered git context.
+
+Examples:
+
+```shell
+# Preview the prompt before sending anything to the model
+go run . commit message --roots . --dry-run
+
+# Generate a message from staged changes using a local OpenAI-compatible endpoint
+OPENAI_API_KEY=sk-xxxx go run . commit message \
+  --roots ~/Development/project \
+  --base-url http://localhost:11434/v1 \
+  --model llama3.1 \
+  --diff-source staged
+```
 
 ## Development and testing
 

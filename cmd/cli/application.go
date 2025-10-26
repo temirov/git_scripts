@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/pflag"
 	"go.uber.org/zap"
 
+	commitcmd "github.com/temirov/gix/cmd/cli/commit"
 	"github.com/temirov/gix/cmd/cli/repos"
 	workflowcmd "github.com/temirov/gix/cmd/cli/workflow"
 	"github.com/temirov/gix/internal/audit"
@@ -98,6 +99,7 @@ const (
 	workflowCommandOperationNameConstant                             = "workflow"
 	branchRefreshOperationNameConstant                               = "branch-refresh"
 	branchMigrateOperationNameConstant                               = "branch-migrate"
+	commitMessageOperationNameConstant                               = "commit-message"
 	auditCommandAliasConstant                                        = "a"
 	workflowCommandAliasConstant                                     = "w"
 	repoNamespaceUseNameConstant                                     = "repo"
@@ -126,8 +128,15 @@ const (
 	branchNamespaceShortDescriptionConstant                          = "Branch management commands"
 	migrateCommandUseNameConstant                                    = "migrate"
 	refreshCommandUseNameConstant                                    = "refresh"
+	commitNamespaceUseNameConstant                                   = "commit"
+	commitNamespaceAliasConstant                                     = "c"
+	commitNamespaceShortDescriptionConstant                          = "Commit assistance commands"
+	commitMessageUseNameConstant                                     = "message"
+	commitMessageAliasConstant                                       = "msg"
+	commitMessageLongDescriptionConstant                             = "commit message drafts Conventional Commit subjects and optional bullets using the configured language model."
 	repoPullRequestsDeleteCompositeKeyConstant                       = repoPullRequestsNamespaceUseNameConstant + "/" + prsDeleteCommandUseNameConstant
 	repoPackagesDeleteCompositeKeyConstant                           = repoPackagesNamespaceUseNameConstant + "/" + packagesDeleteCommandUseNameConstant
+	commitMessageCompositeKeyConstant                                = commitNamespaceUseNameConstant + "/" + commitMessageUseNameConstant
 	renameNestedLongDescriptionConstant                              = "repo folder rename normalizes repository directory names to match canonical GitHub repositories."
 	updateRemoteCanonicalLongDescriptionConstant                     = "repo remote update-to-canonical adjusts origin remotes to match canonical GitHub repositories."
 	updateProtocolLongDescriptionConstant                            = "repo remote update-protocol converts origin URLs to a desired protocol."
@@ -157,6 +166,7 @@ var commandOperationRequirements = map[string][]string{
 	branchCleanupOperationNameConstant:         {branchCleanupOperationNameConstant},
 	branchMigrateOperationNameConstant:         {branchMigrateOperationNameConstant},
 	branchRefreshOperationNameConstant:         {branchRefreshOperationNameConstant},
+	commitMessageCompositeKeyConstant:          {commitMessageOperationNameConstant},
 	migrateCommandUseNameConstant:              {branchMigrateOperationNameConstant},
 	packagesPurgeOperationNameConstant:         {packagesPurgeOperationNameConstant},
 	repoPackagesDeleteCompositeKeyConstant:     {packagesPurgeOperationNameConstant},
@@ -513,6 +523,21 @@ func NewApplication() *Application {
 	if workflowBuildError == nil {
 		workflowCommand.Aliases = appendUnique(workflowCommand.Aliases, workflowCommandAliasConstant)
 		cobraCommand.AddCommand(workflowCommand)
+	}
+
+	commitMessageBuilder := commitcmd.MessageCommandBuilder{
+		LoggerProvider: func() *zap.Logger {
+			return application.logger
+		},
+		HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
+		ConfigurationProvider:        application.commitMessageConfiguration,
+	}
+	commitMessageCommand, commitMessageBuildError := commitMessageBuilder.Build()
+	if commitMessageBuildError == nil {
+		commitNamespaceCommand := newNamespaceCommand(commitNamespaceUseNameConstant, commitNamespaceShortDescriptionConstant, commitNamespaceAliasConstant)
+		configureCommandMetadata(commitMessageCommand, commitMessageUseNameConstant, commitMessageCommand.Short, commitMessageLongDescriptionConstant, commitMessageAliasConstant)
+		commitNamespaceCommand.AddCommand(commitMessageCommand)
+		cobraCommand.AddCommand(commitNamespaceCommand)
 	}
 
 	repoNamespaceCommand := newNamespaceCommand(repoNamespaceUseNameConstant, repoNamespaceShortDescriptionConstant, repoNamespaceAliasConstant)
@@ -917,6 +942,12 @@ func (application *Application) workflowCommandConfiguration() workflowcmd.Comma
 	}
 
 	return configuration
+}
+
+func (application *Application) commitMessageConfiguration() commitcmd.MessageConfiguration {
+	configuration := commitcmd.DefaultMessageConfiguration()
+	application.decodeOperationConfiguration(commitMessageOperationNameConstant, &configuration)
+	return configuration.Sanitize()
 }
 
 func (application *Application) branchMigrateConfiguration() migrate.CommandConfiguration {
