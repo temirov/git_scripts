@@ -8,9 +8,11 @@
 
 ### Testing 🧪
 - Added application command hierarchy coverage to ensure aliases and nested commands resolve to the existing operations.
+- Added task operation planner/executor unit tests and a workflow CLI integration test covering the new `apply-tasks` step.
 
 ### Docs 📚
 - Documented the new CLI syntax and shortcuts in `README.md`, including refreshed quick-start examples.
+- Added `apply-tasks` workflow guidance to `README.md`, including templating details and sample YAML.
 
 ## [v0.0.8] - 2025-10-07
 

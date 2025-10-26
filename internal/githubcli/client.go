@@ -17,6 +17,7 @@ const (
 	pullRequestSubcommandConstant              = "pr"
 	listSubcommandConstant                     = "list"
 	editSubcommandConstant                     = "edit"
+	createSubcommandConstant                   = "create"
 	apiSubcommandConstant                      = "api"
 	jsonFlagConstant                           = "--json"
 	repoFlagConstant                           = "--repo"
@@ -27,6 +28,10 @@ const (
 	fieldFlagConstant                          = "-f"
 	inputFlagConstant                          = "--input"
 	stdinReferenceConstant                     = "-"
+	headFlagConstant                           = "--head"
+	titleFlagConstant                          = "--title"
+	bodyFlagConstant                           = "--body"
+	draftFlagConstant                          = "--draft"
 	acceptHeaderFlagConstant                   = "-H"
 	acceptHeaderValueConstant                  = "Accept: application/vnd.github+json"
 	repositoryFieldNameConstant                = "repository"
@@ -59,6 +64,7 @@ const (
 	updateDefaultBranchOperationNameConstant   = OperationName("UpdateDefaultBranch")
 	updatePullRequestOperationNameConstant     = OperationName("UpdatePullRequestBase")
 	checkBranchProtectionOperationNameConstant = OperationName("CheckBranchProtection")
+	createPullRequestOperationNameConstant     = OperationName("CreatePullRequest")
 	httpNotFoundIndicatorConstant              = "http 404"
 	statusNotFoundIndicatorConstant            = "status 404"
 )
@@ -96,6 +102,16 @@ type PullRequestListOptions struct {
 	State       PullRequestState
 	BaseBranch  string
 	ResultLimit int
+}
+
+// PullRequestCreateOptions configures pull request creation parameters.
+type PullRequestCreateOptions struct {
+	Repository string
+	Title      string
+	Body       string
+	Base       string
+	Head       string
+	Draft      bool
 }
 
 // PagesConfiguration describes the desired GitHub Pages configuration.
@@ -313,6 +329,60 @@ func (client *Client) ListPullRequests(executionContext context.Context, reposit
 	}
 
 	return pullRequests, nil
+}
+
+// CreatePullRequest opens a pull request using gh pr create.
+func (client *Client) CreatePullRequest(executionContext context.Context, options PullRequestCreateOptions) error {
+	if client.executor == nil {
+		return ErrExecutorNotConfigured
+	}
+
+	repositoryIdentifier := strings.TrimSpace(options.Repository)
+	if len(repositoryIdentifier) == 0 {
+		return InvalidInputError{FieldName: repositoryFieldNameConstant, Message: requiredValueMessageConstant}
+	}
+
+	title := strings.TrimSpace(options.Title)
+	if len(title) == 0 {
+		return InvalidInputError{FieldName: titleFlagConstant, Message: requiredValueMessageConstant}
+	}
+
+	head := strings.TrimSpace(options.Head)
+	if len(head) == 0 {
+		return InvalidInputError{FieldName: sourceBranchFieldNameConstant, Message: requiredValueMessageConstant}
+	}
+
+	base := strings.TrimSpace(options.Base)
+	if len(base) == 0 {
+		return InvalidInputError{FieldName: baseBranchFieldNameConstant, Message: requiredValueMessageConstant}
+	}
+
+	arguments := []string{
+		pullRequestSubcommandConstant,
+		createSubcommandConstant,
+		repoFlagConstant,
+		repositoryIdentifier,
+		baseFlagConstant,
+		base,
+		headFlagConstant,
+		head,
+		titleFlagConstant,
+		title,
+		bodyFlagConstant,
+		options.Body,
+	}
+
+	if options.Draft {
+		arguments = append(arguments, draftFlagConstant)
+	}
+
+	commandDetails := execshell.CommandDetails{Arguments: arguments}
+	_, executionError := client.executor.ExecuteGitHubCLI(executionContext, commandDetails)
+	if executionError != nil {
+		return OperationError{Operation: createPullRequestOperationNameConstant, Cause: executionError}
+	}
+
+	return nil
 }
 
 // UpdatePagesConfig updates the GitHub Pages configuration using gh api.

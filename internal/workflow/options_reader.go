@@ -88,3 +88,15 @@ func (reader optionReader) mapSlice(key string) ([]map[string]any, bool, error) 
 	}
 	return maps, true, nil
 }
+
+func (reader optionReader) mapValue(key string) (map[string]any, bool, error) {
+	value, exists := reader.entries[key]
+	if !exists {
+		return nil, false, nil
+	}
+	typed, ok := value.(map[string]any)
+	if !ok {
+		return nil, true, fmt.Errorf("option %s must be a map", key)
+	}
+	return typed, true, nil
+}

@@ -20,8 +20,19 @@ import (
 )
 
 const (
-	workflowConfigFileNameConstant = "config.yaml"
-	workflowConfigContentConstant  = "operations:\n  - operation: workflow\n    with:\n      roots:\n        - .\nworkflow:\n  - step:\n      operation: audit-report\n"
+	workflowConfigFileNameConstant          = "config.yaml"
+	workflowConfigContentConstant           = "operations:\n  - operation: workflow\n    with:\n      roots:\n        - .\nworkflow:\n  - step:\n      operation: audit-report\n"
+	workflowApplyTasksConfigContentConstant = `
+workflow:
+  - step:
+      operation: apply-tasks
+      with:
+        tasks:
+          - name: Add Notes
+            files:
+              - path: NOTES.md
+                content: "Repository: {{ .Repository.Name }}"
+`
 	workflowConfiguredRootConstant = "/tmp/workflow-config-root"
 	workflowCliRootConstant        = "/tmp/workflow-cli-root"
 	workflowPlanMessageSnippet     = "WORKFLOW-PLAN: audit report"
@@ -186,13 +197,68 @@ func bindGlobalWorkflowFlags(command *cobra.Command) {
 	}
 }
 
+func TestWorkflowCommandApplyTasksDryRun(testInstance *testing.T) {
+	tempDirectory := testInstance.TempDir()
+	repositoryPath := filepath.Join(tempDirectory, "sample")
+	writeRepositoryError := os.MkdirAll(repositoryPath, 0o755)
+	require.NoError(testInstance, writeRepositoryError)
+
+	configPath := filepath.Join(tempDirectory, workflowConfigFileNameConstant)
+	configContent := strings.TrimSpace(workflowApplyTasksConfigContentConstant)
+	writeConfigError := os.WriteFile(configPath, []byte(configContent), 0o644)
+	require.NoError(testInstance, writeConfigError)
+
+	discoverer := &fakeWorkflowDiscoverer{
+		repositories: []string{repositoryPath},
+	}
+	gitExecutor := &applyTasksWorkflowGitExecutor{}
+
+	builder := workflowcmd.CommandBuilder{
+		LoggerProvider: func() *zap.Logger { return zap.NewNop() },
+		Discoverer:     discoverer,
+		GitExecutor:    gitExecutor,
+		ConfigurationProvider: func() workflowcmd.CommandConfiguration {
+			return workflowcmd.CommandConfiguration{
+				Roots:  []string{repositoryPath},
+				DryRun: true,
+			}
+		},
+	}
+
+	command, buildError := builder.Build()
+	require.NoError(testInstance, buildError)
+	bindGlobalWorkflowFlags(command)
+
+	var outputBuffer bytes.Buffer
+	var errorBuffer bytes.Buffer
+	command.SetOut(&outputBuffer)
+	command.SetErr(&errorBuffer)
+	command.SetContext(context.Background())
+
+	command.SetArgs([]string{configPath})
+
+	executionError := command.Execute()
+	require.NoError(testInstance, executionError)
+
+	require.Equal(testInstance, []string{repositoryPath}, discoverer.receivedRoots)
+	require.NotEmpty(testInstance, gitExecutor.githubCommands)
+
+	outputText := outputBuffer.String()
+	require.Contains(testInstance, outputText, "TASK-PLAN: Add Notes "+repositoryPath+" branch=automation-Add-Notes base=main")
+	require.Contains(testInstance, outputText, "TASK-PLAN: Add Notes file=NOTES.md action=write")
+}
+
 type fakeWorkflowDiscoverer struct {
 	receivedRoots []string
+	repositories  []string
 }
 
 func (discoverer *fakeWorkflowDiscoverer) DiscoverRepositories(roots []string) ([]string, error) {
 	discoverer.receivedRoots = append([]string{}, roots...)
-	return []string{}, nil
+	if len(discoverer.repositories) == 0 {
+		return []string{}, nil
+	}
+	return append([]string{}, discoverer.repositories...), nil
 }
 
 type fakeWorkflowGitExecutor struct{}
@@ -203,4 +269,37 @@ func (executor *fakeWorkflowGitExecutor) ExecuteGit(context.Context, execshell.C
 
 func (executor *fakeWorkflowGitExecutor) ExecuteGitHubCLI(context.Context, execshell.CommandDetails) (execshell.ExecutionResult, error) {
 	return execshell.ExecutionResult{StandardOutput: ""}, nil
+}
+
+type applyTasksWorkflowGitExecutor struct {
+	gitCommands    []execshell.CommandDetails
+	githubCommands []execshell.CommandDetails
+}
+
+func (executor *applyTasksWorkflowGitExecutor) ExecuteGit(_ context.Context, details execshell.CommandDetails) (execshell.ExecutionResult, error) {
+	executor.gitCommands = append(executor.gitCommands, details)
+	args := details.Arguments
+	if len(args) >= 2 && args[0] == "rev-parse" {
+		switch args[1] {
+		case "--is-inside-work-tree":
+			return execshell.ExecutionResult{StandardOutput: "true\n"}, nil
+		case "--abbrev-ref":
+			return execshell.ExecutionResult{StandardOutput: "master\n"}, nil
+		}
+	}
+
+	if len(args) >= 3 && args[0] == "remote" && args[1] == "get-url" && args[2] == "origin" {
+		return execshell.ExecutionResult{StandardOutput: "https://github.com/octocat/sample.git\n"}, nil
+	}
+
+	return execshell.ExecutionResult{}, nil
+}
+
+func (executor *applyTasksWorkflowGitExecutor) ExecuteGitHubCLI(_ context.Context, details execshell.CommandDetails) (execshell.ExecutionResult, error) {
+	executor.githubCommands = append(executor.githubCommands, details)
+	if len(details.Arguments) >= 2 && details.Arguments[0] == "repo" && details.Arguments[1] == "view" {
+		response := `{"nameWithOwner":"octocat/sample","description":"","defaultBranchRef":{"name":"main"},"isInOrganization":false}`
+		return execshell.ExecutionResult{StandardOutput: response}, nil
+	}
+	return execshell.ExecutionResult{}, nil
 }

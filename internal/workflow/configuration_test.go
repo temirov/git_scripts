@@ -123,6 +123,33 @@ func TestBuildOperations(testInstance *testing.T) {
 				require.True(testingInstance, renameOperation.IncludeOwner)
 			},
 		},
+		{
+			name: "builds task operation",
+			configuration: workflow.Configuration{
+				Steps: []workflow.StepConfiguration{
+					{
+						Operation: workflow.OperationTypeApplyTasks,
+						Options: map[string]any{
+							"tasks": []any{
+								map[string]any{
+									"name": "add-agents",
+									"files": []any{
+										map[string]any{
+											"path":    "AGENTS.md",
+											"content": "example",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedOperationType: workflow.OperationTypeApplyTasks,
+			assertFunc: func(testingInstance *testing.T, operation workflow.Operation) {
+				require.IsType(testingInstance, &workflow.TaskOperation{}, operation)
+			},
+		},
 	}
 
 	for testCaseIndex := range testCases {
@@ -144,6 +171,18 @@ func TestBuildOperationsMissingOperation(testInstance *testing.T) {
 	_, buildError := workflow.BuildOperations(configuration)
 	require.Error(testInstance, buildError)
 	require.ErrorContains(testInstance, buildError, "workflow step missing operation name")
+}
+
+func TestBuildOperationsApplyTasksValidation(testInstance *testing.T) {
+	configuration := workflow.Configuration{
+		Steps: []workflow.StepConfiguration{
+			{Operation: workflow.OperationTypeApplyTasks},
+		},
+	}
+
+	_, buildError := workflow.BuildOperations(configuration)
+	require.Error(testInstance, buildError)
+	require.ErrorContains(testInstance, buildError, "apply-tasks step requires at least one task entry")
 }
 
 func TestLoadConfiguration(testInstance *testing.T) {

@@ -28,3 +28,13 @@ func (OSFileSystem) Abs(path string) (string, error) {
 func (OSFileSystem) MkdirAll(path string, permissions fs.FileMode) error {
 	return os.MkdirAll(path, permissions)
 }
+
+// ReadFile reads file contents.
+func (OSFileSystem) ReadFile(path string) ([]byte, error) {
+	return os.ReadFile(path)
+}
+
+// WriteFile writes data to a file with the supplied permissions.
+func (OSFileSystem) WriteFile(path string, data []byte, permissions fs.FileMode) error {
+	return os.WriteFile(path, data, permissions)
+}

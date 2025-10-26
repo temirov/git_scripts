@@ -50,6 +50,8 @@ type FileSystem interface {
 	Rename(oldPath string, newPath string) error
 	Abs(path string) (string, error)
 	MkdirAll(path string, permissions fs.FileMode) error
+	ReadFile(path string) ([]byte, error)
+	WriteFile(path string, data []byte, permissions fs.FileMode) error
 }
 
 // ConfirmationResult captures the outcome of a user confirmation prompt.

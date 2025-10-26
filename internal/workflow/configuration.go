@@ -28,6 +28,7 @@ const (
 	OperationTypeRenameDirectories  OperationType = OperationType("rename-directories")
 	OperationTypeBranchMigration    OperationType = OperationType("migrate-branch")
 	OperationTypeAuditReport        OperationType = OperationType("audit-report")
+	OperationTypeApplyTasks         OperationType = OperationType("apply-tasks")
 )
 
 // Configuration describes the ordered workflow steps loaded from YAML or JSON.
