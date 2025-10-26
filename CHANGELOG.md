@@ -13,6 +13,7 @@
 
 ### Docs 📚
 - Documented the branch command expectations now that the global `--branch` flag is removed.
+- Refreshed the README command catalog with up-to-date command paths and shortcuts.
 
 ## [v0.1.0]
 
