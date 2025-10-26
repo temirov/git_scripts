@@ -111,6 +111,13 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
     ```
     Same required argument with description and examples shall be in all commands that would require such argument. Analyze all command if there is a similar scenario and the arguments are missing in the help, and fix them.
 
+    - [ ] [GX-09] Got an error message after issuing the command `go run ./... repo release v0.1.0`
+    ```shell
+    no repository roots provided; specify --roots or configure defaults
+    exit status 1
+    ```
+    but that makes no sense. We do embed the default config and the command requires no other information, since --rrots shall have '.' as a default
+
 ## Maintenance
 
 ## Planning 
