@@ -110,7 +110,8 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
     exit status 1
     ```
 
-    - [ ] [GX-12] Same required argument with description and examples as in GX-08 shall be in all commands that would require such argument. Analyze all command if there is a similar scenario and the arguments are missing in the help, and fix them.
+    - [x] [GX-12] Same required argument with description and examples as in GX-08 shall be in all commands that would require such argument. Analyze all command if there is a similar scenario and the arguments are missing in the help, and fix them.
+        Resolution: Added help usage templates and examples for `branch cd`, updated long descriptions, and added regression tests to enforce the required branch argument guidance.
 
     - [ ] [GX-10] Got an error message after issuing the command `go run ./... repo release v0.1.0`
     ```shell

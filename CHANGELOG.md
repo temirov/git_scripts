@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+### Bug Fixes 🐛
+- Updated `branch cd` help to surface the required `<branch>` argument along with usage guidance and examples.
+
+### Testing 🧪
+- Added CLI and command unit tests to enforce the `<branch>` usage template for `branch cd`.
+
 ## [v0.1.0]
 
 ### Features ✨

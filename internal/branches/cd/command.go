@@ -16,9 +16,11 @@ import (
 )
 
 const (
-	commandUseConstant                   = "branch-cd"
+	commandUseNameConstant               = "branch-cd"
+	commandUsageTemplateConstant         = commandUseNameConstant + " <branch>"
+	commandExampleTemplateConstant       = "gix branch cd feature/new-branch --roots ~/Development"
 	commandShortDescriptionConstant      = "Switch repositories to the selected branch"
-	commandLongDescriptionConstant       = "branch-cd fetches updates, switches to the requested branch, creates it if missing, and rebases onto the remote for each repository root."
+	commandLongDescriptionConstant       = "branch-cd fetches updates, switches to the requested branch, creates it if missing, and rebases onto the remote for each repository root. Provide the branch name as the first argument before any optional repository roots or flags, or configure a default branch in the application settings."
 	missingBranchMessageConstant         = "branch name is required; provide it as the first argument or configure a default"
 	changeSuccessMessageTemplateConstant = "SWITCHED: %s -> %s"
 	changeCreatedSuffixConstant          = " (created)"
@@ -38,11 +40,12 @@ type CommandBuilder struct {
 // Build constructs the branch-cd command.
 func (builder *CommandBuilder) Build() (*cobra.Command, error) {
 	command := &cobra.Command{
-		Use:   commandUseConstant,
-		Short: commandShortDescriptionConstant,
-		Long:  commandLongDescriptionConstant,
-		RunE:  builder.run,
-		Args:  cobra.ArbitraryArgs,
+		Use:     commandUsageTemplateConstant,
+		Short:   commandShortDescriptionConstant,
+		Long:    commandLongDescriptionConstant,
+		RunE:    builder.run,
+		Args:    cobra.ArbitraryArgs,
+		Example: commandExampleTemplateConstant,
 	}
 
 	return command, nil
