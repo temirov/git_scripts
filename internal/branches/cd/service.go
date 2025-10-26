@@ -18,9 +18,8 @@ const (
 	gitSwitchFailureTemplateConstant         = "failed to switch to branch %q: %w"
 	gitCreateBranchFailureTemplateConstant   = "failed to create branch %q from %s: %w"
 	gitPullFailureTemplateConstant           = "failed to pull latest changes: %w"
-	defaultRemoteNameConstant                = "origin"
+	defaultRemoteNameConstant                = shared.OriginRemoteNameConstant
 	gitFetchSubcommandConstant               = "fetch"
-	gitFetchAllFlagConstant                  = "--all"
 	gitFetchPruneFlagConstant                = "--prune"
 	gitSwitchSubcommandConstant              = "switch"
 	gitCreateBranchFlagConstant              = "-c"
@@ -98,7 +97,7 @@ func (service *Service) Change(executionContext context.Context, options Options
 	environment := map[string]string{gitTerminalPromptEnvironmentNameConstant: gitTerminalPromptEnvironmentDisableValue}
 
 	if _, err := service.executor.ExecuteGit(executionContext, execshell.CommandDetails{
-		Arguments:            []string{gitFetchSubcommandConstant, gitFetchAllFlagConstant, gitFetchPruneFlagConstant},
+		Arguments:            []string{gitFetchSubcommandConstant, gitFetchPruneFlagConstant, remoteName},
 		WorkingDirectory:     trimmedRepositoryPath,
 		EnvironmentVariables: environment,
 	}); err != nil {

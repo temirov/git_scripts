@@ -42,7 +42,7 @@ func TestChangeExecutesExpectedCommands(t *testing.T) {
 	require.Equal(t, Result{RepositoryPath: "/tmp/repo", BranchName: "feature", BranchCreated: false}, result)
 	require.Len(t, executor.recorded, 3)
 
-	require.Equal(t, []string{"fetch", "--all", "--prune"}, executor.recorded[0].Arguments)
+	require.Equal(t, []string{"fetch", "--prune", "origin"}, executor.recorded[0].Arguments)
 	require.Equal(t, []string{"switch", "feature"}, executor.recorded[1].Arguments)
 	require.Equal(t, []string{"pull", "--rebase"}, executor.recorded[2].Arguments)
 }

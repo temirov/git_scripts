@@ -149,7 +149,8 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
     ```
         Resolution: Default logging now runs at `error`, configuration banners only print in debug mode, and documentation/tests were updated so standard executions stay silent unless increased verbosity is requested.
 
-    - [ ] [GX-15] The message is misleading: `Fetching from unknown in .` We always know thwe current brnach and the branch we are switching to, so there can not be "unknown"
+    - [x] [GX-15] The message is misleading: `Fetching from unknown in .` We always know thwe current brnach and the branch we are switching to, so there can not be "unknown"
+        Resolution: Branch fetch now records the remote for logging, message formatter falls back to "all remotes" instead of "unknown," and tests cover the new behavior.
 
 ## Maintenance
 
