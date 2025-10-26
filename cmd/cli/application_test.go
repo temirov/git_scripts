@@ -91,6 +91,8 @@ var requiredOperationNames = []string{
 	"workflow",
 	"branch-refresh",
 	"branch-migrate",
+	"commit-message",
+	"changelog-message",
 }
 
 func TestApplicationInitializeConfiguration(t *testing.T) {

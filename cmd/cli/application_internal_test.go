@@ -184,6 +184,18 @@ func TestApplicationCommandHierarchyAndAliases(t *testing.T) {
 	require.NotNil(t, branchMigrateCommand.Parent())
 	require.Equal(t, "branch", branchMigrateCommand.Parent().Name())
 
+	commitMessageCommand, _, commitMessageError := rootCommand.Find([]string{"c", "message"})
+	require.NoError(t, commitMessageError)
+	require.Equal(t, "message", commitMessageCommand.Name())
+	require.NotNil(t, commitMessageCommand.Parent())
+	require.Equal(t, "commit", commitMessageCommand.Parent().Name())
+
+	changelogMessageCommand, _, changelogMessageError := rootCommand.Find([]string{"l", "message"})
+	require.NoError(t, changelogMessageError)
+	require.Equal(t, "message", changelogMessageCommand.Name())
+	require.NotNil(t, changelogMessageCommand.Parent())
+	require.Equal(t, "changelog", changelogMessageCommand.Parent().Name())
+
 	_, _, legacyRenameError := rootCommand.Find([]string{"repo-folders-rename"})
 	require.Error(t, legacyRenameError)
 	require.Contains(t, legacyRenameError.Error(), "unknown command")
