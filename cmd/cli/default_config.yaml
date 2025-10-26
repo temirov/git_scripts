@@ -1,5 +1,5 @@
 common:
-  log_level: info
+  log_level: error
   log_format: console
   dry_run: false
   assume_yes: false

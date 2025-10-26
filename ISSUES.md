@@ -134,7 +134,7 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
     - [x] [GX-11] what is --branch CLI flag? `--branch string           Branch name for command context`. I dont think we use it anywhere. Remove it if it's unused, explain here otherwise
         Resolution: Standardized required argument messaging across commands by ensuring `repo release`, `branch cd`, and `workflow` help/usage strings surface their required inputs, backed by tests.
     
-    - [ ] [GX-14] See GX-12. Remove all logging unless explicitly called for. The INFO line should have not been there. The default logging is none.
+    - [x] [GX-14] See GX-12. Remove all logging unless explicitly called for. The INFO line should have not been there. The default logging is none.
     ```
     14:16:51 tyemirov@computercat:~/Development/gix [improvement/GX-13-command-alignment] $ go run ./... b cd master
     INFO    configuration initialized | log level=info | log format=console | config file=/home/tyemirov/Development/gix/config.yaml
@@ -145,8 +145,9 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
     14:17:20        INFO    Running git pull --rebase (in .)
     14:17:21        INFO    Completed git pull --rebase (in .)
     SWITCHED: . -> master
-    14:17:21 tyemirov@computercat:~/Development/gix [master] $ 
+    14:17:21 tyemirov@computercat:~/Development/gix [master] $
     ```
+        Resolution: Default logging now runs at `error`, configuration banners only print in debug mode, and documentation/tests were updated so standard executions stay silent unless increased verbosity is requested.
 
     - [ ] [GX-15] The message is misleading: `Fetching from unknown in .` We always know thwe current brnach and the branch we are switching to, so there can not be "unknown"
 

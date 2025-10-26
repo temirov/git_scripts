@@ -27,8 +27,10 @@ import (
 
 const (
 	testConfigurationFileNameConstant                        = "config.yaml"
-	testConfigurationHeaderConstant                          = "common:\n  log_level: info\n  log_format: structured\noperations:\n"
-	testConsoleConfigurationHeaderConstant                   = "common:\n  log_level: info\n  log_format: console\noperations:\n"
+	testConfigurationHeaderConstant                          = "common:\n  log_level: error\n  log_format: structured\noperations:\n"
+	testConsoleConfigurationHeaderConstant                   = "common:\n  log_level: error\n  log_format: console\noperations:\n"
+	testDebugConfigurationHeaderConstant                     = "common:\n  log_level: debug\n  log_format: structured\noperations:\n"
+	testDebugConsoleConfigurationHeaderConstant              = "common:\n  log_level: debug\n  log_format: console\noperations:\n"
 	testOperationBlockTemplateConstant                       = "  - operation: %s\n    with:\n%s"
 	testOperationRootsTemplateConstant                       = "      roots:\n        - %s\n"
 	testOperationRootDirectoryConstant                       = "/tmp/config-root"
@@ -75,7 +77,7 @@ const (
 	configurationInitializationArgumentsLocalConstant        = "--init"
 	configurationInitializationArgumentsUserConstant         = "--init=user"
 	configurationInitializationForceFlagConstant             = "--force"
-	configurationInitializationExistingContentConstant       = "common:\n  log_level: info\n"
+	configurationInitializationExistingContentConstant       = "common:\n  log_level: error\n"
 	configurationInitializationErrorMessageFragmentConstant  = "already exists"
 	configurationInitializationApplicationNameConstant       = "gix"
 	configurationInitializationUserHomeEnvNameConstant       = "HOME"
@@ -181,8 +183,24 @@ func TestApplicationInitializationLoggingModes(testInstance *testing.T) {
 		assertion           func(*testing.T, string, string)
 	}{
 		{
-			name:                "StructuredLogging",
+			name:                "StructuredDefaultSilent",
 			configurationHeader: testConfigurationHeaderConstant,
+			assertion: func(t *testing.T, capturedOutput string, configurationPath string) {
+				t.Helper()
+				require.Empty(t, strings.TrimSpace(capturedOutput))
+			},
+		},
+		{
+			name:                "ConsoleDefaultSilent",
+			configurationHeader: testConsoleConfigurationHeaderConstant,
+			assertion: func(t *testing.T, capturedOutput string, configurationPath string) {
+				t.Helper()
+				require.Empty(t, strings.TrimSpace(capturedOutput))
+			},
+		},
+		{
+			name:                "StructuredDebugLogging",
+			configurationHeader: testDebugConfigurationHeaderConstant,
 			assertion: func(t *testing.T, capturedOutput string, configurationPath string) {
 				t.Helper()
 
@@ -201,7 +219,7 @@ func TestApplicationInitializationLoggingModes(testInstance *testing.T) {
 
 				logLevelValue, logLevelExists := logEntry[configurationLogLevelFieldNameConstant].(string)
 				require.True(t, logLevelExists)
-				require.Equal(t, string(utils.LogLevelInfo), logLevelValue)
+				require.Equal(t, string(utils.LogLevelDebug), logLevelValue)
 
 				logFormatValue, logFormatExists := logEntry[configurationLogFormatFieldNameConstant].(string)
 				require.True(t, logFormatExists)
@@ -213,8 +231,8 @@ func TestApplicationInitializationLoggingModes(testInstance *testing.T) {
 			},
 		},
 		{
-			name:                "ConsoleLogging",
-			configurationHeader: testConsoleConfigurationHeaderConstant,
+			name:                "ConsoleDebugLogging",
+			configurationHeader: testDebugConsoleConfigurationHeaderConstant,
 			assertion: func(t *testing.T, capturedOutput string, configurationPath string) {
 				t.Helper()
 
@@ -224,7 +242,7 @@ func TestApplicationInitializationLoggingModes(testInstance *testing.T) {
 				expectedBanner := fmt.Sprintf(
 					configurationInitializedConsoleTemplateConstant,
 					configurationInitializedMessageTextConstant,
-					string(utils.LogLevelInfo),
+					string(utils.LogLevelDebug),
 					string(utils.LogFormatConsole),
 					configurationPath,
 				)
@@ -243,18 +261,19 @@ func TestApplicationInitializationLoggingModes(testInstance *testing.T) {
 			configurationPath := filepath.Join(configurationDirectory, testConfigurationFileNameConstant)
 
 			writeConfigurationFile(t, configurationPath, configurationContent)
-
 			t.Setenv(testConfigurationSearchPathEnvironmentName, configurationDirectory)
 
 			application := cli.NewApplication()
-
 			stderrCapture := startTestStderrCapture(t)
 			initializationError := application.InitializeForCommand(testPackagesCommandNameConstant)
 			capturedOutput := stderrCapture.Stop(t)
 
 			require.NoError(t, initializationError)
 
-			testCase.assertion(t, capturedOutput, configurationPath)
+			resolvedConfigPath := resolveSymlinkedPath(t, application.ConfigFileUsed())
+			require.Equal(t, configurationPath, resolvedConfigPath)
+
+			testCase.assertion(t, capturedOutput, resolvedConfigPath)
 		})
 	}
 }
@@ -482,9 +501,9 @@ func TestApplicationConfigurationSearchPaths(testInstance *testing.T) {
 			capturedOutput := stderrCapture.Stop(testInstance)
 
 			require.NoError(testInstance, initializationError)
+			require.Empty(testInstance, strings.TrimSpace(capturedOutput))
 
-			configurationFilePath := extractConfigurationFilePath(testInstance, capturedOutput)
-			configurationFilePath = resolveSymlinkedPath(testInstance, configurationFilePath)
+			configurationFilePath := resolveSymlinkedPath(testInstance, application.ConfigFileUsed())
 			require.Equal(testInstance, expectedConfigurationPath, configurationFilePath)
 		})
 	}
@@ -654,43 +673,6 @@ func TestApplicationEmbeddedDefaultsProvideCommandConfigurations(testInstance *t
 			testCase.assertion(t, operationOptions)
 		})
 	}
-}
-
-func extractConfigurationFilePath(testingInstance testing.TB, capturedOutput string) string {
-	testingInstance.Helper()
-
-	logLines := strings.Split(capturedOutput, "\n")
-	for _, logLine := range logLines {
-		trimmedLine := strings.TrimSpace(logLine)
-		if len(trimmedLine) == 0 {
-			continue
-		}
-
-		var logEntry map[string]any
-		if json.Unmarshal([]byte(trimmedLine), &logEntry) == nil {
-			configurationValue, configurationExists := logEntry[configurationFileFieldNameConstant]
-			if !configurationExists {
-				continue
-			}
-
-			configurationPath, pathIsString := configurationValue.(string)
-			if pathIsString {
-				return configurationPath
-			}
-
-			continue
-		}
-
-		fieldIndex := strings.Index(trimmedLine, configurationFileFieldNameConstant+"=")
-		if fieldIndex >= 0 {
-			configurationFieldValue := strings.TrimSpace(trimmedLine[fieldIndex+len(configurationFileFieldNameConstant)+1:])
-			configurationFieldValue = strings.Trim(configurationFieldValue, "\"")
-			return configurationFieldValue
-		}
-	}
-
-	testingInstance.Fatalf("configuration file path not found in output: %s", capturedOutput)
-	return ""
 }
 
 func resolveSymlinkedPath(testingInstance testing.TB, candidatePath string) string {

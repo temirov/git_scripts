@@ -27,7 +27,6 @@ const (
 	integrationEnvironmentCaseNameConstant             = "environment_error"
 	integrationDebugLevelConstant                      = "debug"
 	integrationErrorLevelConstant                      = "error"
-	integrationInfoLevelConstant                       = "info"
 	integrationCommandTimeout                          = 5 * time.Second
 	integrationConfigFlagTemplateConstant              = "--config=%s"
 	integrationEnvironmentAssignmentTemplateConstant   = "%s=%s"
@@ -52,7 +51,7 @@ func writeIntegrationConfiguration(
 	logLevel string,
 ) string {
 	if len(logLevel) == 0 {
-		logLevel = integrationInfoLevelConstant
+		logLevel = integrationErrorLevelConstant
 	}
 
 	configurationPath := filepath.Join(directory, integrationConfigFileNameConstant)
@@ -82,7 +81,7 @@ func TestCLIIntegrationLogLevels(testInstance *testing.T) {
 			configurationLevel:   "",
 			environmentLevel:     "",
 			extraArguments:       nil,
-			expectedInfoVisible:  true,
+			expectedInfoVisible:  false,
 			expectedDebugVisible: false,
 		},
 		{
@@ -179,7 +178,7 @@ func TestCLIIntegrationDisplaysHelpWhenNoArgumentsProvided(testInstance *testing
 		testInstance.Run(fmt.Sprintf(integrationSubtestNameTemplateConstant, testCaseIndex, testCase.name), func(testInstance *testing.T) {
 			commandArguments := []string{integrationGoRunSubcommandConstant, integrationCurrentDirectoryArgumentConstant}
 			tempDirectory := testInstance.TempDir()
-			configurationPath := writeIntegrationConfiguration(testInstance, tempDirectory, "")
+			configurationPath := writeIntegrationConfiguration(testInstance, tempDirectory, integrationDebugLevelConstant)
 			commandArguments = append(commandArguments, fmt.Sprintf(integrationConfigFlagTemplateConstant, configurationPath))
 			executionContext, cancelFunction := context.WithTimeout(context.Background(), integrationCommandTimeout)
 			defer cancelFunction()
@@ -227,6 +226,7 @@ func TestCLIIntegrationRespectsLogFormatFlag(testInstance *testing.T) {
 			tempDirectory := testInstance.TempDir()
 			configurationPath := writeIntegrationConfiguration(testInstance, tempDirectory, "")
 			commandArguments = append(commandArguments, fmt.Sprintf(integrationConfigFlagTemplateConstant, configurationPath))
+			commandArguments = append(commandArguments, "--log-level=debug")
 			commandArguments = append(commandArguments, testCase.additionalArguments...)
 
 			executionContext, cancelFunction := context.WithTimeout(context.Background(), integrationCommandTimeout)
