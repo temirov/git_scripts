@@ -117,6 +117,7 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
     exit status 1
     ```
     but that makes no sense. We do embed the default config and the command requires no other information, since --rrots shall have '.' as a default
+    - [ ] [GX-11] what is --branch CLI flag? `--branch string           Branch name for command context`. I dont think we use it anywhere. Remove it if it's unused
 
 ## Maintenance
 
