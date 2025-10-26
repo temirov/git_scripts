@@ -112,23 +112,21 @@ Every command accepts the shared execution flags below in addition to its comman
 The commands below share repository discovery, prompting, and logging helpers. Use the quick-start examples to align
 with the registered command names and flags.
 
-| Command path                        | Shortcut                    | Former command         | Summary                                                       | Example                                                                                                 |
-|------------------------------------|-----------------------------|------------------------|---------------------------------------------------------------|---------------------------------------------------------------------------------------------------------|
-| `audit`                            | `a`                         | `audit`                | Audit and reconcile local GitHub repositories                 | `go run . a --log-level=debug --roots ~/Development --all`                                              |
-| `repo folder rename`               | `r folder rename`           | `repo-folders-rename`  | Rename repository directories to match canonical GitHub names | `go run . r folder rename --yes --require-clean --owner --roots ~/Development`                          |
-| `repo remote update-to-canonical`  | `r remote update-to-canonical` | `repo-remote-update`   | Update origin URLs to match canonical GitHub repositories     | `go run . r remote update-to-canonical --dry-run --owner canonical --roots ~/Development`               |
-| `repo remote update-protocol`      | `r remote update-protocol`  | `repo-protocol-convert`| Convert repository origin remotes between protocols           | `go run . r remote update-protocol --from https --to ssh --yes --roots ~/Development`                   |
-| `repo prs delete`                  | `r prs delete`              | `repo-prs-purge`       | Remove remote and local branches for closed pull requests     | `go run . r prs delete --remote origin --limit 100 --roots ~/Development`                               |
-| `repo packages delete`             | `r packages delete`         | `repo-packages-purge`  | Delete untagged GHCR versions                                 | `go run . r packages delete --dry-run --roots ~/Development`                                            |
-| `repo release`                     | `r release`                 | `repo-release`         | Annotate and push a release tag across repositories           | `go run . r release v1.2.3 --roots ~/Development`                                                      |
-| `branch migrate`                   | `b migrate`                 | `branch-migrate`       | Migrate repository defaults from main to master               | `go run . b migrate --from main --to master --roots ~/Development/project-repo`                         |
-| `branch refresh`                   | `b refresh`                 | `branch-refresh`       | Fetch, checkout, and pull a branch with recovery options      | `go run . b refresh --branch main --roots ~/Development/project-repo --stash`                           |
-| `branch cd`                        | `b cd`                      | `branch-cd`            | Switch to a branch across repositories, creating it if needed | `go run . b cd feature/rebrand --roots ~/Development/project-repo`                                      |
-| `commit message`                   | `c message`                 | `commit-message`       | Draft a Conventional Commit message from staged or worktree changes | `go run . c message --roots . --dry-run`                                                             |
-| `changelog message`                | `l message`                 | `changelog-message`    | Summarize recent history into a Markdown changelog section          | `go run . l message --roots . --version v1.0.0 --since-tag v0.9.0 --dry-run`                         |
-| `workflow`                         | `w`                         | `workflow`             | Run a workflow configuration file                             | `go run . w config.yaml --roots ~/Development --dry-run`                                                |
-
-Former command names are listed for reference only; the previous hyphenated invocations have been removed and now serve solely as `operations[].operation` identifiers in configuration files.
+| Command path                        | Shortcut                    | Summary                                                       | Example                                                                                                 |
+|------------------------------------|-----------------------------|---------------------------------------------------------------|---------------------------------------------------------------------------------------------------------|
+| `audit`                            | `a`                         | Audit and reconcile local GitHub repositories                 | `go run . a --log-level=debug --roots ~/Development --all`                                              |
+| `repo folder rename`               | `r folder rename`           | Rename repository directories to match canonical GitHub names | `go run . r folder rename --yes --require-clean --owner --roots ~/Development`                          |
+| `repo remote update-to-canonical`  | `r remote update-to-canonical` | Sync origin remotes to canonical GitHub repositories      | `go run . r remote update-to-canonical --dry-run --owner canonical --roots ~/Development`               |
+| `repo remote update-protocol`      | `r remote update-protocol`  | Convert repository origin remotes between protocols           | `go run . r remote update-protocol --from https --to ssh --yes --roots ~/Development`                   |
+| `repo prs delete`                  | `r prs delete`              | Remove remote and local branches for closed pull requests     | `go run . r prs delete --remote origin --limit 100 --roots ~/Development`                               |
+| `repo packages delete`             | `r packages delete`         | Delete untagged GHCR versions                                 | `go run . r packages delete --dry-run --roots ~/Development`                                            |
+| `repo release`                     | `r release`                 | Annotate and push a release tag across repositories           | `go run . r release v1.2.3 --roots ~/Development`                                                      |
+| `branch migrate`                   | `b migrate`                 | Migrate repository defaults from main to master               | `go run . b migrate --from main --to master --roots ~/Development/project-repo`                         |
+| `branch refresh`                   | `b refresh`                 | Fetch, checkout, and pull a branch with recovery options      | `go run . b refresh --branch main --roots ~/Development/project-repo --stash`                           |
+| `branch cd`                        | `b cd`                      | Switch repositories to a branch, creating it when missing     | `go run . b cd feature/rebrand --roots ~/Development/project-repo`                                      |
+| `branch commit message`            | `b commit message`          | Draft a Conventional Commit message from staged or worktree changes | `go run . b commit message --roots . --dry-run`                                                     |
+| `repo changelog message`           | `r changelog message`       | Summarize recent history into a Markdown changelog section    | `go run . r changelog message --roots . --version v1.0.0 --since-tag v0.9.0 --dry-run`               |
+| `workflow`                         | `w`                         | Run a workflow configuration file                             | `go run . w config.yaml --roots ~/Development --dry-run`                                                |
 
 Persist defaults and workflow plans in a single configuration file to avoid long flag lists and keep the runner in sync:
 
@@ -358,9 +356,9 @@ go run . repo release v1.5.0 --roots ~/Development
 go run . r release v1.5.0 --remote upstream --message "Release v1.5.0 (hotfix rollup)" --roots ~/Development/services
 ```
 
-#### Commit message assistant (`commit message`)
+#### Commit message assistant (`branch commit message`)
 
-Use `commit message` to turn the current repository changes into a ready-to-paste Conventional Commit draft. The
+Use `branch commit message` to turn the current repository changes into a ready-to-paste Conventional Commit draft. The
 command shells out to git, composes a structured prompt, and delegates to the configured LLM provider.
 
 - Defaults expect `OPENAI_API_KEY` to hold your token, but you can override the lookup with `api_key_env` in the
@@ -376,19 +374,19 @@ Examples:
 
 ```shell
 # Preview the prompt before sending anything to the model
-go run . commit message --roots . --dry-run
+go run . branch commit message --roots . --dry-run
 
 # Generate a message from staged changes using a local OpenAI-compatible endpoint
-OPENAI_API_KEY=sk-xxxx go run . commit message \
+OPENAI_API_KEY=sk-xxxx go run . branch commit message \
   --roots ~/Development/project \
   --base-url http://localhost:11434/v1 \
   --model llama3.1 \
   --diff-source staged
 ```
 
-#### Changelog assistant (`changelog message`)
+#### Changelog assistant (`repo changelog message`)
 
-`changelog message` converts the commits and diffs since a chosen boundary into a Markdown changelog section that matches the format used in this repository.
+`repo changelog message` converts the commits and diffs since a chosen boundary into a Markdown changelog section that matches the format used in this repository.
 
 - Supply `--version` (and optionally `--release-date`) to control the heading.
 - Pick the comparison baseline with `--since-tag` (tag or commit) or `--since-date` (RFC3339 or `YYYY-MM-DD`). If neither flag is set, gix falls back to the most recent tag or, when no tags exist, to the repository root.
@@ -398,10 +396,10 @@ Examples:
 
 ```shell
 # Preview the prompt used to generate release notes for the next version
-go run . changelog message --roots . --version v1.0.0 --since-tag v0.9.0 --dry-run
+go run . repo changelog message --roots . --version v1.0.0 --since-tag v0.9.0 --dry-run
 
 # Produce a Markdown section for changes since a specific date using a local model endpoint
-OPENAI_API_KEY=sk-xxxx go run . changelog message \
+OPENAI_API_KEY=sk-xxxx go run . repo changelog message \
   --roots ~/Development/project \
   --version v1.0.0 \
   --release-date 2025-10-08 \

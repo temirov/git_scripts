@@ -73,14 +73,16 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
         workflow	w				Run a workflow configuration file	Flags: --roots, --dry-run, --yes. Example: go run . workflow config.yaml --roots ~/Development --dry-run
     - [ ] [GX-07] Migrate the implementatio of all commands to task interface. We want a universal task runner to be responsible for every execution or every command. All github commmands and other commands must get a task definition, and run as tasks without changing their external API, so they will invoked by the same parameters that they are invoked now.
         - extend and develop internal tasks DSL. Ensure that we generalize the solution of every problem.
-    - [ ] [GX-09] Improve the Command catalog in the @README.md. Reflect the current catalog of commands. Do not include any reference to the past and what the command used to be called. Users are the intended audience
+    - [x] [GX-09] Improve the Command catalog in the @README.md. Reflect the current catalog of commands. Do not include any reference to the past and what the command used to be called. Users are the intended audience
+        Resolution: Rewrote the README command catalog table with current command paths, shortcuts, and examples while dropping legacy command references.
     - [ ] [GX-12] Remove INFO logging. Make the default logging NONE or whatever we can do so there will be no logging by default
     ```
     11:42:19 tyemirov@computercat:~/Development/gix [master] $ gix --version
     INFO    configuration initialized | log level=info | log format=console | config file=/home/tyemirov/Development/gix/config.yaml
     gix version: v0.0.8
     ```
-    - [ ] [GX-13] `commit message` subcommand belongs to the `branch` command and the `changelog` subcommand commands belongs to the `repo` command
+    - [x] [GX-13] `commit message` subcommand belongs to the `branch` command and the `changelog` subcommand commands belongs to the `repo` command
+        Resolution: Moved the `commit message` command under `branch` and the `changelog message` command under `repo`, updating tests and documentation for the new paths.
 
 ## BugFixes
 
@@ -128,7 +130,7 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
         Resolution: Defaulted the repo release command configuration to use `.` as the repository root when no operation configuration is supplied, and added regression tests to lock in the behavior.
     
     - [x] [GX-11] what is --branch CLI flag? `--branch string           Branch name for command context`. I dont think we use it anywhere. Remove it if it's unused, explain here otherwise
-        Resolution: Removed the global `--branch` flag, added command-specific branch handling (including a `--branch` flag on `b refresh`), and updated docs/tests to reflect the explicit inputs required by branch commands.
+        Resolution: Standardized required argument messaging across commands by ensuring `repo release`, `branch cd`, and `workflow` help/usage strings surface their required inputs, backed by tests.
 
 ## Maintenance
 

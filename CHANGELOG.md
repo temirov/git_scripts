@@ -2,9 +2,13 @@
 
 ## [Unreleased]
 
+### Improvements ⚙️
+- Nested `commit message` under the `branch` namespace and `changelog message` under `repo` to keep related commands grouped.
+
 ### Bug Fixes 🐛
 - Updated `branch cd` help to surface the required `<branch>` argument along with usage guidance and examples.
 - Ensured `repo release` falls back to the embedded `.` repository root when user configuration omits the operation defaults.
+- Updated `workflow` help text to surface the required configuration path and example usage.
 
 ### Testing 🧪
 - Added CLI and command unit tests to enforce the `<branch>` usage template for `branch cd`.
@@ -13,6 +17,7 @@
 
 ### Docs 📚
 - Documented the branch command expectations now that the global `--branch` flag is removed.
+- Refreshed the README command catalog with up-to-date command paths and shortcuts.
 
 ## [v0.1.0]
 

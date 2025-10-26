@@ -199,17 +199,21 @@ func TestApplicationCommandHierarchyAndAliases(t *testing.T) {
 	require.NotNil(t, branchChangeCommand.Parent())
 	require.Equal(t, "branch", branchChangeCommand.Parent().Name())
 
-	commitMessageCommand, _, commitMessageError := rootCommand.Find([]string{"c", "message"})
+	commitMessageCommand, _, commitMessageError := rootCommand.Find([]string{"b", "commit", "message"})
 	require.NoError(t, commitMessageError)
 	require.Equal(t, "message", commitMessageCommand.Name())
 	require.NotNil(t, commitMessageCommand.Parent())
 	require.Equal(t, "commit", commitMessageCommand.Parent().Name())
+	require.NotNil(t, commitMessageCommand.Parent().Parent())
+	require.Equal(t, "branch", commitMessageCommand.Parent().Parent().Name())
 
-	changelogMessageCommand, _, changelogMessageError := rootCommand.Find([]string{"l", "message"})
+	changelogMessageCommand, _, changelogMessageError := rootCommand.Find([]string{"r", "changelog", "message"})
 	require.NoError(t, changelogMessageError)
 	require.Equal(t, "message", changelogMessageCommand.Name())
 	require.NotNil(t, changelogMessageCommand.Parent())
 	require.Equal(t, "changelog", changelogMessageCommand.Parent().Name())
+	require.NotNil(t, changelogMessageCommand.Parent().Parent())
+	require.Equal(t, "repo", changelogMessageCommand.Parent().Parent().Name())
 
 	_, _, legacyRenameError := rootCommand.Find([]string{"repo-folders-rename"})
 	require.Error(t, legacyRenameError)
@@ -259,6 +263,14 @@ func TestApplicationHierarchicalCommandsLoadExpectedOperations(t *testing.T) {
 	branchMigrateCommand, _, branchMigrateError := rootCommand.Find([]string{"b", "migrate"})
 	require.NoError(t, branchMigrateError)
 	require.Equal(t, []string{branchMigrateOperationNameConstant}, application.operationsRequiredForCommand(branchMigrateCommand))
+
+	commitMessageCommand, _, commitMessageError := rootCommand.Find([]string{"b", "commit", "message"})
+	require.NoError(t, commitMessageError)
+	require.Equal(t, []string{commitMessageOperationNameConstant}, application.operationsRequiredForCommand(commitMessageCommand))
+
+	changelogMessageCommand, _, changelogMessageError := rootCommand.Find([]string{"r", "changelog", "message"})
+	require.NoError(t, changelogMessageError)
+	require.Equal(t, []string{changelogMessageOperationNameConstant}, application.operationsRequiredForCommand(changelogMessageCommand))
 }
 
 func TestReleaseCommandUsageIncludesTagPlaceholder(t *testing.T) {
@@ -285,6 +297,18 @@ func TestBranchChangeCommandUsageIncludesBranchPlaceholder(t *testing.T) {
 	require.Contains(t, branchChangeCommand.Use, "<branch>")
 	require.Contains(t, branchChangeCommand.Long, "Provide the branch name as the first argument")
 	require.Contains(t, branchChangeCommand.Example, "gix branch cd")
+}
+
+func TestWorkflowCommandUsageIncludesConfigurationPlaceholder(t *testing.T) {
+	application := NewApplication()
+	rootCommand := application.rootCommand
+
+	workflowCommand, _, workflowError := rootCommand.Find([]string{"w"})
+	require.NoError(t, workflowError)
+
+	require.Contains(t, workflowCommand.Use, "<configuration>")
+	require.Contains(t, workflowCommand.Long, "Provide the configuration path as the first argument")
+	require.Contains(t, workflowCommand.Example, "gix workflow")
 }
 
 func TestRepoReleaseConfigurationUsesEmbeddedDefaults(t *testing.T) {
