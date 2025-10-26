@@ -83,6 +83,8 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
     ```
     - [x] [GX-13] `commit message` subcommand belongs to the `branch` command and the `changelog` subcommand commands belongs to the `repo` command
         Resolution: Moved the `commit message` command under `branch` and the `changelog message` command under `repo`, updating tests and documentation for the new paths.
+    
+    
 
 ## BugFixes
 
@@ -131,6 +133,22 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
     
     - [x] [GX-11] what is --branch CLI flag? `--branch string           Branch name for command context`. I dont think we use it anywhere. Remove it if it's unused, explain here otherwise
         Resolution: Standardized required argument messaging across commands by ensuring `repo release`, `branch cd`, and `workflow` help/usage strings surface their required inputs, backed by tests.
+    
+    - [ ] [GX-14] See GX-12. Remove all logging unless explicitly called for. The INFO line should have not been there.
+    ```
+    14:16:51 tyemirov@computercat:~/Development/gix [improvement/GX-13-command-alignment] $ go run ./... b cd master
+    INFO    configuration initialized | log level=info | log format=console | config file=/home/tyemirov/Development/gix/config.yaml
+    14:17:18        INFO    Fetching from unknown in .
+    14:17:20        INFO    Fetched from unknown in .
+    14:17:20        INFO    Running git switch master (in .)
+    14:17:20        INFO    Completed git switch master (in .)
+    14:17:20        INFO    Running git pull --rebase (in .)
+    14:17:21        INFO    Completed git pull --rebase (in .)
+    SWITCHED: . -> master
+    14:17:21 tyemirov@computercat:~/Development/gix [master] $ 
+    ```
+
+    - [ ] [GX-15] The message is misleading: `Fetching from unknown in .` We always know thwe current brnach and the branch we are switching to, so there can not be "unknown"
 
 ## Maintenance
 
