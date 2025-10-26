@@ -15,12 +15,15 @@ const (
 	branchNameRequiredMessageConstant        = "branch name must be provided"
 	gitExecutorMissingMessageConstant        = "git executor not configured"
 	gitFetchFailureTemplateConstant          = "failed to fetch updates: %w"
+	gitRemoteListFailureTemplateConstant     = "failed to list remotes: %w"
 	gitSwitchFailureTemplateConstant         = "failed to switch to branch %q: %w"
 	gitCreateBranchFailureTemplateConstant   = "failed to create branch %q from %s: %w"
 	gitPullFailureTemplateConstant           = "failed to pull latest changes: %w"
 	defaultRemoteNameConstant                = shared.OriginRemoteNameConstant
 	gitFetchSubcommandConstant               = "fetch"
+	gitFetchAllFlagConstant                  = "--all"
 	gitFetchPruneFlagConstant                = "--prune"
+	gitRemoteSubcommandConstant              = "remote"
 	gitSwitchSubcommandConstant              = "switch"
 	gitCreateBranchFlagConstant              = "-c"
 	gitTrackFlagConstant                     = "--track"
@@ -86,7 +89,8 @@ func (service *Service) Change(executionContext context.Context, options Options
 	}
 
 	remoteName := strings.TrimSpace(options.RemoteName)
-	if len(remoteName) == 0 {
+	remoteExplicitlyProvided := len(remoteName) > 0
+	if !remoteExplicitlyProvided {
 		remoteName = defaultRemoteNameConstant
 	}
 
@@ -96,8 +100,24 @@ func (service *Service) Change(executionContext context.Context, options Options
 
 	environment := map[string]string{gitTerminalPromptEnvironmentNameConstant: gitTerminalPromptEnvironmentDisableValue}
 
+	fetchArguments := []string{gitFetchSubcommandConstant}
+	useAllRemotes := false
+	if !remoteExplicitlyProvided {
+		remoteExists, remoteLookupErr := service.remoteExists(executionContext, trimmedRepositoryPath, remoteName, environment)
+		if remoteLookupErr != nil {
+			return Result{}, fmt.Errorf(gitFetchFailureTemplateConstant, fmt.Errorf(gitRemoteListFailureTemplateConstant, remoteLookupErr))
+		}
+		useAllRemotes = !remoteExists
+	}
+
+	if useAllRemotes {
+		fetchArguments = append(fetchArguments, gitFetchAllFlagConstant, gitFetchPruneFlagConstant)
+	} else {
+		fetchArguments = append(fetchArguments, gitFetchPruneFlagConstant, remoteName)
+	}
+
 	if _, err := service.executor.ExecuteGit(executionContext, execshell.CommandDetails{
-		Arguments:            []string{gitFetchSubcommandConstant, gitFetchPruneFlagConstant, remoteName},
+		Arguments:            fetchArguments,
 		WorkingDirectory:     trimmedRepositoryPath,
 		EnvironmentVariables: environment,
 	}); err != nil {
@@ -139,4 +159,26 @@ func (service *Service) trySwitch(executionContext context.Context, repositoryPa
 		EnvironmentVariables: environment,
 	})
 	return err
+}
+
+func (service *Service) remoteExists(executionContext context.Context, repositoryPath string, remoteName string, environment map[string]string) (bool, error) {
+	if len(strings.TrimSpace(remoteName)) == 0 {
+		return false, nil
+	}
+
+	result, err := service.executor.ExecuteGit(executionContext, execshell.CommandDetails{
+		Arguments:            []string{gitRemoteSubcommandConstant},
+		WorkingDirectory:     repositoryPath,
+		EnvironmentVariables: environment,
+	})
+	if err != nil {
+		return false, err
+	}
+
+	for _, candidate := range strings.Split(result.StandardOutput, "\n") {
+		if strings.TrimSpace(candidate) == remoteName {
+			return true, nil
+		}
+	}
+	return false, nil
 }

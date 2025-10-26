@@ -11,21 +11,27 @@ import (
 )
 
 type stubGitExecutor struct {
-	recorded []execshell.CommandDetails
-	errors   []error
+	recorded  []execshell.CommandDetails
+	responses []stubGitResponse
+}
+
+type stubGitResponse struct {
+	result execshell.ExecutionResult
+	err    error
 }
 
 func (executor *stubGitExecutor) ExecuteGit(_ context.Context, details execshell.CommandDetails) (execshell.ExecutionResult, error) {
 	executor.recorded = append(executor.recorded, details)
-	if len(executor.errors) == 0 {
+	if len(executor.responses) == 0 {
 		return execshell.ExecutionResult{}, nil
 	}
-	next := executor.errors[0]
-	executor.errors = executor.errors[1:]
-	if next != nil {
-		return execshell.ExecutionResult{}, next
+
+	next := executor.responses[0]
+	executor.responses = executor.responses[1:]
+	if next.err != nil {
+		return execshell.ExecutionResult{}, next.err
 	}
-	return execshell.ExecutionResult{}, nil
+	return next.result, nil
 }
 
 func (executor *stubGitExecutor) ExecuteGitHubCLI(context.Context, execshell.CommandDetails) (execshell.ExecutionResult, error) {
@@ -48,7 +54,7 @@ func TestChangeExecutesExpectedCommands(t *testing.T) {
 }
 
 func TestChangeCreatesBranchWhenMissing(t *testing.T) {
-	executor := &stubGitExecutor{errors: []error{nil, errors.New("missing"), nil, nil}}
+	executor := &stubGitExecutor{responses: []stubGitResponse{{}, {err: errors.New("missing")}}}
 	service, err := NewService(ServiceDependencies{GitExecutor: executor})
 	require.NoError(t, err)
 
@@ -72,7 +78,35 @@ func TestChangeValidatesInputs(t *testing.T) {
 }
 
 func TestChangeSurfaceGitErrors(t *testing.T) {
-	executor := &stubGitExecutor{errors: []error{errors.New("fetch failed")}}
+	executor := &stubGitExecutor{responses: []stubGitResponse{
+		{result: execshell.ExecutionResult{StandardOutput: "origin\n"}},
+		{err: errors.New("fetch failed")},
+	}}
+	service, err := NewService(ServiceDependencies{GitExecutor: executor})
+	require.NoError(t, err)
+
+	_, changeError := service.Change(context.Background(), Options{RepositoryPath: "/tmp/repo", BranchName: "main"})
+	require.ErrorContains(t, changeError, "fetch updates")
+}
+
+func TestChangeFetchesAllWhenDefaultRemoteMissing(t *testing.T) {
+	executor := &stubGitExecutor{responses: []stubGitResponse{
+		{result: execshell.ExecutionResult{StandardOutput: "upstream\n"}},
+	}}
+	service, err := NewService(ServiceDependencies{GitExecutor: executor})
+	require.NoError(t, err)
+
+	result, changeError := service.Change(context.Background(), Options{RepositoryPath: "/tmp/repo", BranchName: "feature"})
+	require.NoError(t, changeError)
+	require.False(t, result.BranchCreated)
+
+	require.Len(t, executor.recorded, 4)
+	require.Equal(t, []string{"remote"}, executor.recorded[0].Arguments)
+	require.Equal(t, []string{"fetch", "--all", "--prune"}, executor.recorded[1].Arguments)
+}
+
+func TestChangeFailsWhenRemoteEnumerationFails(t *testing.T) {
+	executor := &stubGitExecutor{responses: []stubGitResponse{{err: errors.New("remote list failed")}}}
 	service, err := NewService(ServiceDependencies{GitExecutor: executor})
 	require.NoError(t, err)
 
