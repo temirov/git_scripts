@@ -178,11 +178,23 @@ func TestApplicationCommandHierarchyAndAliases(t *testing.T) {
 	require.NotNil(t, repoPackagesCommand.Parent())
 	require.Equal(t, "packages", repoPackagesCommand.Parent().Name())
 
+	releaseCommand, _, releaseError := rootCommand.Find([]string{"r", "release"})
+	require.NoError(t, releaseError)
+	require.Equal(t, "release", releaseCommand.Name())
+	require.NotNil(t, releaseCommand.Parent())
+	require.Equal(t, "repo", releaseCommand.Parent().Name())
+
 	branchMigrateCommand, _, branchMigrateError := rootCommand.Find([]string{"b", "migrate"})
 	require.NoError(t, branchMigrateError)
 	require.Equal(t, "migrate", branchMigrateCommand.Name())
 	require.NotNil(t, branchMigrateCommand.Parent())
 	require.Equal(t, "branch", branchMigrateCommand.Parent().Name())
+
+	branchChangeCommand, _, branchChangeError := rootCommand.Find([]string{"b", "cd"})
+	require.NoError(t, branchChangeError)
+	require.Equal(t, "cd", branchChangeCommand.Name())
+	require.NotNil(t, branchChangeCommand.Parent())
+	require.Equal(t, "branch", branchChangeCommand.Parent().Name())
 
 	commitMessageCommand, _, commitMessageError := rootCommand.Find([]string{"c", "message"})
 	require.NoError(t, commitMessageError)

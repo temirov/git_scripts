@@ -120,8 +120,10 @@ with the registered command names and flags.
 | `repo remote update-protocol`      | `r remote update-protocol`  | `repo-protocol-convert`| Convert repository origin remotes between protocols           | `go run . r remote update-protocol --from https --to ssh --yes --roots ~/Development`                   |
 | `repo prs delete`                  | `r prs delete`              | `repo-prs-purge`       | Remove remote and local branches for closed pull requests     | `go run . r prs delete --remote origin --limit 100 --roots ~/Development`                               |
 | `repo packages delete`             | `r packages delete`         | `repo-packages-purge`  | Delete untagged GHCR versions                                 | `go run . r packages delete --dry-run --roots ~/Development`                                            |
+| `repo release`                     | `r release`                 | `repo-release`         | Annotate and push a release tag across repositories           | `go run . r release v1.2.3 --roots ~/Development`                                                      |
 | `branch migrate`                   | `b migrate`                 | `branch-migrate`       | Migrate repository defaults from main to master               | `go run . b migrate --from main --to master --roots ~/Development/project-repo`                         |
 | `branch refresh`                   | `b refresh`                 | `branch-refresh`       | Fetch, checkout, and pull a branch with recovery options      | `go run . b refresh --branch main --roots ~/Development/project-repo --stash`                           |
+| `branch cd`                        | `b cd`                      | `branch-cd`            | Switch to a branch across repositories, creating it if needed | `go run . b cd feature/rebrand --roots ~/Development/project-repo`                                      |
 | `commit message`                   | `c message`                 | `commit-message`       | Draft a Conventional Commit message from staged or worktree changes | `go run . c message --roots . --dry-run`                                                             |
 | `changelog message`                | `l message`                 | `changelog-message`    | Summarize recent history into a Markdown changelog section          | `go run . l message --roots . --version v1.0.0 --since-tag v0.9.0 --dry-run`                         |
 | `workflow`                         | `w`                         | `workflow`             | Run a workflow configuration file                             | `go run . w config.yaml --roots ~/Development --dry-run`                                                |
@@ -317,6 +319,44 @@ workflow:
 
 Dry runs surface `TASK-PLAN` entries summarizing the branch, base, and per-file actions, making it easy to preview
 changes before letting the executor materialize commits and pull requests.
+
+#### Branch switch assistant (`branch cd`)
+
+`branch cd` standardizes the routine of jumping between branches across many repositories. For each configured root, gix
+fetches with `--all --prune`, switches to the requested branch, creates it from the selected remote when missing, and
+finishes with `git pull --rebase`.
+
+- Provide the target branch as the first argument (`b cd feature/new-ui`).
+- Override the tracking remote with `--remote`; otherwise the command tracks `origin`.
+- Use `--dry-run` to see the planned actions without touching the repositories.
+
+Examples:
+
+```shell
+# Switch every repository under the configured roots to release/v1.2
+go run . branch cd release/v1.2 --roots ~/Development
+
+# Create and track a topic branch from upstream instead of origin
+go run . b cd bugfix/api-timeout --remote upstream --roots ~/Development/services
+```
+
+#### Release assistant (`repo release`)
+
+`repo release` creates an annotated tag (default message `Release <tag>`) and pushes it to the configured remote for each
+repository root. Use it to stamp consistent version tags across many projects in one invocation.
+
+- Provide the tag as the first argument (`r release v1.2.3`).
+- Override the default remote (`origin`) with the global `--remote` flag.
+- Supply custom release notes via `--message`; otherwise the command formats one automatically.
+- Combine with `--dry-run` to inspect which repositories would be tagged without mutating them.
+
+```shell
+# Create and push v1.5.0 across all configured repositories
+go run . repo release v1.5.0 --roots ~/Development
+
+# Annotate with a custom message and push to upstream instead of origin
+go run . r release v1.5.0 --remote upstream --message "Release v1.5.0 (hotfix rollup)" --roots ~/Development/services
+```
 
 #### Commit message assistant (`commit message`)
 
