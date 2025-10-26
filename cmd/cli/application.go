@@ -501,12 +501,6 @@ func NewApplication() *Application {
 
 	cobraCommand.PersistentFlags().String(flagutils.RemoteFlagName, "", flagutils.RemoteFlagUsage)
 
-	application.branchFlagValues = flagutils.BindBranchFlags(
-		cobraCommand,
-		flagutils.BranchFlagValues{},
-		flagutils.BranchFlagDefinition{Name: branchFlagNameConstant, Usage: branchFlagUsageConstant, Enabled: true},
-	)
-
 	cobraCommand.PersistentFlags().BoolVar(&application.versionFlag, versionFlagNameConstant, false, versionFlagUsageConstant)
 
 	auditBuilder := audit.CommandBuilder{
@@ -694,6 +688,11 @@ func NewApplication() *Application {
 	}
 
 	branchNamespaceCommand := newNamespaceCommand(branchNamespaceUseNameConstant, branchNamespaceShortDescriptionConstant, branchNamespaceAliasConstant)
+	application.branchFlagValues = flagutils.BindBranchFlags(
+		branchNamespaceCommand,
+		flagutils.BranchFlagValues{},
+		flagutils.BranchFlagDefinition{Name: branchFlagNameConstant, Usage: branchFlagUsageConstant, Enabled: true},
+	)
 	if branchMigrateNestedCommand, branchMigrateNestedError := branchMigrationBuilder.Build(); branchMigrateNestedError == nil {
 		configureCommandMetadata(branchMigrateNestedCommand, migrateCommandUseNameConstant, branchMigrateNestedCommand.Short, branchMigrateNestedLongDescriptionConstant)
 		branchNamespaceCommand.AddCommand(branchMigrateNestedCommand)

@@ -111,17 +111,20 @@ func TestInitializeConfigurationAttachesBranchContext(t *testing.T) {
 	require.NoError(t, rootCommand.PersistentFlags().Set(flagutils.DryRunFlagName, "true"))
 	require.NoError(t, rootCommand.PersistentFlags().Set(flagutils.AssumeYesFlagName, "true"))
 	require.NoError(t, rootCommand.PersistentFlags().Set(flagutils.RemoteFlagName, "custom-remote"))
-	require.NoError(t, rootCommand.PersistentFlags().Set(branchFlagNameConstant, "main"))
 
-	initializationError := application.initializeConfiguration(rootCommand)
+	branchCdCommand, _, branchCdError := rootCommand.Find([]string{"b", "cd"})
+	require.NoError(t, branchCdError)
+	require.NoError(t, branchCdCommand.Parent().PersistentFlags().Set(branchFlagNameConstant, "main"))
+
+	initializationError := application.initializeConfiguration(branchCdCommand)
 	require.NoError(t, initializationError)
 
-	branchContext, branchExists := application.commandContextAccessor.BranchContext(rootCommand.Context())
+	branchContext, branchExists := application.commandContextAccessor.BranchContext(branchCdCommand.Context())
 	require.True(t, branchExists)
 	require.Equal(t, "main", branchContext.Name)
 	require.True(t, branchContext.RequireClean)
 
-	executionFlags, executionFlagsAvailable := application.commandContextAccessor.ExecutionFlags(rootCommand.Context())
+	executionFlags, executionFlagsAvailable := application.commandContextAccessor.ExecutionFlags(branchCdCommand.Context())
 	require.True(t, executionFlagsAvailable)
 	require.True(t, executionFlags.DryRun)
 	require.True(t, executionFlags.AssumeYes)

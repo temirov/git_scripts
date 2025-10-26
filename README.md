@@ -106,7 +106,6 @@ Every command accepts the shared execution flags below in addition to its comman
 - `--dry-run` – plan work without performing any side effects.
 - `--yes`/`-y` – automatically confirm interactive prompts.
 - `--remote <name>` – override the Git remote to inspect or mutate (defaults to `origin`).
-- `--branch <name>` – provide a branch context consumed by branch commands (`b cd`, `b refresh`, `b migrate`) when you omit the positional branch name.
 
 ## Command catalog
 
@@ -328,7 +327,7 @@ fetches with `--all --prune`, switches to the requested branch, creates it from 
 finishes with `git pull --rebase`.
 
 - Provide the target branch as the first argument (`b cd feature/new-ui`).
-- When chaining commands, use the global `--branch` flag (`gix --branch release/v1.2 b cd`) to avoid repeating the positional argument.
+- When chaining commands, use the branch family `--branch` flag (`gix --branch release/v1.2 b cd`) to avoid repeating the positional argument.
 - Override the tracking remote with `--remote`; otherwise the command tracks `origin`.
 - Use `--dry-run` to see the planned actions without touching the repositories.
 
