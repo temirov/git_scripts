@@ -78,7 +78,7 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
 
 ## BugFixes
 
-    - [ ] [GX-08] The required argument is missing in the help. I was expecting the help screen to be `gix repo release <tag> [flags]` and an explanation and an example of the tag.
+    - [x] [GX-08] The required argument is missing in the help. I was expecting the help screen to be `gix repo release <tag> [flags]` and an explanation and an example of the tag.
     ```shell
     INFO    configuration initialized | log level=info | log format=console | config file=/home/tyemirov/Development/gix/config.yaml
     01:17:41        WARN    unable to decode operation defaults     {"operation": "repo-release", "error": "missing configuration for operation \"repo-release\""}
@@ -109,7 +109,8 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
     tag name is required
     exit status 1
     ```
-    Same required argument with description and examples shall be in all commands that would require such argument. Analyze all command if there is a similar scenario and the arguments are missing in the help, and fix them.
+
+    - [ ] [GX-12] Same required argument with description and examples as in GX-08 shall be in all commands that would require such argument. Analyze all command if there is a similar scenario and the arguments are missing in the help, and fix them.
 
     - [ ] [GX-10] Got an error message after issuing the command `go run ./... repo release v0.1.0`
     ```shell
@@ -117,7 +118,8 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
     exit status 1
     ```
     but that makes no sense. We do embed the default config and the command requires no other information, since --rrots shall have '.' as a default
-    - [ ] [GX-11] what is --branch CLI flag? `--branch string           Branch name for command context`. I dont think we use it anywhere. Remove it if it's unused
+    
+    - [ ] [GX-11] what is --branch CLI flag? `--branch string           Branch name for command context`. I dont think we use it anywhere. Remove it if it's unused, explain here otherwise
 
 ## Maintenance
 
