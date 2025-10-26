@@ -8,8 +8,8 @@ import (
 
 func TestDefaultCommandConfigurationProvidesRepositoryRoot(t *testing.T) {
 	configuration := DefaultCommandConfiguration()
-	require.Equal(t, []string{"."}, configuration.RepositoryRoots)
+	require.Empty(t, configuration.RepositoryRoots)
 
 	sanitized := configuration.Sanitize()
-	require.Equal(t, []string{"."}, sanitized.RepositoryRoots)
+	require.Empty(t, sanitized.RepositoryRoots)
 }

@@ -288,10 +288,13 @@ func TestBranchChangeCommandUsageIncludesBranchPlaceholder(t *testing.T) {
 	require.Contains(t, branchChangeCommand.Example, "gix branch cd")
 }
 
-func TestRepoReleaseConfigurationFallsBackToDefaultRoots(t *testing.T) {
-	application := &Application{
-		logger: zap.NewNop(),
-	}
+func TestRepoReleaseConfigurationUsesEmbeddedDefaults(t *testing.T) {
+	application := NewApplication()
+
+	command := &cobra.Command{Use: "test-command"}
+	flagutils.BindRootFlags(command, flagutils.RootFlagValues{}, flagutils.RootFlagDefinition{Enabled: true})
+
+	require.NoError(t, application.initializeConfiguration(command))
 
 	configuration := application.repoReleaseConfiguration()
 	require.Equal(t, []string{"."}, configuration.RepositoryRoots)
