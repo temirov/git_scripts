@@ -259,6 +259,27 @@ type OperationConfigurations struct {
 	entries map[string]map[string]any
 }
 
+// MergeDefaults ensures default operation configurations are available when not overridden.
+func (configurations OperationConfigurations) MergeDefaults(defaults OperationConfigurations) OperationConfigurations {
+	if len(defaults.entries) == 0 {
+		return configurations
+	}
+	if configurations.entries == nil {
+		configurations.entries = map[string]map[string]any{}
+	}
+	for defaultName, defaultOptions := range defaults.entries {
+		if _, exists := configurations.entries[defaultName]; exists {
+			continue
+		}
+		copiedOptions := make(map[string]any, len(defaultOptions))
+		for optionKey, optionValue := range defaultOptions {
+			copiedOptions[optionKey] = optionValue
+		}
+		configurations.entries[defaultName] = copiedOptions
+	}
+	return configurations
+}
+
 type configurationInitializationPlan struct {
 	DirectoryPath string
 	FilePath      string
@@ -343,6 +364,28 @@ func normalizeOperationName(raw string) string {
 	return strings.ToLower(strings.TrimSpace(raw))
 }
 
+func loadEmbeddedOperationConfigurations() OperationConfigurations {
+	configurationData, configurationType := EmbeddedDefaultConfiguration()
+	if len(configurationData) == 0 {
+		return OperationConfigurations{}
+	}
+
+	loader := utils.NewConfigurationLoader(configurationNameConstant, configurationTypeConstant, environmentPrefixConstant, nil)
+	loader.SetEmbeddedConfiguration(configurationData, configurationType)
+
+	var configuration ApplicationConfiguration
+	if _, err := loader.LoadConfiguration("", nil, &configuration); err != nil {
+		return OperationConfigurations{}
+	}
+
+	embeddedConfigurations, configurationError := newOperationConfigurations(configuration.Operations)
+	if configurationError != nil {
+		return OperationConfigurations{}
+	}
+
+	return embeddedConfigurations
+}
+
 // Application wires the Cobra root command, configuration loader, and structured logger.
 type Application struct {
 	rootCommand                       *cobra.Command
@@ -357,6 +400,7 @@ type Application struct {
 	logFormatFlagValue                string
 	commandContextAccessor            utils.CommandContextAccessor
 	operationConfigurations           OperationConfigurations
+	embeddedOperationConfigurations   OperationConfigurations
 	rootFlagValues                    *flagutils.RootFlagValues
 	branchFlagValues                  *flagutils.BranchFlagValues
 	configurationInitializationScope  string
@@ -386,6 +430,7 @@ func NewApplication() *Application {
 
 	embeddedConfigurationData, embeddedConfigurationType := EmbeddedDefaultConfiguration()
 	application.configurationLoader.SetEmbeddedConfiguration(embeddedConfigurationData, embeddedConfigurationType)
+	application.embeddedOperationConfigurations = loadEmbeddedOperationConfigurations()
 
 	cobraCommand := &cobra.Command{
 		Use:           applicationNameConstant,
@@ -777,6 +822,7 @@ func (application *Application) initializeConfiguration(command *cobra.Command) 
 	if validationError := application.validateOperationConfigurations(command); validationError != nil {
 		return validationError
 	}
+	application.operationConfigurations = application.operationConfigurations.MergeDefaults(application.embeddedOperationConfigurations)
 
 	if application.persistentFlagChanged(command, logLevelFlagNameConstant) {
 		application.configuration.Common.LogLevel = application.logLevelFlagValue

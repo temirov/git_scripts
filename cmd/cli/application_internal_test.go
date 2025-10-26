@@ -2,9 +2,12 @@ package cli
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
@@ -283,4 +286,49 @@ func TestBranchChangeCommandUsageIncludesBranchPlaceholder(t *testing.T) {
 	require.Contains(t, branchChangeCommand.Use, "<branch>")
 	require.Contains(t, branchChangeCommand.Long, "Provide the branch name as the first argument")
 	require.Contains(t, branchChangeCommand.Example, "gix branch cd")
+}
+
+func TestRepoReleaseConfigurationUsesEmbeddedDefaults(t *testing.T) {
+	application := NewApplication()
+
+	command := &cobra.Command{Use: "test-command"}
+	flagutils.BindRootFlags(command, flagutils.RootFlagValues{}, flagutils.RootFlagDefinition{Enabled: true})
+
+	require.NoError(t, application.initializeConfiguration(command))
+
+	configuration := application.repoReleaseConfiguration()
+	require.Equal(t, []string{"."}, configuration.RepositoryRoots)
+	require.Equal(t, "origin", configuration.RemoteName)
+}
+
+func TestInitializeConfigurationMergesEmbeddedRepoReleaseDefaults(t *testing.T) {
+	temporaryDirectory := t.TempDir()
+	configurationPath := filepath.Join(temporaryDirectory, "config.yaml")
+
+	configurationContent := `common:
+  log_level: info
+  log_format: console
+operations:
+  - operation: repo-folders-rename
+    with:
+      roots:
+        - ./custom
+`
+	require.NoError(t, os.WriteFile(configurationPath, []byte(configurationContent), 0o644))
+
+	application := NewApplication()
+	application.configurationFilePath = configurationPath
+
+	command := &cobra.Command{Use: "test-command"}
+	flagutils.BindRootFlags(command, flagutils.RootFlagValues{}, flagutils.RootFlagDefinition{Enabled: true})
+
+	require.NoError(t, application.initializeConfiguration(command))
+
+	options, lookupError := application.operationConfigurations.Lookup(repoReleaseOperationNameConstant)
+	require.NoError(t, lookupError)
+	require.NotNil(t, options)
+
+	releaseConfiguration := application.repoReleaseConfiguration()
+	require.Equal(t, []string{"."}, releaseConfiguration.RepositoryRoots)
+	require.Equal(t, "origin", releaseConfiguration.RemoteName)
 }

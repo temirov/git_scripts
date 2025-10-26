@@ -4,9 +4,11 @@
 
 ### Bug Fixes 🐛
 - Updated `branch cd` help to surface the required `<branch>` argument along with usage guidance and examples.
+- Ensured `repo release` falls back to the embedded `.` repository root when user configuration omits the operation defaults.
 
 ### Testing 🧪
 - Added CLI and command unit tests to enforce the `<branch>` usage template for `branch cd`.
+- Added configuration and CLI tests confirming the `repo release` command retains default roots without explicit configuration.
 
 ## [v0.1.0]
 
