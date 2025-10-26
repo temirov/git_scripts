@@ -287,6 +287,18 @@ func TestBranchChangeCommandUsageIncludesBranchPlaceholder(t *testing.T) {
 	require.Contains(t, branchChangeCommand.Example, "gix branch cd")
 }
 
+func TestWorkflowCommandUsageIncludesConfigurationPlaceholder(t *testing.T) {
+	application := NewApplication()
+	rootCommand := application.rootCommand
+
+	workflowCommand, _, workflowError := rootCommand.Find([]string{"w"})
+	require.NoError(t, workflowError)
+
+	require.Contains(t, workflowCommand.Use, "<configuration>")
+	require.Contains(t, workflowCommand.Long, "Provide the configuration path as the first argument")
+	require.Contains(t, workflowCommand.Example, "gix workflow")
+}
+
 func TestRepoReleaseConfigurationUsesEmbeddedDefaults(t *testing.T) {
 	application := NewApplication()
 

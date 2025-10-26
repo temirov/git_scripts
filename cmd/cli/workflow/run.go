@@ -18,9 +18,10 @@ import (
 )
 
 const (
-	commandUseConstant                        = "workflow [workflow]"
+	commandUseConstant                        = "workflow <configuration>"
 	commandShortDescriptionConstant           = "Run a workflow configuration file"
-	commandLongDescriptionConstant            = "workflow executes operations defined in a YAML or JSON configuration file across discovered repositories."
+	commandLongDescriptionConstant            = "workflow executes operations defined in a YAML or JSON configuration file across discovered repositories. Provide the configuration path as the first argument or supply --config."
+	commandExampleConstant                    = "gix workflow ./workflow.yaml --roots ~/Development --dry-run"
 	requireCleanFlagNameConstant              = "require-clean"
 	requireCleanFlagDescriptionConstant       = "Require clean worktrees for rename operations"
 	configurationPathRequiredMessageConstant  = "workflow configuration path required; provide a positional argument or --config flag"
@@ -44,10 +45,11 @@ type CommandBuilder struct {
 // Build constructs the workflow command.
 func (builder *CommandBuilder) Build() (*cobra.Command, error) {
 	command := &cobra.Command{
-		Use:   commandUseConstant,
-		Short: commandShortDescriptionConstant,
-		Long:  commandLongDescriptionConstant,
-		RunE:  builder.run,
+		Use:     commandUseConstant,
+		Short:   commandShortDescriptionConstant,
+		Long:    commandLongDescriptionConstant,
+		Example: commandExampleConstant,
+		RunE:    builder.run,
 	}
 
 	flagutils.AddToggleFlag(command.Flags(), nil, requireCleanFlagNameConstant, "", false, requireCleanFlagDescriptionConstant)
