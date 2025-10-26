@@ -32,7 +32,8 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
                 condition: if NOTES.md already exists, skip the task.
         5. Employ workflow runner for the tasks. Generalize workflow runner, if needed
         Resolution: Added an `apply-tasks` workflow operation with templated file mutations, Git/PR automation, tests, and documentation.
-    - [ ] [GX-03] Add an ability to prepare commit messages based on the file changes. Use @tools/llm-tasks for inspiration and code examples. Extract AI communication to pkg/ package and imake it universal enough to be used by other programs
+    - [x] [GX-03] Add an ability to prepare commit messages based on the file changes. Use @tools/llm-tasks for inspiration and code examples. Extract AI communication to pkg/ package and imake it universal enough to be used by other programs
+        Resolution: Added a reusable `pkg/llm` client, commit message generator, CLI command, and supporting tests/documentation.
     - [ ] [GX-04] Add an ability to prepare changelog messages based on the changes since given time, version or the last version found in git tags. Use @tools/llm-tasks for inspiration and code examples. Extract AI communication to pkg/ package and imake it universal enough to be used by other programs
     - [ ] [GX-05] Add `b cd` command to change between branches, e.g. `b cd feature/qqq` changes the current branch to `feature/qqq`. make logic similar to
             cd = "!f() { \
@@ -77,4 +78,3 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
 
 ## Planning 
 do not work on the issues below, not ready
-

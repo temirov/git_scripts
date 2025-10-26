@@ -46,3 +46,13 @@ operations:
     with:
       roots:
         - .
+  - operation: commit-message
+    with:
+      roots:
+        - .
+      api_key_env: OPENAI_API_KEY
+      model: gpt-4.1-mini
+      diff_source: staged
+      max_completion_tokens: 256
+      temperature: 0.2
+      timeout_seconds: 60
