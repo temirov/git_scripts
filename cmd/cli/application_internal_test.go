@@ -284,3 +284,13 @@ func TestBranchChangeCommandUsageIncludesBranchPlaceholder(t *testing.T) {
 	require.Contains(t, branchChangeCommand.Long, "Provide the branch name as the first argument")
 	require.Contains(t, branchChangeCommand.Example, "gix branch cd")
 }
+
+func TestRepoReleaseConfigurationFallsBackToDefaultRoots(t *testing.T) {
+	application := &Application{
+		logger: zap.NewNop(),
+	}
+
+	configuration := application.repoReleaseConfiguration()
+	require.Equal(t, []string{"."}, configuration.RepositoryRoots)
+	require.Equal(t, "origin", configuration.RemoteName)
+}

@@ -113,12 +113,13 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
     - [x] [GX-12] Same required argument with description and examples as in GX-08 shall be in all commands that would require such argument. Analyze all command if there is a similar scenario and the arguments are missing in the help, and fix them.
         Resolution: Added help usage templates and examples for `branch cd`, updated long descriptions, and added regression tests to enforce the required branch argument guidance.
 
-    - [ ] [GX-10] Got an error message after issuing the command `go run ./... repo release v0.1.0`
+    - [x] [GX-10] Got an error message after issuing the command `go run ./... repo release v0.1.0`
     ```shell
     no repository roots provided; specify --roots or configure defaults
     exit status 1
     ```
     but that makes no sense. We do embed the default config and the command requires no other information, since --rrots shall have '.' as a default
+        Resolution: Defaulted the repo release command configuration to use `.` as the repository root when no operation configuration is supplied, and added regression tests to lock in the behavior.
     
     - [ ] [GX-11] what is --branch CLI flag? `--branch string           Branch name for command context`. I dont think we use it anywhere. Remove it if it's unused, explain here otherwise
 

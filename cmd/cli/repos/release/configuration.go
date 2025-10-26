@@ -19,7 +19,10 @@ type CommandConfiguration struct {
 
 // DefaultCommandConfiguration returns baseline configuration.
 func DefaultCommandConfiguration() CommandConfiguration {
-	return CommandConfiguration{RemoteName: defaultRemoteName}
+	return CommandConfiguration{
+		RepositoryRoots: []string{"."},
+		RemoteName:      defaultRemoteName,
+	}
 }
 
 // Sanitize trims textual configuration values and normalizes roots.
