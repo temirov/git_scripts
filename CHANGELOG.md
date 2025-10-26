@@ -1,25 +1,5 @@
 # Changelog
 
-## [Unreleased]
-
-### Improvements ⚙️
-- Nested `commit message` under the `branch` namespace and `changelog message` under `repo` to keep related commands grouped.
-
-### Bug Fixes 🐛
-- Updated `branch cd` help to surface the required `<branch>` argument along with usage guidance and examples.
-- Ensured `repo release` falls back to the embedded `.` repository root when user configuration omits the operation defaults.
-- Updated `workflow` help text to surface the required configuration path and example usage.
-- Disabled default CLI info logging and set the default log level to `error` so commands run silently unless verbosity is explicitly requested.
-
-### Testing 🧪
-- Added CLI and command unit tests to enforce the `<branch>` usage template for `branch cd`.
-- Added configuration and CLI tests confirming the `repo release` command retains default roots without explicit configuration.
-- Added branch refresh coverage to exercise the command-level `--branch` flag after removing the global variant.
-
-### Docs 📚
-- Documented the branch command expectations now that the global `--branch` flag is removed.
-- Refreshed the README command catalog with up-to-date command paths and shortcuts.
-
 ## [v0.1.0]
 
 ### Features ✨
@@ -31,9 +11,14 @@
 ### Improvements ⚙️
 - Introduced hierarchical command namespaces (`repo`, `branch`) with short aliases (`r`, `b`, `a`, `w`) and removed the legacy hyphenated commands.
 - Updated CLI bootstrap to register alias-aware help so the new paths and shortcuts surface in command discovery.
+- Nested `commit message` under the `branch` namespace and `changelog message` under `repo` to keep related commands grouped.
 
 ### Bug Fixes 🐛
 - Updated `repo release` help to surface the required `<tag>` argument along with usage guidance and examples across the CLI.
+- Updated `branch cd` help to surface the required `<branch>` argument along with usage guidance and examples.
+- Ensured `repo release` falls back to the embedded `.` repository root when user configuration omits the operation defaults.
+- Updated `workflow` help text to surface the required configuration path and example usage.
+- Disabled default CLI info logging and set the default log level to `error` so commands run silently unless verbosity is explicitly requested.
 
 ### Testing 🧪
 - Added application command hierarchy coverage to ensure aliases and nested commands resolve to the existing operations.
@@ -41,6 +26,9 @@
 - Added unit coverage for the LLM client wrapper, commit message generator, changelog generator, and CLI dry-run flows.
 - Added branch cd service and command tests covering fetch/switch/create flows and CLI execution.
 - Added release service and CLI tests verifying tag annotation, push behavior, and dry-run handling.
+- Added CLI and command unit tests to enforce the `<branch>` usage template for `branch cd`.
+- Added configuration and CLI tests confirming the `repo release` command retains default roots without explicit configuration.
+- Added branch refresh coverage to exercise the command-level `--branch` flag after removing the global variant.
 
 ### Docs 📚
 - Documented the new CLI syntax and shortcuts in `README.md`, including refreshed quick-start examples.
@@ -49,6 +37,8 @@
 - Documented the `changelog message` assistant, baseline controls, and sample invocations in `README.md`.
 - Documented the `branch cd` helper with usage notes and remote/dry-run options.
 - Documented the `repo release` helper including remote overrides, custom messages, and dry-run support.
+- Documented the branch command expectations now that the global `--branch` flag is removed.
+- Refreshed the README command catalog with up-to-date command paths and shortcuts.
 
 ## [v0.0.8] - 2025-10-07
 
