@@ -10,7 +10,6 @@ import (
 
 	"github.com/temirov/gix/internal/repos/dependencies"
 	"github.com/temirov/gix/internal/repos/shared"
-	"github.com/temirov/gix/internal/utils"
 	rootutils "github.com/temirov/gix/internal/utils/roots"
 )
 
@@ -24,6 +23,8 @@ const (
 	commitFlagDescriptionConstant           = "Commit local changes before refreshing the branch"
 	missingBranchNameMessageConstant        = "branch name is required; supply --branch"
 	conflictingRecoveryFlagsMessageConstant = "use at most one of --stash or --commit"
+	branchFlagNameConstant                  = "branch"
+	branchFlagDescriptionConstant           = "Branch name to refresh"
 	refreshSuccessMessageTemplateConstant   = "REFRESHED: %s (%s)\n"
 )
 
@@ -51,6 +52,7 @@ func (builder *CommandBuilder) Build() (*cobra.Command, error) {
 
 	command.Flags().Bool(stashFlagNameConstant, false, stashFlagDescriptionConstant)
 	command.Flags().Bool(commitFlagNameConstant, false, commitFlagDescriptionConstant)
+	command.Flags().String(branchFlagNameConstant, "", branchFlagDescriptionConstant)
 
 	return command, nil
 }
@@ -59,10 +61,11 @@ func (builder *CommandBuilder) run(command *cobra.Command, arguments []string) e
 	configuration := builder.resolveConfiguration()
 
 	branchName := strings.TrimSpace(configuration.BranchName)
-	contextAccessor := utils.NewCommandContextAccessor()
-	if branchContext, exists := contextAccessor.BranchContext(command.Context()); exists {
-		if len(strings.TrimSpace(branchContext.Name)) > 0 {
-			branchName = branchContext.Name
+	if command != nil {
+		if branchFlagValue, flagError := command.Flags().GetString(branchFlagNameConstant); flagError == nil && command.Flags().Changed(branchFlagNameConstant) {
+			branchName = strings.TrimSpace(branchFlagValue)
+		} else if flagError != nil {
+			return flagError
 		}
 	}
 	if len(branchName) == 0 {

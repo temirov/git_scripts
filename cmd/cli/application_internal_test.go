@@ -111,14 +111,13 @@ func TestInitializeConfigurationAttachesBranchContext(t *testing.T) {
 	require.NoError(t, rootCommand.PersistentFlags().Set(flagutils.DryRunFlagName, "true"))
 	require.NoError(t, rootCommand.PersistentFlags().Set(flagutils.AssumeYesFlagName, "true"))
 	require.NoError(t, rootCommand.PersistentFlags().Set(flagutils.RemoteFlagName, "custom-remote"))
-	require.NoError(t, rootCommand.PersistentFlags().Set(branchFlagNameConstant, "main"))
 
 	initializationError := application.initializeConfiguration(rootCommand)
 	require.NoError(t, initializationError)
 
 	branchContext, branchExists := application.commandContextAccessor.BranchContext(rootCommand.Context())
 	require.True(t, branchExists)
-	require.Equal(t, "main", branchContext.Name)
+	require.Empty(t, branchContext.Name)
 	require.True(t, branchContext.RequireClean)
 
 	executionFlags, executionFlagsAvailable := application.commandContextAccessor.ExecutionFlags(rootCommand.Context())
