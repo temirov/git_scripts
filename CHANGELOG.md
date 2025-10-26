@@ -4,6 +4,7 @@
 
 ### Features ✨
 - Added a `commit message` command that summarizes staged or worktree changes with the shared LLM client and returns a Conventional Commit draft.
+- Added a `changelog message` command that turns tagged or time-based git history into Markdown release notes using the shared LLM client.
 
 ### Improvements ⚙️
 - Introduced hierarchical command namespaces (`repo`, `branch`) with short aliases (`r`, `b`, `a`, `w`) and removed the legacy hyphenated commands.
@@ -12,12 +13,13 @@
 ### Testing 🧪
 - Added application command hierarchy coverage to ensure aliases and nested commands resolve to the existing operations.
 - Added task operation planner/executor unit tests and a workflow CLI integration test covering the new `apply-tasks` step.
-- Added unit coverage for the LLM client wrapper, commit message generator, and CLI dry-run flow.
+- Added unit coverage for the LLM client wrapper, commit message generator, changelog generator, and CLI dry-run flows.
 
 ### Docs 📚
 - Documented the new CLI syntax and shortcuts in `README.md`, including refreshed quick-start examples.
 - Added `apply-tasks` workflow guidance to `README.md`, including templating details and sample YAML.
 - Documented the `commit message` assistant, configuration knobs, and usage examples.
+- Documented the `changelog message` assistant, baseline controls, and sample invocations in `README.md`.
 
 ## [v0.0.8] - 2025-10-07
 

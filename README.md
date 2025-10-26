@@ -123,6 +123,7 @@ with the registered command names and flags.
 | `branch migrate`                   | `b migrate`                 | `branch-migrate`       | Migrate repository defaults from main to master               | `go run . b migrate --from main --to master --roots ~/Development/project-repo`                         |
 | `branch refresh`                   | `b refresh`                 | `branch-refresh`       | Fetch, checkout, and pull a branch with recovery options      | `go run . b refresh --branch main --roots ~/Development/project-repo --stash`                           |
 | `commit message`                   | `c message`                 | `commit-message`       | Draft a Conventional Commit message from staged or worktree changes | `go run . c message --roots . --dry-run`                                                             |
+| `changelog message`                | `l message`                 | `changelog-message`    | Summarize recent history into a Markdown changelog section          | `go run . l message --roots . --version v1.0.0 --since-tag v0.9.0 --dry-run`                         |
 | `workflow`                         | `w`                         | `workflow`             | Run a workflow configuration file                             | `go run . w config.yaml --roots ~/Development --dry-run`                                                |
 
 Former command names are listed for reference only; the previous hyphenated invocations have been removed and now serve solely as `operations[].operation` identifiers in configuration files.
@@ -343,6 +344,30 @@ OPENAI_API_KEY=sk-xxxx go run . commit message \
   --base-url http://localhost:11434/v1 \
   --model llama3.1 \
   --diff-source staged
+```
+
+#### Changelog assistant (`changelog message`)
+
+`changelog message` converts the commits and diffs since a chosen boundary into a Markdown changelog section that matches the format used in this repository.
+
+- Supply `--version` (and optionally `--release-date`) to control the heading.
+- Pick the comparison baseline with `--since-tag` (tag or commit) or `--since-date` (RFC3339 or `YYYY-MM-DD`). If neither flag is set, gix falls back to the most recent tag or, when no tags exist, to the repository root.
+- As with `commit message`, `--dry-run` prints the system/user prompts so you can audit the gathered git context.
+
+Examples:
+
+```shell
+# Preview the prompt used to generate release notes for the next version
+go run . changelog message --roots . --version v1.0.0 --since-tag v0.9.0 --dry-run
+
+# Produce a Markdown section for changes since a specific date using a local model endpoint
+OPENAI_API_KEY=sk-xxxx go run . changelog message \
+  --roots ~/Development/project \
+  --version v1.0.0 \
+  --release-date 2025-10-08 \
+  --since-date 2025-10-01T00:00:00Z \
+  --base-url http://localhost:11434/v1 \
+  --model llama3.1
 ```
 
 ## Development and testing
