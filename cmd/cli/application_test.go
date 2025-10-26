@@ -88,9 +88,11 @@ var requiredOperationNames = []string{
 	"repo-folders-rename",
 	"repo-remote-update",
 	"repo-protocol-convert",
+	"repo-release",
 	"workflow",
 	"branch-refresh",
 	"branch-migrate",
+	"branch-cd",
 	"commit-message",
 	"changelog-message",
 }

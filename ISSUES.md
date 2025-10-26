@@ -36,7 +36,7 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
         Resolution: Added a reusable `pkg/llm` client, commit message generator, CLI command, and supporting tests/documentation.
     - [x] [GX-04] Add an ability to prepare changelog messages based on the changes since given time, version or the last version found in git tags. Use @tools/llm-tasks for inspiration and code examples. Extract AI communication to pkg/ package and imake it universal enough to be used by other programs
         Resolution: Added a `changelog message` CLI command, shared changelog generator, tests, and documentation for generating release notes via the LLM client.
-    - [ ] [GX-05] Add `b cd` command to change between branches, e.g. `b cd feature/qqq` changes the current branch to `feature/qqq`. make logic similar to
+    - [x] [GX-05] Add `b cd` command to change between branches, e.g. `b cd feature/qqq` changes the current branch to `feature/qqq`. make logic similar to
             cd = "!f() { \
                 branch=\"${1:-master}\"; \
                 git fetch -a --prune && \
@@ -44,7 +44,8 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
                 git pull --rebase; \
             }; f"
             NB: the command shall work across repos
-    - [ ] [GX-06] Add `r release` command to release new versions, e.g. `r relase v0.1.3` tags the barnch and pushes to remote. Make logic similar to
+        Resolution: Added a `branch cd` command with shared service, configuration defaults, and CLI wiring to fetch, switch, create, and rebase branches across repositories.
+    - [x] [GX-06] Add `r release` command to release new versions, e.g. `r relase v0.1.3` tags the barnch and pushes to remote. Make logic similar to
             release = "!f() { \
                 tag_name=\"$1\"; \
                 if [ -z \"$tag_name\" ]; then \
@@ -55,6 +56,7 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
                 git push origin \"$tag_name\"; \
             }; f"
             NB: the command shall work across repos only through tasks interface with the additiona logic of how to version different repos
+        Resolution: Added a `repo release` command that annotates tags with customizable messages, pushes them to the chosen remote, and supports dry-run safety checks across repositories.
 
 
 ## Improvements

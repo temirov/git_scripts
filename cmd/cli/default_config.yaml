@@ -34,6 +34,11 @@ operations:
       roots:
         - .
       include_owner: false
+  - operation: repo-release
+    with:
+      roots:
+        - .
+      remote: origin
   - operation: workflow
     with:
       roots:
@@ -46,6 +51,12 @@ operations:
     with:
       roots:
         - .
+  - operation: branch-cd
+    with:
+      roots:
+        - .
+      remote: origin
+      branch: master
   - operation: commit-message
     with:
       roots:

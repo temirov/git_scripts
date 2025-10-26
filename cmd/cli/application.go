@@ -21,9 +21,11 @@ import (
 	workflowcmd "github.com/temirov/gix/cmd/cli/workflow"
 	"github.com/temirov/gix/internal/audit"
 	"github.com/temirov/gix/internal/branches"
+	branchcdcmd "github.com/temirov/gix/internal/branches/cd"
 	branchrefresh "github.com/temirov/gix/internal/branches/refresh"
 	"github.com/temirov/gix/internal/migrate"
 	"github.com/temirov/gix/internal/packages"
+releasecmd "github.com/temirov/gix/cmd/cli/repos/release"
 	reposdeps "github.com/temirov/gix/internal/repos/dependencies"
 	"github.com/temirov/gix/internal/repos/prompt"
 	"github.com/temirov/gix/internal/repos/shared"
@@ -97,9 +99,11 @@ const (
 	reposRenameOperationNameConstant                                 = "repo-folders-rename"
 	reposRemotesOperationNameConstant                                = "repo-remote-update"
 	reposProtocolOperationNameConstant                               = "repo-protocol-convert"
+	repoReleaseOperationNameConstant                                  = "repo-release"
 	workflowCommandOperationNameConstant                             = "workflow"
 	branchRefreshOperationNameConstant                               = "branch-refresh"
 	branchMigrateOperationNameConstant                               = "branch-migrate"
+	branchChangeOperationNameConstant                                = "branch-cd"
 	commitMessageOperationNameConstant                               = "commit-message"
 	changelogMessageOperationNameConstant                            = "changelog-message"
 	auditCommandAliasConstant                                        = "a"
@@ -125,11 +129,17 @@ const (
 	repoPackagesNamespaceShortDescriptionConstant                    = "GitHub Packages maintenance commands"
 	packagesDeleteCommandUseNameConstant                             = "delete"
 	packagesDeleteCommandAliasConstant                               = "prune"
+	repoReleaseCommandUseNameConstant                                = "release"
+	repoReleaseCommandAliasConstant                                  = "rel"
+	repoReleaseCommandLongDescriptionConstant                        = "repo release annotates the provided tag and pushes it to the configured remote."
 	branchNamespaceUseNameConstant                                   = "branch"
 	branchNamespaceAliasConstant                                     = "b"
 	branchNamespaceShortDescriptionConstant                          = "Branch management commands"
 	migrateCommandUseNameConstant                                    = "migrate"
 	refreshCommandUseNameConstant                                    = "refresh"
+	branchChangeCommandUseNameConstant                               = "cd"
+	branchChangeCommandAliasConstant                                 = "switch"
+	branchChangeLongDescriptionConstant                              = "branch cd fetches updates, switches to the requested branch, creates it when missing, and rebases onto the remote."
 	commitNamespaceUseNameConstant                                   = "commit"
 	commitNamespaceAliasConstant                                     = "c"
 	commitNamespaceShortDescriptionConstant                          = "Commit assistance commands"
@@ -171,24 +181,28 @@ const (
 )
 
 var commandOperationRequirements = map[string][]string{
-	auditOperationNameConstant:                 {auditOperationNameConstant},
-	branchCleanupOperationNameConstant:         {branchCleanupOperationNameConstant},
-	branchMigrateOperationNameConstant:         {branchMigrateOperationNameConstant},
-	branchRefreshOperationNameConstant:         {branchRefreshOperationNameConstant},
-	commitMessageCompositeKeyConstant:          {commitMessageOperationNameConstant},
-	changelogMessageCompositeKeyConstant:       {changelogMessageOperationNameConstant},
-	migrateCommandUseNameConstant:              {branchMigrateOperationNameConstant},
-	packagesPurgeOperationNameConstant:         {packagesPurgeOperationNameConstant},
-	repoPackagesDeleteCompositeKeyConstant:     {packagesPurgeOperationNameConstant},
-	repoPullRequestsDeleteCompositeKeyConstant: {branchCleanupOperationNameConstant},
-	refreshCommandUseNameConstant:              {branchRefreshOperationNameConstant},
-	renameCommandUseNameConstant:               {reposRenameOperationNameConstant},
-	reposProtocolOperationNameConstant:         {reposProtocolOperationNameConstant},
-	reposRemotesOperationNameConstant:          {reposRemotesOperationNameConstant},
-	reposRenameOperationNameConstant:           {reposRenameOperationNameConstant},
-	updateProtocolCommandUseNameConstant:       {reposProtocolOperationNameConstant},
-	updateRemoteCanonicalUseNameConstant:       {reposRemotesOperationNameConstant},
-	workflowCommandOperationNameConstant:       {workflowCommandOperationNameConstant},
+	auditOperationNameConstant:                                                {auditOperationNameConstant},
+	branchCleanupOperationNameConstant:                                        {branchCleanupOperationNameConstant},
+	branchMigrateOperationNameConstant:                                        {branchMigrateOperationNameConstant},
+	branchRefreshOperationNameConstant:                                        {branchRefreshOperationNameConstant},
+	branchChangeOperationNameConstant:                                         {branchChangeOperationNameConstant},
+	repoReleaseOperationNameConstant:                                          {repoReleaseOperationNameConstant},
+	commitMessageCompositeKeyConstant:                                         {commitMessageOperationNameConstant},
+	changelogMessageCompositeKeyConstant:                                      {changelogMessageOperationNameConstant},
+	migrateCommandUseNameConstant:                                             {branchMigrateOperationNameConstant},
+	packagesPurgeOperationNameConstant:                                        {packagesPurgeOperationNameConstant},
+	repoPackagesDeleteCompositeKeyConstant:                                    {packagesPurgeOperationNameConstant},
+	repoPullRequestsDeleteCompositeKeyConstant:                                {branchCleanupOperationNameConstant},
+	refreshCommandUseNameConstant:                                             {branchRefreshOperationNameConstant},
+	branchNamespaceUseNameConstant + "/" + branchChangeCommandUseNameConstant: {branchChangeOperationNameConstant},
+	repoNamespaceUseNameConstant + "/" + repoReleaseCommandUseNameConstant:    {repoReleaseOperationNameConstant},
+	renameCommandUseNameConstant:                                              {reposRenameOperationNameConstant},
+	reposProtocolOperationNameConstant:                                        {reposProtocolOperationNameConstant},
+	reposRemotesOperationNameConstant:                                         {reposRemotesOperationNameConstant},
+	reposRenameOperationNameConstant:                                          {reposRenameOperationNameConstant},
+	updateProtocolCommandUseNameConstant:                                      {reposProtocolOperationNameConstant},
+	updateRemoteCanonicalUseNameConstant:                                      {reposRemotesOperationNameConstant},
+	workflowCommandOperationNameConstant:                                      {workflowCommandOperationNameConstant},
 }
 
 var requiredOperationConfigurationNames = collectRequiredOperationConfigurationNames()
@@ -483,6 +497,14 @@ func NewApplication() *Application {
 		ConfigurationProvider:        application.branchRefreshConfiguration,
 	}
 
+	branchChangeBuilder := branchcdcmd.CommandBuilder{
+		LoggerProvider: func() *zap.Logger {
+			return application.logger
+		},
+		HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
+		ConfigurationProvider:        application.branchChangeConfiguration,
+	}
+
 	branchMigrationBuilder := migrate.CommandBuilder{
 		LoggerProvider: func() *zap.Logger {
 			return application.logger
@@ -491,12 +513,20 @@ func NewApplication() *Application {
 		ConfigurationProvider:        application.branchMigrateConfiguration,
 	}
 
-	packagesBuilder := packages.CommandBuilder{
-		LoggerProvider: func() *zap.Logger {
-			return application.logger
-		},
-		ConfigurationProvider: application.packagesConfiguration,
-	}
+packagesBuilder := packages.CommandBuilder{
+	LoggerProvider: func() *zap.Logger {
+		return application.logger
+	},
+	ConfigurationProvider: application.packagesConfiguration,
+}
+
+releaseBuilder := releasecmd.CommandBuilder{
+	LoggerProvider: func() *zap.Logger {
+		return application.logger
+	},
+	HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
+	ConfigurationProvider:        application.repoReleaseConfiguration,
+}
 
 	renameBuilder := repos.RenameCommandBuilder{
 		LoggerProvider: func() *zap.Logger {
@@ -607,6 +637,11 @@ func NewApplication() *Application {
 		repoNamespaceCommand.AddCommand(repoPackagesCommand)
 	}
 
+	if releaseCommand, releaseBuildError := releaseBuilder.Build(); releaseBuildError == nil {
+		configureCommandMetadata(releaseCommand, repoReleaseCommandUseNameConstant, releaseCommand.Short, repoReleaseCommandLongDescriptionConstant, repoReleaseCommandAliasConstant)
+		repoNamespaceCommand.AddCommand(releaseCommand)
+	}
+
 	if len(repoNamespaceCommand.Commands()) > 0 {
 		cobraCommand.AddCommand(repoNamespaceCommand)
 	}
@@ -615,6 +650,10 @@ func NewApplication() *Application {
 	if branchMigrateNestedCommand, branchMigrateNestedError := branchMigrationBuilder.Build(); branchMigrateNestedError == nil {
 		configureCommandMetadata(branchMigrateNestedCommand, migrateCommandUseNameConstant, branchMigrateNestedCommand.Short, branchMigrateNestedLongDescriptionConstant)
 		branchNamespaceCommand.AddCommand(branchMigrateNestedCommand)
+	}
+	if branchChangeCommand, branchChangeError := branchChangeBuilder.Build(); branchChangeError == nil {
+		configureCommandMetadata(branchChangeCommand, branchChangeCommandUseNameConstant, branchChangeCommand.Short, branchChangeLongDescriptionConstant, branchChangeCommandAliasConstant)
+		branchNamespaceCommand.AddCommand(branchChangeCommand)
 	}
 	if branchRefreshNestedCommand, branchRefreshNestedError := branchRefreshBuilder.Build(); branchRefreshNestedError == nil {
 		configureCommandMetadata(branchRefreshNestedCommand, refreshCommandUseNameConstant, branchRefreshNestedCommand.Short, branchRefreshNestedLongDescriptionConstant)
@@ -885,6 +924,18 @@ func (application *Application) branchCleanupConfiguration() branches.CommandCon
 func (application *Application) branchRefreshConfiguration() branchrefresh.CommandConfiguration {
 	configuration := branchrefresh.DefaultCommandConfiguration()
 	application.decodeOperationConfiguration(branchRefreshOperationNameConstant, &configuration)
+	return configuration.Sanitize()
+}
+
+func (application *Application) branchChangeConfiguration() branchcdcmd.CommandConfiguration {
+	configuration := branchcdcmd.DefaultCommandConfiguration()
+	application.decodeOperationConfiguration(branchChangeOperationNameConstant, &configuration)
+	return configuration.Sanitize()
+}
+
+func (application *Application) repoReleaseConfiguration() releasecmd.CommandConfiguration {
+	configuration := releasecmd.DefaultCommandConfiguration()
+	application.decodeOperationConfiguration(repoReleaseOperationNameConstant, &configuration)
 	return configuration.Sanitize()
 }
 

@@ -5,6 +5,8 @@
 ### Features ✨
 - Added a `commit message` command that summarizes staged or worktree changes with the shared LLM client and returns a Conventional Commit draft.
 - Added a `changelog message` command that turns tagged or time-based git history into Markdown release notes using the shared LLM client.
+- Added a `branch cd` command that fetches, switches, and rebases repositories onto the requested branch, creating it from the remote when missing.
+- Added a `repo release` command that annotates tags with customizable messages and pushes them to the selected remote across repositories.
 
 ### Improvements ⚙️
 - Introduced hierarchical command namespaces (`repo`, `branch`) with short aliases (`r`, `b`, `a`, `w`) and removed the legacy hyphenated commands.
@@ -14,12 +16,16 @@
 - Added application command hierarchy coverage to ensure aliases and nested commands resolve to the existing operations.
 - Added task operation planner/executor unit tests and a workflow CLI integration test covering the new `apply-tasks` step.
 - Added unit coverage for the LLM client wrapper, commit message generator, changelog generator, and CLI dry-run flows.
+- Added branch cd service and command tests covering fetch/switch/create flows and CLI execution.
+- Added release service and CLI tests verifying tag annotation, push behavior, and dry-run handling.
 
 ### Docs 📚
 - Documented the new CLI syntax and shortcuts in `README.md`, including refreshed quick-start examples.
 - Added `apply-tasks` workflow guidance to `README.md`, including templating details and sample YAML.
 - Documented the `commit message` assistant, configuration knobs, and usage examples.
 - Documented the `changelog message` assistant, baseline controls, and sample invocations in `README.md`.
+- Documented the `branch cd` helper with usage notes and remote/dry-run options.
+- Documented the `repo release` helper including remote overrides, custom messages, and dry-run support.
 
 ## [v0.0.8] - 2025-10-07
 
