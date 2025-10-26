@@ -139,8 +139,9 @@ const (
 	migrateCommandUseNameConstant                                    = "migrate"
 	refreshCommandUseNameConstant                                    = "refresh"
 	branchChangeCommandUseNameConstant                               = "cd"
+	branchChangeCommandUsageTemplateConstant                         = branchChangeCommandUseNameConstant + " <branch>"
 	branchChangeCommandAliasConstant                                 = "switch"
-	branchChangeLongDescriptionConstant                              = "branch cd fetches updates, switches to the requested branch, creates it when missing, and rebases onto the remote."
+	branchChangeLongDescriptionConstant                              = "branch cd fetches updates, switches to the requested branch, creates it when missing, and rebases onto the remote. Provide the branch name as the first argument before any optional repository roots or flags, or configure a default branch in the application settings."
 	commitNamespaceUseNameConstant                                   = "commit"
 	commitNamespaceAliasConstant                                     = "c"
 	commitNamespaceShortDescriptionConstant                          = "Commit assistance commands"
@@ -653,7 +654,7 @@ func NewApplication() *Application {
 		branchNamespaceCommand.AddCommand(branchMigrateNestedCommand)
 	}
 	if branchChangeCommand, branchChangeError := branchChangeBuilder.Build(); branchChangeError == nil {
-		configureCommandMetadata(branchChangeCommand, branchChangeCommandUseNameConstant, branchChangeCommand.Short, branchChangeLongDescriptionConstant, branchChangeCommandAliasConstant)
+		configureCommandMetadata(branchChangeCommand, branchChangeCommandUsageTemplateConstant, branchChangeCommand.Short, branchChangeLongDescriptionConstant, branchChangeCommandAliasConstant)
 		branchNamespaceCommand.AddCommand(branchChangeCommand)
 	}
 	if branchRefreshNestedCommand, branchRefreshNestedError := branchRefreshBuilder.Build(); branchRefreshNestedError == nil {

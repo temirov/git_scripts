@@ -271,3 +271,16 @@ func TestReleaseCommandUsageIncludesTagPlaceholder(t *testing.T) {
 	require.Contains(t, releaseCommand.Long, "Provide the tag as the first argument")
 	require.Contains(t, releaseCommand.Example, "gix repo release")
 }
+
+func TestBranchChangeCommandUsageIncludesBranchPlaceholder(t *testing.T) {
+	application := NewApplication()
+	rootCommand := application.rootCommand
+
+	branchChangeCommand, _, branchChangeError := rootCommand.Find([]string{"b", "cd"})
+	require.NoError(t, branchChangeError)
+
+	require.True(t, strings.HasPrefix(strings.TrimSpace(branchChangeCommand.Use), branchChangeCommandUseNameConstant))
+	require.Contains(t, branchChangeCommand.Use, "<branch>")
+	require.Contains(t, branchChangeCommand.Long, "Provide the branch name as the first argument")
+	require.Contains(t, branchChangeCommand.Example, "gix branch cd")
+}

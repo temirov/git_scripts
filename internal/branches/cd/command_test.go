@@ -24,6 +24,13 @@ func TestCommandBuilds(t *testing.T) {
 	require.IsType(t, &cobra.Command{}, command)
 }
 
+func TestCommandUsageIncludesBranchPlaceholder(t *testing.T) {
+	builder := CommandBuilder{}
+	command, err := builder.Build()
+	require.NoError(t, err)
+	require.Contains(t, command.Use, "<branch>")
+}
+
 func TestCommandRequiresBranchArgument(t *testing.T) {
 	builder := CommandBuilder{
 		LoggerProvider: func() *zap.Logger { return zap.NewNop() },
