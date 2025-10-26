@@ -796,7 +796,7 @@ func (application *Application) resolveUserConfigurationDirectoryPaths() []strin
 
 func (application *Application) initializeConfiguration(command *cobra.Command) error {
 	defaultValues := map[string]any{
-		commonLogLevelConfigKeyConstant:     string(utils.LogLevelInfo),
+		commonLogLevelConfigKeyConstant:     string(utils.LogLevelError),
 		commonLogFormatConfigKeyConstant:    string(utils.LogFormatStructured),
 		commonDryRunConfigKeyConstant:       false,
 		commonAssumeYesConfigKeyConstant:    false,
@@ -876,12 +876,21 @@ func (application *Application) InitializeForCommand(commandUse string) error {
 	return application.initializeConfiguration(command)
 }
 
+// ConfigFileUsed returns the configuration file path used during initialization.
+func (application *Application) ConfigFileUsed() string {
+	return application.configurationMetadata.ConfigFileUsed
+}
+
 func (application *Application) humanReadableLoggingEnabled() bool {
 	logFormatValue := strings.TrimSpace(application.configuration.Common.LogFormat)
 	return strings.EqualFold(logFormatValue, string(utils.LogFormatConsole))
 }
 
 func (application *Application) logConfigurationInitialization() {
+	if !strings.EqualFold(strings.TrimSpace(application.configuration.Common.LogLevel), string(utils.LogLevelDebug)) {
+		return
+	}
+
 	if application.humanReadableLoggingEnabled() {
 		bannerMessage := fmt.Sprintf(
 			configurationInitializedConsoleTemplateConstant,

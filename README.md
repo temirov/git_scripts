@@ -142,7 +142,7 @@ from the repository name.
 ```yaml
 # config.yaml
 common:
-  log_level: info
+  log_level: error
   log_format: structured
 
 operations:
