@@ -18,6 +18,7 @@ import (
 	changelogcmd "github.com/temirov/gix/cmd/cli/changelog"
 	commitcmd "github.com/temirov/gix/cmd/cli/commit"
 	"github.com/temirov/gix/cmd/cli/repos"
+	releasecmd "github.com/temirov/gix/cmd/cli/repos/release"
 	workflowcmd "github.com/temirov/gix/cmd/cli/workflow"
 	"github.com/temirov/gix/internal/audit"
 	"github.com/temirov/gix/internal/branches"
@@ -25,7 +26,6 @@ import (
 	branchrefresh "github.com/temirov/gix/internal/branches/refresh"
 	"github.com/temirov/gix/internal/migrate"
 	"github.com/temirov/gix/internal/packages"
-releasecmd "github.com/temirov/gix/cmd/cli/repos/release"
 	reposdeps "github.com/temirov/gix/internal/repos/dependencies"
 	"github.com/temirov/gix/internal/repos/prompt"
 	"github.com/temirov/gix/internal/repos/shared"
@@ -99,7 +99,7 @@ const (
 	reposRenameOperationNameConstant                                 = "repo-folders-rename"
 	reposRemotesOperationNameConstant                                = "repo-remote-update"
 	reposProtocolOperationNameConstant                               = "repo-protocol-convert"
-	repoReleaseOperationNameConstant                                  = "repo-release"
+	repoReleaseOperationNameConstant                                 = "repo-release"
 	workflowCommandOperationNameConstant                             = "workflow"
 	branchRefreshOperationNameConstant                               = "branch-refresh"
 	branchMigrateOperationNameConstant                               = "branch-migrate"
@@ -513,20 +513,20 @@ func NewApplication() *Application {
 		ConfigurationProvider:        application.branchMigrateConfiguration,
 	}
 
-packagesBuilder := packages.CommandBuilder{
-	LoggerProvider: func() *zap.Logger {
-		return application.logger
-	},
-	ConfigurationProvider: application.packagesConfiguration,
-}
+	packagesBuilder := packages.CommandBuilder{
+		LoggerProvider: func() *zap.Logger {
+			return application.logger
+		},
+		ConfigurationProvider: application.packagesConfiguration,
+	}
 
-releaseBuilder := releasecmd.CommandBuilder{
-	LoggerProvider: func() *zap.Logger {
-		return application.logger
-	},
-	HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
-	ConfigurationProvider:        application.repoReleaseConfiguration,
-}
+	releaseBuilder := releasecmd.CommandBuilder{
+		LoggerProvider: func() *zap.Logger {
+			return application.logger
+		},
+		HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
+		ConfigurationProvider:        application.repoReleaseConfiguration,
+	}
 
 	renameBuilder := repos.RenameCommandBuilder{
 		LoggerProvider: func() *zap.Logger {
