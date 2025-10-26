@@ -121,7 +121,8 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
     but that makes no sense. We do embed the default config and the command requires no other information, since --rrots shall have '.' as a default
         Resolution: Defaulted the repo release command configuration to use `.` as the repository root when no operation configuration is supplied, and added regression tests to lock in the behavior.
     
-    - [ ] [GX-11] what is --branch CLI flag? `--branch string           Branch name for command context`. I dont think we use it anywhere. Remove it if it's unused, explain here otherwise
+    - [x] [GX-11] what is --branch CLI flag? `--branch string           Branch name for command context`. I dont think we use it anywhere. Remove it if it's unused, explain here otherwise
+        Resolution: Documented the global `--branch` flag, added regression coverage showing branch commands consume the branch context, and kept the flag as the supported way to supply branch names for `b cd`, `b refresh`, and `b migrate`.
 
 ## Maintenance
 
