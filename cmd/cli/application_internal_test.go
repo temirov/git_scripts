@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -256,4 +257,17 @@ func TestApplicationHierarchicalCommandsLoadExpectedOperations(t *testing.T) {
 	branchMigrateCommand, _, branchMigrateError := rootCommand.Find([]string{"b", "migrate"})
 	require.NoError(t, branchMigrateError)
 	require.Equal(t, []string{branchMigrateOperationNameConstant}, application.operationsRequiredForCommand(branchMigrateCommand))
+}
+
+func TestReleaseCommandUsageIncludesTagPlaceholder(t *testing.T) {
+	application := NewApplication()
+	rootCommand := application.rootCommand
+
+	releaseCommand, _, releaseError := rootCommand.Find([]string{"r", "release"})
+	require.NoError(t, releaseError)
+
+	require.True(t, strings.HasPrefix(strings.TrimSpace(releaseCommand.Use), repoReleaseCommandUseNameConstant))
+	require.Contains(t, releaseCommand.Use, "<tag>")
+	require.Contains(t, releaseCommand.Long, "Provide the tag as the first argument")
+	require.Contains(t, releaseCommand.Example, "gix repo release")
 }

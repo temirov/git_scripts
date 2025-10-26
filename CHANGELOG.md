@@ -12,6 +12,9 @@
 - Introduced hierarchical command namespaces (`repo`, `branch`) with short aliases (`r`, `b`, `a`, `w`) and removed the legacy hyphenated commands.
 - Updated CLI bootstrap to register alias-aware help so the new paths and shortcuts surface in command discovery.
 
+### Bug Fixes 🐛
+- Updated `repo release` help to surface the required `<tag>` argument along with usage guidance and examples across the CLI.
+
 ### Testing 🧪
 - Added application command hierarchy coverage to ensure aliases and nested commands resolve to the existing operations.
 - Added task operation planner/executor unit tests and a workflow CLI integration test covering the new `apply-tasks` step.
