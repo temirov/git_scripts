@@ -112,6 +112,7 @@ const (
 	gitFetchWithoutRefsFailureTemplateConstant                      = "Failed to fetch from %s in %s (exit code %d%s)"
 	gitFetchExecutionFailureTemplateConstant                        = "Unable to fetch %s from %s in %s: %s"
 	gitFetchWithoutRefsExecutionFailureTemplateConstant             = "Unable to fetch from %s in %s: %s"
+	gitFetchAllRemotesLabelConstant                                 = "all remotes"
 	gitPushStartTemplateConstant                                    = "Pushing %s to %s from %s"
 	gitPushSuccessTemplateConstant                                  = "Pushed %s to %s from %s"
 	gitPushFailureTemplateConstant                                  = "Failed to push %s to %s from %s (exit code %d%s)"
@@ -490,7 +491,10 @@ func (formatter CommandMessageFormatter) describeGitBranchMessage(command ShellC
 func (formatter CommandMessageFormatter) describeGitFetchMessage(command ShellCommand, result ExecutionResult, failure error, stage messageStage) string {
 	workingDirectory := formatter.describeWorkingDirectory(command)
 	remoteName, references := formatter.extractRemoteAndReferences(command.Details.Arguments[1:])
-	trimmedRemote := formatter.ensureValue(remoteName)
+	trimmedRemote := strings.TrimSpace(remoteName)
+	if len(trimmedRemote) == 0 {
+		trimmedRemote = gitFetchAllRemotesLabelConstant
+	}
 	joinedReferences := formatter.joinReferences(references)
 
 	switch stage {
@@ -965,7 +969,7 @@ func (formatter CommandMessageFormatter) extractRemoteAndReferences(arguments []
 		}
 		references = append(references, trimmed)
 	}
-	return formatter.ensureValue(remoteName), references
+	return remoteName, references
 }
 
 func (formatter CommandMessageFormatter) joinReferences(references []string) string {
