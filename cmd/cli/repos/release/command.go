@@ -16,8 +16,10 @@ import (
 
 const (
 	commandUseName          = "release"
+	commandUsageTemplate    = commandUseName + " <tag>"
+	commandExampleTemplate  = "gix repo release v1.2.3 --roots ~/Development"
 	commandShortDescription = "Create and push an annotated release tag"
-	commandLongDescription  = "release annotates the provided tag (default message 'Release <tag>') and pushes it to the configured remote for each repository root."
+	commandLongDescription  = "release annotates the provided tag (default message 'Release <tag>') and pushes it to the configured remote for each repository root. Provide the tag as the first argument before any optional repository roots or flags."
 	messageFlagName         = "message"
 	messageFlagUsage        = "Override the tag message"
 	missingTagErrorMessage  = "tag name is required"
@@ -35,11 +37,12 @@ type CommandBuilder struct {
 // Build constructs the repo release command.
 func (builder *CommandBuilder) Build() (*cobra.Command, error) {
 	command := &cobra.Command{
-		Use:   commandUseName,
-		Short: commandShortDescription,
-		Long:  commandLongDescription,
-		Args:  cobra.ArbitraryArgs,
-		RunE:  builder.run,
+		Use:     commandUsageTemplate,
+		Short:   commandShortDescription,
+		Long:    commandLongDescription,
+		Example: commandExampleTemplate,
+		Args:    cobra.ArbitraryArgs,
+		RunE:    builder.run,
 	}
 
 	command.Flags().String(messageFlagName, "", messageFlagUsage)
@@ -64,6 +67,12 @@ func (builder *CommandBuilder) run(command *cobra.Command, arguments []string) e
 	}
 
 	tagName := strings.TrimSpace(arguments[0])
+	if len(tagName) == 0 {
+		if command != nil {
+			_ = command.Help()
+		}
+		return errors.New(missingTagErrorMessage)
+	}
 	additionalArgs := arguments[1:]
 
 	messageValue := configuration.Message

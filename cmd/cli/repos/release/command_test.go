@@ -3,6 +3,7 @@ package release
 import (
 	"bytes"
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -32,6 +33,8 @@ func TestCommandBuilds(t *testing.T) {
 	command, err := builder.Build()
 	require.NoError(t, err)
 	require.IsType(t, &cobra.Command{}, command)
+	require.Equal(t, commandUsageTemplate, strings.TrimSpace(command.Use))
+	require.NotEmpty(t, strings.TrimSpace(command.Example))
 }
 
 func TestCommandRequiresTagArgument(t *testing.T) {
@@ -46,6 +49,7 @@ func TestCommandRequiresTagArgument(t *testing.T) {
 	require.NoError(t, err)
 	flagutils.BindRootFlags(command, flagutils.RootFlagValues{}, flagutils.RootFlagDefinition{Enabled: true})
 	require.Error(t, command.RunE(command, []string{}))
+	require.Error(t, command.RunE(command, []string{"   "}))
 }
 
 func TestCommandRunsAcrossRoots(t *testing.T) {

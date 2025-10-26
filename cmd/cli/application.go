@@ -130,8 +130,9 @@ const (
 	packagesDeleteCommandUseNameConstant                             = "delete"
 	packagesDeleteCommandAliasConstant                               = "prune"
 	repoReleaseCommandUseNameConstant                                = "release"
+	repoReleaseCommandUsageTemplateConstant                          = repoReleaseCommandUseNameConstant + " <tag>"
 	repoReleaseCommandAliasConstant                                  = "rel"
-	repoReleaseCommandLongDescriptionConstant                        = "repo release annotates the provided tag and pushes it to the configured remote."
+	repoReleaseCommandLongDescriptionConstant                        = "repo release annotates the provided tag (default message 'Release <tag>') and pushes it to the configured remote. Provide the tag as the first argument before any optional repository roots or flags."
 	branchNamespaceUseNameConstant                                   = "branch"
 	branchNamespaceAliasConstant                                     = "b"
 	branchNamespaceShortDescriptionConstant                          = "Branch management commands"
@@ -638,7 +639,7 @@ func NewApplication() *Application {
 	}
 
 	if releaseCommand, releaseBuildError := releaseBuilder.Build(); releaseBuildError == nil {
-		configureCommandMetadata(releaseCommand, repoReleaseCommandUseNameConstant, releaseCommand.Short, repoReleaseCommandLongDescriptionConstant, repoReleaseCommandAliasConstant)
+		configureCommandMetadata(releaseCommand, repoReleaseCommandUsageTemplateConstant, releaseCommand.Short, repoReleaseCommandLongDescriptionConstant, repoReleaseCommandAliasConstant)
 		repoNamespaceCommand.AddCommand(releaseCommand)
 	}
 
