@@ -610,12 +610,12 @@ func NewApplication() *Application {
 		HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
 		ConfigurationProvider:        application.changelogMessageConfiguration,
 	}
+	var changelogNamespaceCommand *cobra.Command
 	changelogMessageCommand, changelogMessageBuildError := changelogMessageBuilder.Build()
 	if changelogMessageBuildError == nil {
-		changelogNamespaceCommand := newNamespaceCommand(changelogNamespaceUseNameConstant, changelogNamespaceShortDescriptionConstant, changelogNamespaceAliasConstant)
+		changelogNamespaceCommand = newNamespaceCommand(changelogNamespaceUseNameConstant, changelogNamespaceShortDescriptionConstant, changelogNamespaceAliasConstant)
 		configureCommandMetadata(changelogMessageCommand, changelogMessageUseNameConstant, changelogMessageCommand.Short, changelogMessageLongDescriptionConstant, changelogMessageAliasConstant)
 		changelogNamespaceCommand.AddCommand(changelogMessageCommand)
-		cobraCommand.AddCommand(changelogNamespaceCommand)
 	}
 
 	commitMessageBuilder := commitcmd.MessageCommandBuilder{
@@ -625,12 +625,12 @@ func NewApplication() *Application {
 		HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
 		ConfigurationProvider:        application.commitMessageConfiguration,
 	}
+	var commitNamespaceCommand *cobra.Command
 	commitMessageCommand, commitMessageBuildError := commitMessageBuilder.Build()
 	if commitMessageBuildError == nil {
-		commitNamespaceCommand := newNamespaceCommand(commitNamespaceUseNameConstant, commitNamespaceShortDescriptionConstant, commitNamespaceAliasConstant)
+		commitNamespaceCommand = newNamespaceCommand(commitNamespaceUseNameConstant, commitNamespaceShortDescriptionConstant, commitNamespaceAliasConstant)
 		configureCommandMetadata(commitMessageCommand, commitMessageUseNameConstant, commitMessageCommand.Short, commitMessageLongDescriptionConstant, commitMessageAliasConstant)
 		commitNamespaceCommand.AddCommand(commitMessageCommand)
-		cobraCommand.AddCommand(commitNamespaceCommand)
 	}
 
 	repoNamespaceCommand := newNamespaceCommand(repoNamespaceUseNameConstant, repoNamespaceShortDescriptionConstant, repoNamespaceAliasConstant)
@@ -680,6 +680,9 @@ func NewApplication() *Application {
 		repoNamespaceCommand.AddCommand(releaseCommand)
 	}
 
+	if changelogNamespaceCommand != nil {
+		repoNamespaceCommand.AddCommand(changelogNamespaceCommand)
+	}
 	if len(repoNamespaceCommand.Commands()) > 0 {
 		cobraCommand.AddCommand(repoNamespaceCommand)
 	}
@@ -696,6 +699,9 @@ func NewApplication() *Application {
 	if branchRefreshNestedCommand, branchRefreshNestedError := branchRefreshBuilder.Build(); branchRefreshNestedError == nil {
 		configureCommandMetadata(branchRefreshNestedCommand, refreshCommandUseNameConstant, branchRefreshNestedCommand.Short, branchRefreshNestedLongDescriptionConstant)
 		branchNamespaceCommand.AddCommand(branchRefreshNestedCommand)
+	}
+	if commitNamespaceCommand != nil {
+		branchNamespaceCommand.AddCommand(commitNamespaceCommand)
 	}
 	if len(branchNamespaceCommand.Commands()) > 0 {
 		cobraCommand.AddCommand(branchNamespaceCommand)
