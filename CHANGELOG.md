@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [v0.1.0]
 
 ### Features ✨
 - Added a `commit message` command that summarizes staged or worktree changes with the shared LLM client and returns a Conventional Commit draft.
