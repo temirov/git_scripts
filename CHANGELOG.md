@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased]
+
+### Improvements ⚙️
+- Introduced hierarchical command namespaces (`repo`, `branch`) with short aliases (`r`, `b`, `a`, `w`) and removed the legacy hyphenated commands.
+- Updated CLI bootstrap to register alias-aware help so the new paths and shortcuts surface in command discovery.
+
+### Testing 🧪
+- Added application command hierarchy coverage to ensure aliases and nested commands resolve to the existing operations.
+
+### Docs 📚
+- Documented the new CLI syntax and shortcuts in `README.md`, including refreshed quick-start examples.
+
 ## [v0.0.8] - 2025-10-07
 
 ### Features ✨

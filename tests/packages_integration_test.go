@@ -29,7 +29,9 @@ const (
 	packagesIntegrationRunSubcommandConstant            = "run"
 	packagesIntegrationModulePathConstant               = "."
 	packagesIntegrationConfigFlagTemplateConstant       = "--config=%s"
-	packagesIntegrationPackagesPurgeCommandNameConstant = "repo-packages-purge"
+	packagesIntegrationRepoNamespaceCommand             = "repo"
+	packagesIntegrationPackagesNamespaceCommand         = "packages"
+	packagesIntegrationDeleteActionCommand              = "delete"
 	packagesIntegrationCommandTimeout                   = 10 * time.Second
 	packagesIntegrationExpectedPageSizeConstant         = 100
 	packagesIntegrationTaggedVersionIDConstant          = 101
@@ -241,7 +243,9 @@ func TestPackagesCommandIntegration(testInstance *testing.T) {
 				packagesIntegrationRunSubcommandConstant,
 				packagesIntegrationModulePathConstant,
 				fmt.Sprintf(packagesIntegrationConfigFlagTemplateConstant, configPath),
-				packagesIntegrationPackagesPurgeCommandNameConstant,
+				packagesIntegrationRepoNamespaceCommand,
+				packagesIntegrationPackagesNamespaceCommand,
+				packagesIntegrationDeleteActionCommand,
 			}
 
 			pathVariable := os.Getenv("PATH")

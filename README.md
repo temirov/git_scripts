@@ -8,9 +8,10 @@ A Go-based command-line interface that automates routine Git and GitHub maintena
 
 You can run the CLI in two complementary ways depending on how much orchestration you need:
 
-- **Direct commands with persisted defaults** – invoke commands such as `repo-folders-rename`, `repo-protocol-convert`,
-  `repo-packages-purge`, and `audit` from the shell,
-  optionally loading shared flags (for example, log level or default package names) via [
+- **Direct commands with persisted defaults** – invoke commands such as `repo folder rename` (`r folder rename`, formerly `repo-folders-rename`),
+  `repo remote update-to-canonical` (`r remote update-to-canonical`, formerly `repo-remote-update`),
+  `repo packages delete` (`r packages delete`, formerly `repo-packages-purge`), and `audit` (`a`)
+  from the shell, optionally loading shared flags (for example, log level or default package names) via [
   `--config` files](#configuration-and-logging).
   This mode mirrors the quick-start rows in the [command catalog](#command-catalog) and is ideal when you want
   immediate,
@@ -22,7 +23,7 @@ You can run the CLI in two complementary ways depending on how much orchestratio
 
 | Choose this mode | When it shines                                                                                                          | Example                                                                                |
 |------------------|-------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------|
-| Direct commands  | You need a focused, ad-hoc action with minimal setup, such as renaming directories or auditing repositories             | [`repo-folders-rename`](#command-catalog) and [`audit`](#command-catalog) quick-starts |
+| Direct commands  | You need a focused, ad-hoc action with minimal setup, such as renaming directories or auditing repositories             | [`repo folder rename`](#command-catalog) and [`audit`](#command-catalog) quick-starts |
 | Workflow runner  | You want to bundle several operations together, share discovery across them, or hand off a repeatable plan to teammates | [`workflow` with a YAML plan](#workflow-bundling)                                      |
 
 ## Feature highlights
@@ -111,22 +112,25 @@ Every command accepts the shared execution flags below in addition to its comman
 The commands below share repository discovery, prompting, and logging helpers. Use the quick-start examples to align
 with the registered command names and flags.
 
-| Command                 | Summary                                                       | Key flags / example                                                                                                                |
-|-------------------------|---------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------|
-| `audit`                 | Audit and reconcile local GitHub repositories                 | Flags: `--roots`, `--all`, `--log-level`. Example: `go run . audit --log-level=debug --roots ~/Development --all`                                    |
-| `repo-folders-rename`   | Rename repository directories to match canonical GitHub names | Flags: `--dry-run`, `--yes`, `--require-clean`, `--owner`, `--roots`. Example: `go run . repo-folders-rename --yes --require-clean --owner --roots ~/Development`        |
-| `repo-remote-update`    | Update origin URLs to match canonical GitHub repositories     | Flags: `--dry-run`, `--yes`, `--owner`, `--roots`. Example: `go run . repo-remote-update --dry-run --owner canonical --roots ~/Development`          |
-| `repo-protocol-convert` | Convert repository origin remotes between protocols           | Flags: `--from`, `--to`, `--dry-run`, `--yes`, `--roots`. Example: `go run . repo-protocol-convert --from https --to ssh --yes --roots ~/Development` |
-| `repo-prs-purge`        | Remove remote and local branches for closed pull requests     | Flags: `--remote`, `--limit`, `--dry-run`, `--roots`. Example: `go run . repo-prs-purge --remote origin --limit 100 --roots ~/Development`            |
-| `branch-migrate`        | Migrate repository defaults from main to master               | Flags: `--from`, `--to`, `--roots`. Example: `go run . branch-migrate --from main --to master --roots ~/Development/project-repo`                     |
-| `repo-packages-purge`   | Delete untagged GHCR versions                                 | Flags: `--package` (override), `--dry-run`, `--roots`. Example: `go run . repo-packages-purge --dry-run --roots ~/Development`       |
-| `workflow`              | Run a workflow configuration file                             | Flags: `--roots`, `--dry-run`, `--yes`. Example: `go run . workflow config.yaml --roots ~/Development --dry-run`                     |
+| Command path                        | Shortcut                    | Former command         | Summary                                                       | Example                                                                                                 |
+|------------------------------------|-----------------------------|------------------------|---------------------------------------------------------------|---------------------------------------------------------------------------------------------------------|
+| `audit`                            | `a`                         | `audit`                | Audit and reconcile local GitHub repositories                 | `go run . a --log-level=debug --roots ~/Development --all`                                              |
+| `repo folder rename`               | `r folder rename`           | `repo-folders-rename`  | Rename repository directories to match canonical GitHub names | `go run . r folder rename --yes --require-clean --owner --roots ~/Development`                          |
+| `repo remote update-to-canonical`  | `r remote update-to-canonical` | `repo-remote-update`   | Update origin URLs to match canonical GitHub repositories     | `go run . r remote update-to-canonical --dry-run --owner canonical --roots ~/Development`               |
+| `repo remote update-protocol`      | `r remote update-protocol`  | `repo-protocol-convert`| Convert repository origin remotes between protocols           | `go run . r remote update-protocol --from https --to ssh --yes --roots ~/Development`                   |
+| `repo prs delete`                  | `r prs delete`              | `repo-prs-purge`       | Remove remote and local branches for closed pull requests     | `go run . r prs delete --remote origin --limit 100 --roots ~/Development`                               |
+| `repo packages delete`             | `r packages delete`         | `repo-packages-purge`  | Delete untagged GHCR versions                                 | `go run . r packages delete --dry-run --roots ~/Development`                                            |
+| `branch migrate`                   | `b migrate`                 | `branch-migrate`       | Migrate repository defaults from main to master               | `go run . b migrate --from main --to master --roots ~/Development/project-repo`                         |
+| `branch refresh`                   | `b refresh`                 | `branch-refresh`       | Fetch, checkout, and pull a branch with recovery options      | `go run . b refresh --branch main --roots ~/Development/project-repo --stash`                           |
+| `workflow`                         | `w`                         | `workflow`             | Run a workflow configuration file                             | `go run . w config.yaml --roots ~/Development --dry-run`                                                |
+
+Former command names are listed for reference only; the previous hyphenated invocations have been removed and now serve solely as `operations[].operation` identifiers in configuration files.
 
 Persist defaults and workflow plans in a single configuration file to avoid long flag lists and keep the runner in sync:
 
 The audit command exposes `--all` to enumerate top-level folders lacking Git repositories for each root alongside canonical results, marking git-related fields as `n/a` when metadata is unavailable.
 
-The purge command derives the GHCR owner, owner type, and default package name from each repository's `origin` remote
+The `repo packages delete` command (formerly `repo-packages-purge`) derives the GHCR owner, owner type, and default package name from each repository's `origin` remote
 and the canonical metadata returned by the GitHub CLI. Ensure the remotes point at the desired GitHub repositories
 before running the command. Provide one or more roots with `--roots` or in configuration to run the purge across
 multiple repositories; the command discovers Git repositories beneath every root and executes the purge workflow for
@@ -237,12 +241,12 @@ workflow:
         output: ./reports/audit-latest.csv
 ```
 
-The purge command automatically targets the public GitHub API. Set the
+The `repo packages delete` command automatically targets the public GitHub API. Set the
 `GIX_REPO_PACKAGES_PURGE_BASE_URL` environment variable when you need to
 point at a GitHub Enterprise instance during local testing.
 
 ```shell
-go run . repo-packages-purge --dry-run=false
+go run . r packages delete --dry-run=false
 ```
 
 Specify `--config path/to/override.yaml` when you need to load an alternate configuration.
@@ -289,7 +293,7 @@ make release        # Cross-compile binaries into ./dist
     - Run `gh auth login` (or verify with `gh auth status`) so API calls succeed during branch cleanup and migration
       commands.
 
-The `repo-packages-purge` command additionally requires network access and a GitHub Personal Access Token with
+The `repo packages delete` command additionally requires network access and a GitHub Personal Access Token with
 `read:packages`,
 `write:packages`, and `delete:packages` scopes. Export the token before invoking the command; if the token is missing
 any of these scopes the GHCR API responds with HTTP 403 and the command surfaces an error similar to `unable to purge

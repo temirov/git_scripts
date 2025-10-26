@@ -133,3 +133,103 @@ func TestRootCommandToggleHelpFormatting(t *testing.T) {
 	require.NotContains(t, usage, "__toggle_true__")
 	require.NotContains(t, usage, "toggle[")
 }
+
+func TestApplicationCommandHierarchyAndAliases(t *testing.T) {
+	application := NewApplication()
+	rootCommand := application.rootCommand
+
+	auditCommand, _, auditError := rootCommand.Find([]string{"a"})
+	require.NoError(t, auditError)
+	require.Equal(t, auditOperationNameConstant, auditCommand.Name())
+
+	workflowCommand, _, workflowError := rootCommand.Find([]string{"w"})
+	require.NoError(t, workflowError)
+	require.Equal(t, workflowCommandOperationNameConstant, workflowCommand.Name())
+
+	repoRenameCommand, _, renameError := rootCommand.Find([]string{"r", "folder", "rename"})
+	require.NoError(t, renameError)
+	require.Equal(t, "rename", repoRenameCommand.Name())
+	require.NotNil(t, repoRenameCommand.Parent())
+	require.Equal(t, "folder", repoRenameCommand.Parent().Name())
+	require.NotNil(t, repoRenameCommand.Parent().Parent())
+	require.Equal(t, "repo", repoRenameCommand.Parent().Parent().Name())
+
+	repoRemoteCanonicalCommand, _, canonicalError := rootCommand.Find([]string{"r", "remote", "update-to-canonical"})
+	require.NoError(t, canonicalError)
+	require.Equal(t, "update-to-canonical", repoRemoteCanonicalCommand.Name())
+	require.NotNil(t, repoRemoteCanonicalCommand.Parent())
+	require.Equal(t, "remote", repoRemoteCanonicalCommand.Parent().Name())
+
+	repoRemoteProtocolCommand, _, protocolError := rootCommand.Find([]string{"r", "remote", "update-protocol"})
+	require.NoError(t, protocolError)
+	require.Equal(t, "update-protocol", repoRemoteProtocolCommand.Name())
+	require.NotNil(t, repoRemoteProtocolCommand.Parent())
+	require.Equal(t, "remote", repoRemoteProtocolCommand.Parent().Name())
+
+	repoPullRequestsCommand, _, pullRequestsError := rootCommand.Find([]string{"r", "prs", "delete"})
+	require.NoError(t, pullRequestsError)
+	require.Equal(t, "delete", repoPullRequestsCommand.Name())
+	require.NotNil(t, repoPullRequestsCommand.Parent())
+	require.Equal(t, "prs", repoPullRequestsCommand.Parent().Name())
+
+	repoPackagesCommand, _, packagesError := rootCommand.Find([]string{"r", "packages", "delete"})
+	require.NoError(t, packagesError)
+	require.Equal(t, "delete", repoPackagesCommand.Name())
+	require.NotNil(t, repoPackagesCommand.Parent())
+	require.Equal(t, "packages", repoPackagesCommand.Parent().Name())
+
+	branchMigrateCommand, _, branchMigrateError := rootCommand.Find([]string{"b", "migrate"})
+	require.NoError(t, branchMigrateError)
+	require.Equal(t, "migrate", branchMigrateCommand.Name())
+	require.NotNil(t, branchMigrateCommand.Parent())
+	require.Equal(t, "branch", branchMigrateCommand.Parent().Name())
+
+	_, _, legacyRenameError := rootCommand.Find([]string{"repo-folders-rename"})
+	require.Error(t, legacyRenameError)
+	require.Contains(t, legacyRenameError.Error(), "unknown command")
+
+	_, _, legacyRemoteError := rootCommand.Find([]string{"repo-remote-update"})
+	require.Error(t, legacyRemoteError)
+	require.Contains(t, legacyRemoteError.Error(), "unknown command")
+
+	_, _, legacyProtocolError := rootCommand.Find([]string{"repo-protocol-convert"})
+	require.Error(t, legacyProtocolError)
+	require.Contains(t, legacyProtocolError.Error(), "unknown command")
+
+	_, _, legacyPullRequestsError := rootCommand.Find([]string{"repo-prs-purge"})
+	require.Error(t, legacyPullRequestsError)
+	require.Contains(t, legacyPullRequestsError.Error(), "unknown command")
+
+	_, _, legacyPackagesError := rootCommand.Find([]string{"repo-packages-purge"})
+	require.Error(t, legacyPackagesError)
+	require.Contains(t, legacyPackagesError.Error(), "unknown command")
+}
+
+func TestApplicationHierarchicalCommandsLoadExpectedOperations(t *testing.T) {
+	application := NewApplication()
+	rootCommand := application.rootCommand
+
+	repoRenameCommand, _, renameError := rootCommand.Find([]string{"r", "folder", "rename"})
+	require.NoError(t, renameError)
+	require.Equal(t, []string{reposRenameOperationNameConstant}, application.operationsRequiredForCommand(repoRenameCommand))
+
+	repoRemoteCanonicalCommand, _, canonicalError := rootCommand.Find([]string{"r", "remote", "update-to-canonical"})
+	require.NoError(t, canonicalError)
+	require.Equal(t, []string{reposRemotesOperationNameConstant}, application.operationsRequiredForCommand(repoRemoteCanonicalCommand))
+
+	repoRemoteProtocolCommand, _, protocolError := rootCommand.Find([]string{"r", "remote", "update-protocol"})
+	require.NoError(t, protocolError)
+	require.Equal(t, []string{reposProtocolOperationNameConstant}, application.operationsRequiredForCommand(repoRemoteProtocolCommand))
+
+	repoPullRequestsCommand, _, pullRequestsError := rootCommand.Find([]string{"r", "prs", "delete"})
+	require.NoError(t, pullRequestsError)
+	require.Equal(t, []string{branchCleanupOperationNameConstant}, application.operationsRequiredForCommand(repoPullRequestsCommand))
+
+	repoPackagesCommand, _, packagesError := rootCommand.Find([]string{"r", "packages", "delete"})
+	require.NoError(t, packagesError)
+	require.Equal(t, []string{packagesPurgeOperationNameConstant}, application.operationsRequiredForCommand(repoPackagesCommand))
+
+	branchMigrateCommand, _, branchMigrateError := rootCommand.Find([]string{"b", "migrate"})
+	require.NoError(t, branchMigrateError)
+	require.Equal(t, []string{branchMigrateOperationNameConstant}, application.operationsRequiredForCommand(branchMigrateCommand))
+}

@@ -98,6 +98,43 @@ const (
 	workflowCommandOperationNameConstant                             = "workflow"
 	branchRefreshOperationNameConstant                               = "branch-refresh"
 	branchMigrateOperationNameConstant                               = "branch-migrate"
+	auditCommandAliasConstant                                        = "a"
+	workflowCommandAliasConstant                                     = "w"
+	repoNamespaceUseNameConstant                                     = "repo"
+	repoNamespaceAliasConstant                                       = "r"
+	repoNamespaceShortDescriptionConstant                            = "Repository maintenance commands"
+	repoFolderNamespaceUseNameConstant                               = "folder"
+	repoFolderNamespaceAliasConstant                                 = "folders"
+	repoFolderNamespaceShortDescriptionConstant                      = "Repository directory commands"
+	renameCommandUseNameConstant                                     = "rename"
+	repoRemoteNamespaceUseNameConstant                               = "remote"
+	repoRemoteNamespaceShortDescriptionConstant                      = "Repository remote commands"
+	updateRemoteCanonicalUseNameConstant                             = "update-to-canonical"
+	updateRemoteCanonicalAliasConstant                               = "canonical"
+	updateProtocolCommandUseNameConstant                             = "update-protocol"
+	updateProtocolAliasConstant                                      = "convert"
+	repoPullRequestsNamespaceUseNameConstant                         = "prs"
+	repoPullRequestsNamespaceShortDescriptionConstant                = "Pull request cleanup commands"
+	prsDeleteCommandUseNameConstant                                  = "delete"
+	prsDeleteCommandAliasConstant                                    = "purge"
+	repoPackagesNamespaceUseNameConstant                             = "packages"
+	repoPackagesNamespaceShortDescriptionConstant                    = "GitHub Packages maintenance commands"
+	packagesDeleteCommandUseNameConstant                             = "delete"
+	packagesDeleteCommandAliasConstant                               = "prune"
+	branchNamespaceUseNameConstant                                   = "branch"
+	branchNamespaceAliasConstant                                     = "b"
+	branchNamespaceShortDescriptionConstant                          = "Branch management commands"
+	migrateCommandUseNameConstant                                    = "migrate"
+	refreshCommandUseNameConstant                                    = "refresh"
+	repoPullRequestsDeleteCompositeKeyConstant                       = repoPullRequestsNamespaceUseNameConstant + "/" + prsDeleteCommandUseNameConstant
+	repoPackagesDeleteCompositeKeyConstant                           = repoPackagesNamespaceUseNameConstant + "/" + packagesDeleteCommandUseNameConstant
+	renameNestedLongDescriptionConstant                              = "repo folder rename normalizes repository directory names to match canonical GitHub repositories."
+	updateRemoteCanonicalLongDescriptionConstant                     = "repo remote update-to-canonical adjusts origin remotes to match canonical GitHub repositories."
+	updateProtocolLongDescriptionConstant                            = "repo remote update-protocol converts origin URLs to a desired protocol."
+	prsDeleteLongDescriptionConstant                                 = "repo prs delete removes remote and local Git branches whose pull requests are already closed."
+	packagesDeleteLongDescriptionConstant                            = "repo packages delete removes untagged container versions from GitHub Packages."
+	branchMigrateNestedLongDescriptionConstant                       = "branch migrate switches repository defaults from main to master with safety gates."
+	branchRefreshNestedLongDescriptionConstant                       = "branch refresh synchronizes repository branches by fetching, checking out, and pulling updates."
 	versionFlagNameConstant                                          = "version"
 	versionFlagUsageConstant                                         = "Print the application version and exit"
 	versionOutputTemplateConstant                                    = "gix version: %s\n"
@@ -116,15 +153,22 @@ const (
 )
 
 var commandOperationRequirements = map[string][]string{
-	auditOperationNameConstant:           {auditOperationNameConstant},
-	packagesPurgeOperationNameConstant:   {packagesPurgeOperationNameConstant},
-	branchCleanupOperationNameConstant:   {branchCleanupOperationNameConstant},
-	reposRenameOperationNameConstant:     {reposRenameOperationNameConstant},
-	reposRemotesOperationNameConstant:    {reposRemotesOperationNameConstant},
-	reposProtocolOperationNameConstant:   {reposProtocolOperationNameConstant},
-	workflowCommandOperationNameConstant: {workflowCommandOperationNameConstant},
-	branchRefreshOperationNameConstant:   {branchRefreshOperationNameConstant},
-	branchMigrateOperationNameConstant:   {branchMigrateOperationNameConstant},
+	auditOperationNameConstant:                 {auditOperationNameConstant},
+	branchCleanupOperationNameConstant:         {branchCleanupOperationNameConstant},
+	branchMigrateOperationNameConstant:         {branchMigrateOperationNameConstant},
+	branchRefreshOperationNameConstant:         {branchRefreshOperationNameConstant},
+	migrateCommandUseNameConstant:              {branchMigrateOperationNameConstant},
+	packagesPurgeOperationNameConstant:         {packagesPurgeOperationNameConstant},
+	repoPackagesDeleteCompositeKeyConstant:     {packagesPurgeOperationNameConstant},
+	repoPullRequestsDeleteCompositeKeyConstant: {branchCleanupOperationNameConstant},
+	refreshCommandUseNameConstant:              {branchRefreshOperationNameConstant},
+	renameCommandUseNameConstant:               {reposRenameOperationNameConstant},
+	reposProtocolOperationNameConstant:         {reposProtocolOperationNameConstant},
+	reposRemotesOperationNameConstant:          {reposRemotesOperationNameConstant},
+	reposRenameOperationNameConstant:           {reposRenameOperationNameConstant},
+	updateProtocolCommandUseNameConstant:       {reposProtocolOperationNameConstant},
+	updateRemoteCanonicalUseNameConstant:       {reposRemotesOperationNameConstant},
+	workflowCommandOperationNameConstant:       {workflowCommandOperationNameConstant},
 }
 
 var requiredOperationConfigurationNames = collectRequiredOperationConfigurationNames()
@@ -393,6 +437,7 @@ func NewApplication() *Application {
 	}
 	auditCommand, auditBuildError := auditBuilder.Build()
 	if auditBuildError == nil {
+		auditCommand.Aliases = appendUnique(auditCommand.Aliases, auditCommandAliasConstant)
 		cobraCommand.AddCommand(auditCommand)
 	}
 
@@ -409,10 +454,6 @@ func NewApplication() *Application {
 			return prompt.NewIOConfirmationPrompter(command.InOrStdin(), command.OutOrStdout())
 		},
 	}
-	branchCleanupCommand, branchCleanupBuildError := branchCleanupBuilder.Build()
-	if branchCleanupBuildError == nil {
-		cobraCommand.AddCommand(branchCleanupCommand)
-	}
 
 	branchRefreshBuilder := branchrefresh.CommandBuilder{
 		LoggerProvider: func() *zap.Logger {
@@ -420,10 +461,6 @@ func NewApplication() *Application {
 		},
 		HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
 		ConfigurationProvider:        application.branchRefreshConfiguration,
-	}
-	branchRefreshCommand, branchRefreshBuildError := branchRefreshBuilder.Build()
-	if branchRefreshBuildError == nil {
-		cobraCommand.AddCommand(branchRefreshCommand)
 	}
 
 	branchMigrationBuilder := migrate.CommandBuilder{
@@ -433,20 +470,12 @@ func NewApplication() *Application {
 		HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
 		ConfigurationProvider:        application.branchMigrateConfiguration,
 	}
-	branchMigrationCommand, branchMigrationBuildError := branchMigrationBuilder.Build()
-	if branchMigrationBuildError == nil {
-		cobraCommand.AddCommand(branchMigrationCommand)
-	}
 
 	packagesBuilder := packages.CommandBuilder{
 		LoggerProvider: func() *zap.Logger {
 			return application.logger
 		},
 		ConfigurationProvider: application.packagesConfiguration,
-	}
-	repoPackagesPurgeCommand, packagesBuildError := packagesBuilder.Build()
-	if packagesBuildError == nil {
-		cobraCommand.AddCommand(repoPackagesPurgeCommand)
 	}
 
 	renameBuilder := repos.RenameCommandBuilder{
@@ -456,10 +485,6 @@ func NewApplication() *Application {
 		HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
 		ConfigurationProvider:        application.reposRenameConfiguration,
 	}
-	renameCommand, renameBuildError := renameBuilder.Build()
-	if renameBuildError == nil {
-		cobraCommand.AddCommand(renameCommand)
-	}
 
 	remotesBuilder := repos.RemotesCommandBuilder{
 		LoggerProvider: func() *zap.Logger {
@@ -468,10 +493,6 @@ func NewApplication() *Application {
 		HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
 		ConfigurationProvider:        application.reposRemotesConfiguration,
 	}
-	remotesCommand, remotesBuildError := remotesBuilder.Build()
-	if remotesBuildError == nil {
-		cobraCommand.AddCommand(remotesCommand)
-	}
 
 	protocolBuilder := repos.ProtocolCommandBuilder{
 		LoggerProvider: func() *zap.Logger {
@@ -479,10 +500,6 @@ func NewApplication() *Application {
 		},
 		HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
 		ConfigurationProvider:        application.reposProtocolConfiguration,
-	}
-	protocolCommand, protocolBuildError := protocolBuilder.Build()
-	if protocolBuildError == nil {
-		cobraCommand.AddCommand(protocolCommand)
 	}
 
 	workflowBuilder := workflowcmd.CommandBuilder{
@@ -494,7 +511,67 @@ func NewApplication() *Application {
 	}
 	workflowCommand, workflowBuildError := workflowBuilder.Build()
 	if workflowBuildError == nil {
+		workflowCommand.Aliases = appendUnique(workflowCommand.Aliases, workflowCommandAliasConstant)
 		cobraCommand.AddCommand(workflowCommand)
+	}
+
+	repoNamespaceCommand := newNamespaceCommand(repoNamespaceUseNameConstant, repoNamespaceShortDescriptionConstant, repoNamespaceAliasConstant)
+
+	repoFolderCommand := newNamespaceCommand(repoFolderNamespaceUseNameConstant, repoFolderNamespaceShortDescriptionConstant, repoFolderNamespaceAliasConstant)
+	if renameNestedCommand, nestedRenameError := renameBuilder.Build(); nestedRenameError == nil {
+		configureCommandMetadata(renameNestedCommand, renameCommandUseNameConstant, renameNestedCommand.Short, renameNestedLongDescriptionConstant)
+		repoFolderCommand.AddCommand(renameNestedCommand)
+	}
+	if len(repoFolderCommand.Commands()) > 0 {
+		repoNamespaceCommand.AddCommand(repoFolderCommand)
+	}
+
+	repoRemoteCommand := newNamespaceCommand(repoRemoteNamespaceUseNameConstant, repoRemoteNamespaceShortDescriptionConstant)
+	if canonicalRemoteCommand, canonicalRemoteError := remotesBuilder.Build(); canonicalRemoteError == nil {
+		configureCommandMetadata(canonicalRemoteCommand, updateRemoteCanonicalUseNameConstant, canonicalRemoteCommand.Short, updateRemoteCanonicalLongDescriptionConstant, updateRemoteCanonicalAliasConstant)
+		repoRemoteCommand.AddCommand(canonicalRemoteCommand)
+	}
+	if protocolConversionCommand, protocolConversionError := protocolBuilder.Build(); protocolConversionError == nil {
+		configureCommandMetadata(protocolConversionCommand, updateProtocolCommandUseNameConstant, protocolConversionCommand.Short, updateProtocolLongDescriptionConstant, updateProtocolAliasConstant)
+		repoRemoteCommand.AddCommand(protocolConversionCommand)
+	}
+	if len(repoRemoteCommand.Commands()) > 0 {
+		repoNamespaceCommand.AddCommand(repoRemoteCommand)
+	}
+
+	repoPullRequestsCommand := newNamespaceCommand(repoPullRequestsNamespaceUseNameConstant, repoPullRequestsNamespaceShortDescriptionConstant)
+	if pullRequestCleanupCommand, pullRequestCleanupError := branchCleanupBuilder.Build(); pullRequestCleanupError == nil {
+		configureCommandMetadata(pullRequestCleanupCommand, prsDeleteCommandUseNameConstant, pullRequestCleanupCommand.Short, prsDeleteLongDescriptionConstant, prsDeleteCommandAliasConstant)
+		repoPullRequestsCommand.AddCommand(pullRequestCleanupCommand)
+	}
+	if len(repoPullRequestsCommand.Commands()) > 0 {
+		repoNamespaceCommand.AddCommand(repoPullRequestsCommand)
+	}
+
+	repoPackagesCommand := newNamespaceCommand(repoPackagesNamespaceUseNameConstant, repoPackagesNamespaceShortDescriptionConstant)
+	if packagesCleanupCommand, packagesCleanupError := packagesBuilder.Build(); packagesCleanupError == nil {
+		configureCommandMetadata(packagesCleanupCommand, packagesDeleteCommandUseNameConstant, packagesCleanupCommand.Short, packagesDeleteLongDescriptionConstant, packagesDeleteCommandAliasConstant)
+		repoPackagesCommand.AddCommand(packagesCleanupCommand)
+	}
+	if len(repoPackagesCommand.Commands()) > 0 {
+		repoNamespaceCommand.AddCommand(repoPackagesCommand)
+	}
+
+	if len(repoNamespaceCommand.Commands()) > 0 {
+		cobraCommand.AddCommand(repoNamespaceCommand)
+	}
+
+	branchNamespaceCommand := newNamespaceCommand(branchNamespaceUseNameConstant, branchNamespaceShortDescriptionConstant, branchNamespaceAliasConstant)
+	if branchMigrateNestedCommand, branchMigrateNestedError := branchMigrationBuilder.Build(); branchMigrateNestedError == nil {
+		configureCommandMetadata(branchMigrateNestedCommand, migrateCommandUseNameConstant, branchMigrateNestedCommand.Short, branchMigrateNestedLongDescriptionConstant)
+		branchNamespaceCommand.AddCommand(branchMigrateNestedCommand)
+	}
+	if branchRefreshNestedCommand, branchRefreshNestedError := branchRefreshBuilder.Build(); branchRefreshNestedError == nil {
+		configureCommandMetadata(branchRefreshNestedCommand, refreshCommandUseNameConstant, branchRefreshNestedCommand.Short, branchRefreshNestedLongDescriptionConstant)
+		branchNamespaceCommand.AddCommand(branchRefreshNestedCommand)
+	}
+	if len(branchNamespaceCommand.Commands()) > 0 {
+		cobraCommand.AddCommand(branchNamespaceCommand)
 	}
 
 	application.rootCommand = cobraCommand
@@ -962,11 +1039,88 @@ func (application *Application) operationsRequiredForCommand(command *cobra.Comm
 		return requiredOperations
 	}
 
-	if command.HasParent() {
-		return application.operationsRequiredForCommand(command.Parent())
+	if parentCommand := command.Parent(); parentCommand != nil {
+		parentName := strings.TrimSpace(parentCommand.Name())
+		if len(parentName) > 0 {
+			compositeKey := parentName + "/" + commandName
+			if requiredOperations, exists := commandOperationRequirements[compositeKey]; exists {
+				return requiredOperations
+			}
+		}
+		return application.operationsRequiredForCommand(parentCommand)
 	}
 
 	return nil
+}
+
+func appendUnique(values []string, candidates ...string) []string {
+	result := values
+	for _, candidate := range candidates {
+		trimmedCandidate := strings.TrimSpace(candidate)
+		if len(trimmedCandidate) == 0 {
+			continue
+		}
+		duplicate := false
+		for _, existing := range result {
+			if existing == trimmedCandidate {
+				duplicate = true
+				break
+			}
+		}
+		if !duplicate {
+			result = append(result, trimmedCandidate)
+		}
+	}
+	return result
+}
+
+func configureCommandMetadata(command *cobra.Command, use string, shortDescription string, longDescription string, aliases ...string) {
+	if command == nil {
+		return
+	}
+
+	useValue := strings.TrimSpace(use)
+	if len(useValue) > 0 {
+		command.Use = useValue
+	}
+
+	shortValue := strings.TrimSpace(shortDescription)
+	if len(shortValue) > 0 {
+		command.Short = shortValue
+	}
+
+	longValue := strings.TrimSpace(longDescription)
+	if len(longValue) > 0 {
+		command.Long = longValue
+	}
+
+	command.Aliases = appendUnique(command.Aliases, aliases...)
+}
+
+func newNamespaceCommand(use string, shortDescription string, aliases ...string) *cobra.Command {
+	useValue := strings.TrimSpace(use)
+	if len(useValue) == 0 {
+		useValue = repoNamespaceUseNameConstant
+	}
+
+	shortValue := strings.TrimSpace(shortDescription)
+	if len(shortValue) == 0 {
+		shortValue = applicationShortDescriptionConstant
+	}
+
+	command := &cobra.Command{
+		Use:           useValue,
+		Short:         shortValue,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return cmd.Help()
+		},
+	}
+
+	command.Aliases = appendUnique(command.Aliases, aliases...)
+
+	return command
 }
 
 func collectRequiredOperationConfigurationNames() []string {
