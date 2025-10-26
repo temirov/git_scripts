@@ -60,32 +60,6 @@ func BindRepositoryFlags(command *cobra.Command, defaults RepositoryFlagValues, 
 	return &values
 }
 
-// BranchFlagDefinition captures configuration for branch context flags.
-type BranchFlagDefinition struct {
-	Name    string
-	Usage   string
-	Enabled bool
-}
-
-// BranchFlagValues stores branch context flag values.
-type BranchFlagValues struct {
-	Name string
-}
-
-// BindBranchFlags attaches branch context flags to the provided command.
-func BindBranchFlags(command *cobra.Command, defaults BranchFlagValues, definition BranchFlagDefinition) *BranchFlagValues {
-	values := defaults
-	if command == nil {
-		return &values
-	}
-	if !definition.Enabled || len(definition.Name) == 0 {
-		return &values
-	}
-
-	command.PersistentFlags().StringVar(&values.Name, definition.Name, defaults.Name, definition.Usage)
-	return &values
-}
-
 // RootFlagDefinition captures configuration for repository root flags.
 type RootFlagDefinition struct {
 	Name       string

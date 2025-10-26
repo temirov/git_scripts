@@ -10,7 +10,6 @@ import (
 
 	"github.com/temirov/gix/internal/repos/dependencies"
 	"github.com/temirov/gix/internal/repos/shared"
-	"github.com/temirov/gix/internal/utils"
 	flagutils "github.com/temirov/gix/internal/utils/flags"
 	rootutils "github.com/temirov/gix/internal/utils/roots"
 )
@@ -147,14 +146,6 @@ func (builder *CommandBuilder) resolveBranchName(command *cobra.Command, argumen
 	if len(remaining) > 0 {
 		branch := strings.TrimSpace(remaining[0])
 		return branch, remaining[1:]
-	}
-
-	accessor := utils.NewCommandContextAccessor()
-	if branchContext, exists := accessor.BranchContext(command.Context()); exists {
-		trimmed := strings.TrimSpace(branchContext.Name)
-		if len(trimmed) > 0 {
-			return trimmed, remaining
-		}
 	}
 
 	defaultBranch := strings.TrimSpace(configuration.DefaultBranch)

@@ -327,7 +327,6 @@ fetches with `--all --prune`, switches to the requested branch, creates it from 
 finishes with `git pull --rebase`.
 
 - Provide the target branch as the first argument (`b cd feature/new-ui`).
-- When chaining commands, use the branch family `--branch` flag (`gix --branch release/v1.2 b cd`) to avoid repeating the positional argument.
 - Override the tracking remote with `--remote`; otherwise the command tracks `origin`.
 - Use `--dry-run` to see the planned actions without touching the repositories.
 

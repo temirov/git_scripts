@@ -11,7 +11,6 @@ import (
 
 	"github.com/temirov/gix/internal/branches/refresh"
 	"github.com/temirov/gix/internal/execshell"
-	"github.com/temirov/gix/internal/utils"
 	flagutils "github.com/temirov/gix/internal/utils/flags"
 )
 
@@ -110,8 +109,7 @@ func TestCommandRunsSuccessfully(t *testing.T) {
 	require.NoError(t, buildError)
 	flagutils.BindRootFlags(command, flagutils.RootFlagValues{}, flagutils.RootFlagDefinition{Enabled: true})
 
-	contextAccessor := utils.NewCommandContextAccessor()
-	command.SetContext(contextAccessor.WithBranchContext(context.Background(), utils.BranchContext{Name: "main", RequireClean: true}))
+	require.NoError(t, command.Flags().Set("branch", "main"))
 
 	outputBuffer := &bytes.Buffer{}
 	command.SetOut(outputBuffer)

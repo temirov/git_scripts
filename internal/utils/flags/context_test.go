@@ -25,19 +25,6 @@ func TestBindRepositoryFlagsUsesDefaultsAndParsesValues(t *testing.T) {
 	require.Equal(t, "sample", values.Name)
 }
 
-func TestBindBranchFlagsUsesDefaultsAndParsesValues(t *testing.T) {
-	command := &cobra.Command{}
-
-	values := BindBranchFlags(command, BranchFlagValues{Name: "main"}, BranchFlagDefinition{Name: "branch", Usage: "Branch name", Enabled: true})
-
-	require.NotNil(t, values)
-	require.Equal(t, "main", values.Name)
-
-	parseError := command.ParseFlags([]string{"--branch", "feature"})
-	require.NoError(t, parseError)
-	require.Equal(t, "feature", values.Name)
-}
-
 func TestBindRootFlagsUsesDefaultsAndParsesValues(t *testing.T) {
 	command := &cobra.Command{}
 

@@ -9,10 +9,10 @@
 ### Testing 🧪
 - Added CLI and command unit tests to enforce the `<branch>` usage template for `branch cd`.
 - Added configuration and CLI tests confirming the `repo release` command retains default roots without explicit configuration.
-- Added branch cd command coverage to exercise the branch namespace `--branch` flag when no positional branch argument is supplied.
+- Added branch refresh coverage to exercise the command-level `--branch` flag after removing the global variant.
 
 ### Docs 📚
-- Documented the branch family `--branch` flag and how branch commands consume it when chaining operations.
+- Documented the branch command expectations now that the global `--branch` flag is removed.
 
 ## [v0.1.0]
 

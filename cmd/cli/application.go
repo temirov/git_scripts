@@ -178,8 +178,6 @@ const (
 	dryRunOptionKeyConstant                                          = "dry_run"
 	assumeYesOptionKeyConstant                                       = "assume_yes"
 	requireCleanOptionKeyConstant                                    = "require_clean"
-	branchFlagNameConstant                                           = "branch"
-	branchFlagUsageConstant                                          = "Branch name for command context"
 )
 
 var commandOperationRequirements = map[string][]string{
@@ -402,7 +400,6 @@ type Application struct {
 	operationConfigurations           OperationConfigurations
 	embeddedOperationConfigurations   OperationConfigurations
 	rootFlagValues                    *flagutils.RootFlagValues
-	branchFlagValues                  *flagutils.BranchFlagValues
 	configurationInitializationScope  string
 	configurationInitializationForced bool
 	versionFlag                       bool
@@ -688,11 +685,6 @@ func NewApplication() *Application {
 	}
 
 	branchNamespaceCommand := newNamespaceCommand(branchNamespaceUseNameConstant, branchNamespaceShortDescriptionConstant, branchNamespaceAliasConstant)
-	application.branchFlagValues = flagutils.BindBranchFlags(
-		branchNamespaceCommand,
-		flagutils.BranchFlagValues{},
-		flagutils.BranchFlagDefinition{Name: branchFlagNameConstant, Usage: branchFlagUsageConstant, Enabled: true},
-	)
 	if branchMigrateNestedCommand, branchMigrateNestedError := branchMigrationBuilder.Build(); branchMigrateNestedError == nil {
 		configureCommandMetadata(branchMigrateNestedCommand, migrateCommandUseNameConstant, branchMigrateNestedCommand.Short, branchMigrateNestedLongDescriptionConstant)
 		branchNamespaceCommand.AddCommand(branchMigrateNestedCommand)
@@ -861,11 +853,7 @@ func (application *Application) initializeConfiguration(command *cobra.Command) 
 		updatedContext = application.commandContextAccessor.WithExecutionFlags(updatedContext, executionFlags)
 		updatedContext = application.commandContextAccessor.WithLogLevel(updatedContext, application.configuration.Common.LogLevel)
 
-		branchContext := utils.BranchContext{RequireClean: true}
-		if application.branchFlagValues != nil {
-			branchContext.Name = application.branchFlagValues.Name
-		}
-		updatedContext = application.commandContextAccessor.WithBranchContext(updatedContext, branchContext)
+		updatedContext = application.commandContextAccessor.WithBranchContext(updatedContext, utils.BranchContext{RequireClean: true})
 
 		command.SetContext(updatedContext)
 		if rootCommand := command.Root(); rootCommand != nil {
