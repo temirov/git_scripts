@@ -77,6 +77,39 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
 
 ## BugFixes
 
+    - [ ] [GX-08] The required argument is missing in the help. I was expecting the help screen to be `gix repo release <tag> [flags]` and an explanation and an example of the tag.
+    ```shell
+    INFO    configuration initialized | log level=info | log format=console | config file=/home/tyemirov/Development/gix/config.yaml
+    01:17:41        WARN    unable to decode operation defaults     {"operation": "repo-release", "error": "missing configuration for operation \"repo-release\""}
+    repo release annotates the provided tag and pushes it to the configured remote.
+
+    Usage:
+    gix repo release [flags]
+
+    Aliases:
+    release, rel
+
+    Flags:
+    -h, --help             help for release
+        --message string   Override the tag message
+
+    Global Flags:
+        --branch string           Branch name for command context
+        --config string           Optional path to a configuration file (YAML or JSON).
+        --dry-run <yes|NO>        <yes|NO> Preview operations without making changes
+        --force                   Overwrite an existing configuration file when initializing.
+        --init string[="local"]   Write the embedded default configuration to the selected scope (local or user). (default "local")
+        --log-format string       Override the configured log format (structured or console).
+        --log-level string        Override the configured log level.
+        --remote string           Remote name to target
+        --roots strings           Repository roots to scan (repeatable; nested paths ignored)
+        --version                 Print the application version and exit
+    -y, --yes <yes|NO>            <yes|NO> Automatically confirm prompts
+    tag name is required
+    exit status 1
+    ```
+    Same required argument with description and examples shall be in all commands that would require such argument. Analyze all command if there is a similar scenario and the arguments are missing in the help, and fix them.
+
 ## Maintenance
 
 ## Planning 
