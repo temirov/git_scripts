@@ -401,6 +401,7 @@ type recordingFileSystem struct {
 	renameOperations   []renameOperation
 	existingPaths      map[string]struct{}
 	createdDirectories []string
+	fileContents       map[string][]byte
 }
 
 func newRecordingFileSystem(existingPaths []string) *recordingFileSystem {
@@ -408,7 +409,7 @@ func newRecordingFileSystem(existingPaths []string) *recordingFileSystem {
 	for index := range existingPaths {
 		pathSet[existingPaths[index]] = struct{}{}
 	}
-	return &recordingFileSystem{existingPaths: pathSet}
+	return &recordingFileSystem{existingPaths: pathSet, fileContents: map[string][]byte{}}
 }
 
 func (fileSystem *recordingFileSystem) Stat(path string) (fs.FileInfo, error) {
@@ -433,6 +434,25 @@ func (fileSystem *recordingFileSystem) MkdirAll(path string, permissions fs.File
 	return nil
 }
 
+func (fileSystem *recordingFileSystem) ReadFile(path string) ([]byte, error) {
+	fileSystem.ensurePathSet()
+	if contents, exists := fileSystem.fileContents[path]; exists {
+		duplicate := make([]byte, len(contents))
+		copy(duplicate, contents)
+		return duplicate, nil
+	}
+	return nil, os.ErrNotExist
+}
+
+func (fileSystem *recordingFileSystem) WriteFile(path string, data []byte, permissions fs.FileMode) error {
+	fileSystem.ensurePathSet()
+	duplicate := make([]byte, len(data))
+	copy(duplicate, data)
+	fileSystem.fileContents[path] = duplicate
+	fileSystem.existingPaths[path] = struct{}{}
+	return nil
+}
+
 func (fileSystem *recordingFileSystem) Exists(path string) bool {
 	fileSystem.ensurePathSet()
 	_, exists := fileSystem.existingPaths[path]
@@ -446,6 +466,9 @@ func (fileSystem *recordingFileSystem) Abs(path string) (string, error) {
 func (fileSystem *recordingFileSystem) ensurePathSet() {
 	if fileSystem.existingPaths == nil {
 		fileSystem.existingPaths = map[string]struct{}{}
+	}
+	if fileSystem.fileContents == nil {
+		fileSystem.fileContents = map[string][]byte{}
 	}
 }
 

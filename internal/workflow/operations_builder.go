@@ -48,6 +48,8 @@ func buildOperationFromStep(step StepConfiguration) (Operation, error) {
 		return buildBranchMigrationOperation(normalizedOptions)
 	case OperationTypeAuditReport:
 		return buildAuditReportOperation(normalizedOptions)
+	case OperationTypeApplyTasks:
+		return buildTaskOperation(normalizedOptions)
 	default:
 		return nil, fmt.Errorf("unsupported workflow operation: %s", resolvedOperation)
 	}

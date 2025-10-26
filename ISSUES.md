@@ -4,7 +4,7 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
 
 ## Features
 
-    - [ ] [GX-02] Add an ability to run git/file related tasks across folders
+    - [x] [GX-02] Add an ability to run git/file related tasks across folders
         1. Develop a syntax that describes a task
         2. Allow for templating in the files to be changed
         3. Ensure the reversability and idempotency of the execution
@@ -31,6 +31,7 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
                     open a PR
                 condition: if NOTES.md already exists, skip the task.
         5. Employ workflow runner for the tasks. Generalize workflow runner, if needed
+        Resolution: Added an `apply-tasks` workflow operation with templated file mutations, Git/PR automation, tests, and documentation.
     - [ ] [GX-03] Add an ability to prepare commit messages based on the file changes. Use @tools/llm-tasks for inspiration and code examples. Extract AI communication to pkg/ package and imake it universal enough to be used by other programs
     - [ ] [GX-04] Add an ability to prepare changelog messages based on the changes since given time, version or the last version found in git tags. Use @tools/llm-tasks for inspiration and code examples. Extract AI communication to pkg/ package and imake it universal enough to be used by other programs
     - [ ] [GX-05] Add `b cd` command to change between branches, e.g. `b cd feature/qqq` changes the current branch to `feature/qqq`. make logic similar to
@@ -66,6 +67,9 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
         branch	b	migrate			Migrate repository defaults from main to master	Flags: --from, --to. Example: go run . branch migrate --from main --to master --roots ~/Development/project-repo
         repo	r	packages	delete	untagged|all	Delete untagged GHCR versions	Flags: --package (override), --dry-run, --roots. Example: go run . repo packages delete --dry-run --roots ~/Development
         workflow	w				Run a workflow configuration file	Flags: --roots, --dry-run, --yes. Example: go run . workflow config.yaml --roots ~/Development --dry-run
+    - [ ] [GX-07] Migrate the implementatio of all commands to task interface. We want a universal task runner to be responsible for every execution or every command. All github commmands and other commands must get a task definition, and run as tasks without changing their external API, so they will invoked by the same parameters that they are invoked now.
+        - extend and develop internal tasks DSL. Ensure that we generalize the solution of every problem.
+
 
 ## BugFixes
 
@@ -73,3 +77,4 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
 
 ## Planning 
 do not work on the issues below, not ready
+

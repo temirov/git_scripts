@@ -46,6 +46,9 @@ const (
 	testUpdatePullRequestSuccessCaseNameConstant         = "update_pull_request_success"
 	testUpdatePullRequestCommandFailureCaseNameConstant  = "update_pull_request_command_failure"
 	testUpdatePullRequestValidationCaseNameConstant      = "update_pull_request_validation"
+	testCreatePullRequestSuccessCaseNameConstant         = "create_pull_request_success"
+	testCreatePullRequestCommandFailureCaseNameConstant  = "create_pull_request_command_failure"
+	testCreatePullRequestValidationCaseNameConstant      = "create_pull_request_validation"
 	testBranchProtectionProtectedCaseNameConstant        = "branch_protection_protected"
 	testBranchProtectionUnprotectedCaseNameConstant      = "branch_protection_unprotected"
 	testBranchProtectionUnexpectedStatusCaseNameConstant = "branch_protection_unexpected_status"
@@ -514,6 +517,89 @@ func TestUpdatePullRequestBase(testInstance *testing.T) {
 				require.NoError(testInstance, executionError)
 				require.NotNil(testInstance, testCase.verify)
 				testCase.verify(testInstance, testCase.executor)
+			}
+		})
+	}
+}
+
+func TestCreatePullRequest(testInstance *testing.T) {
+	testCases := []struct {
+		name        string
+		options     githubcli.PullRequestCreateOptions
+		executor    *stubGitHubExecutor
+		expectError bool
+		errorType   any
+		verify      func(testInstance *testing.T, executor *stubGitHubExecutor)
+	}{
+		{
+			name:     testCreatePullRequestSuccessCaseNameConstant,
+			executor: &stubGitHubExecutor{},
+			options: githubcli.PullRequestCreateOptions{
+				Repository: testRepositoryIdentifierConstant,
+				Title:      testPullRequestTitleConstant,
+				Body:       "Automated update",
+				Base:       testBaseBranchConstant,
+				Head:       testPullRequestHeadConstant,
+				Draft:      true,
+			},
+			verify: func(testInstance *testing.T, executor *stubGitHubExecutor) {
+				require.Len(testInstance, executor.recordedDetails, 1)
+				expectedArguments := []string{
+					"pr",
+					"create",
+					"--repo",
+					testRepositoryIdentifierConstant,
+					"--base",
+					testBaseBranchConstant,
+					"--head",
+					testPullRequestHeadConstant,
+					"--title",
+					testPullRequestTitleConstant,
+					"--body",
+					"Automated update",
+					"--draft",
+				}
+				require.Equal(testInstance, expectedArguments, executor.recordedDetails[0].Arguments)
+			},
+		},
+		{
+			name: testCreatePullRequestCommandFailureCaseNameConstant,
+			executor: &stubGitHubExecutor{executeFunc: func(context.Context, execshell.CommandDetails) (execshell.ExecutionResult, error) {
+				return execshell.ExecutionResult{}, execshell.CommandFailedError{Command: execshell.ShellCommand{Name: execshell.CommandGitHub}, Result: execshell.ExecutionResult{ExitCode: 1}}
+			}},
+			options: githubcli.PullRequestCreateOptions{
+				Repository: testRepositoryIdentifierConstant,
+				Title:      testPullRequestTitleConstant,
+				Body:       "Automated update",
+				Base:       testBaseBranchConstant,
+				Head:       testPullRequestHeadConstant,
+			},
+			expectError: true,
+			errorType:   githubcli.OperationError{},
+		},
+		{
+			name:        testCreatePullRequestValidationCaseNameConstant,
+			executor:    &stubGitHubExecutor{},
+			options:     githubcli.PullRequestCreateOptions{},
+			expectError: true,
+			errorType:   githubcli.InvalidInputError{},
+		},
+	}
+
+	for _, testCase := range testCases {
+		testInstance.Run(testCase.name, func(testInstance *testing.T) {
+			client, creationError := githubcli.NewClient(testCase.executor)
+			require.NoError(testInstance, creationError)
+
+			executionError := client.CreatePullRequest(context.Background(), testCase.options)
+			if testCase.expectError {
+				require.Error(testInstance, executionError)
+				require.IsType(testInstance, testCase.errorType, executionError)
+			} else {
+				require.NoError(testInstance, executionError)
+				if testCase.verify != nil {
+					testCase.verify(testInstance, testCase.executor)
+				}
 			}
 		})
 	}

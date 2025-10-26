@@ -23,6 +23,7 @@ type stubFileSystem struct {
 	absBase            string
 	absError           error
 	renameError        error
+	fileContents       map[string][]byte
 }
 
 func (fileSystem *stubFileSystem) Stat(path string) (fs.FileInfo, error) {
@@ -63,6 +64,32 @@ func (fileSystem *stubFileSystem) MkdirAll(path string, permissions fs.FileMode)
 		fileSystem.existingPaths = map[string]bool{}
 	}
 	fileSystem.createdDirectories = append(fileSystem.createdDirectories, path)
+	fileSystem.existingPaths[path] = true
+	return nil
+}
+
+func (fileSystem *stubFileSystem) ReadFile(path string) ([]byte, error) {
+	if fileSystem.fileContents == nil {
+		fileSystem.fileContents = map[string][]byte{}
+	}
+	if contents, exists := fileSystem.fileContents[path]; exists {
+		duplicate := make([]byte, len(contents))
+		copy(duplicate, contents)
+		return duplicate, nil
+	}
+	return nil, errors.New("not exists")
+}
+
+func (fileSystem *stubFileSystem) WriteFile(path string, data []byte, permissions fs.FileMode) error {
+	if fileSystem.existingPaths == nil {
+		fileSystem.existingPaths = map[string]bool{}
+	}
+	if fileSystem.fileContents == nil {
+		fileSystem.fileContents = map[string][]byte{}
+	}
+	duplicate := make([]byte, len(data))
+	copy(duplicate, data)
+	fileSystem.fileContents[path] = duplicate
 	fileSystem.existingPaths[path] = true
 	return nil
 }
