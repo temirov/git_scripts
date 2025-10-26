@@ -18,9 +18,12 @@ const (
 	reposIntegrationErrorLevel                  = "error"
 	reposIntegrationRunSubcommand               = "run"
 	reposIntegrationModulePathConstant          = "."
-	reposIntegrationRenameCommand               = "repo-folders-rename"
-	reposIntegrationRemotesCommand              = "repo-remote-update"
-	reposIntegrationProtocolCommand             = "repo-protocol-convert"
+	reposIntegrationRepoNamespaceCommand        = "repo"
+	reposIntegrationFolderNamespaceCommand      = "folder"
+	reposIntegrationRemoteNamespaceCommand      = "remote"
+	reposIntegrationRenameActionCommand         = "rename"
+	reposIntegrationUpdateCanonicalAction       = "update-to-canonical"
+	reposIntegrationUpdateProtocolAction        = "update-protocol"
 	reposIntegrationDryRunFlag                  = "--dry-run"
 	reposIntegrationYesFlag                     = "--yes"
 	reposIntegrationOwnerFlag                   = "--owner"
@@ -58,7 +61,7 @@ const (
 	reposIntegrationProtocolConfigCaseName      = "convert_protocol_config"
 	reposIntegrationProtocolConfigDryRunCase    = "convert_protocol_config_dry_run_literal"
 	reposIntegrationProtocolHelpCaseName        = "protocol_help_missing_flags"
-	reposIntegrationProtocolUsageSnippet        = "repo-protocol-convert [flags]"
+	reposIntegrationProtocolUsageSnippet        = "gix repo remote update-protocol [flags]"
 	reposIntegrationProtocolMissingFlagsMessage = "specify both --from and --to"
 	reposIntegrationConfigFlagName              = "--config"
 	reposIntegrationConfigFileName              = "config.yaml"
@@ -94,7 +97,9 @@ func TestReposCommandIntegration(testInstance *testing.T) {
 				reposIntegrationModulePathConstant,
 				reposIntegrationLogLevelFlag,
 				reposIntegrationErrorLevel,
-				reposIntegrationRenameCommand,
+				reposIntegrationRepoNamespaceCommand,
+				reposIntegrationFolderNamespaceCommand,
+				reposIntegrationRenameActionCommand,
 				reposIntegrationDryRunFlag,
 			},
 			expectedOutput: func(repositoryPath string) string {
@@ -116,7 +121,9 @@ func TestReposCommandIntegration(testInstance *testing.T) {
 				reposIntegrationModulePathConstant,
 				reposIntegrationLogLevelFlag,
 				reposIntegrationErrorLevel,
-				reposIntegrationRenameCommand,
+				reposIntegrationRepoNamespaceCommand,
+				reposIntegrationFolderNamespaceCommand,
+				reposIntegrationRenameActionCommand,
 				reposIntegrationDryRunFlag,
 				reposIntegrationOwnerFlag,
 			},
@@ -146,7 +153,9 @@ func TestReposCommandIntegration(testInstance *testing.T) {
 				reposIntegrationModulePathConstant,
 				reposIntegrationLogLevelFlag,
 				reposIntegrationErrorLevel,
-				reposIntegrationRenameCommand,
+				reposIntegrationRepoNamespaceCommand,
+				reposIntegrationFolderNamespaceCommand,
+				reposIntegrationRenameActionCommand,
 				reposIntegrationYesFlag,
 				reposIntegrationOwnerFlag,
 			},
@@ -204,7 +213,9 @@ func TestReposCommandIntegration(testInstance *testing.T) {
 				reposIntegrationModulePathConstant,
 				reposIntegrationLogLevelFlag,
 				reposIntegrationErrorLevel,
-				reposIntegrationRenameCommand,
+				reposIntegrationRepoNamespaceCommand,
+				reposIntegrationFolderNamespaceCommand,
+				reposIntegrationRenameActionCommand,
 				reposIntegrationYesFlag,
 				reposIntegrationOwnerFlag,
 			},
@@ -242,7 +253,9 @@ func TestReposCommandIntegration(testInstance *testing.T) {
 				reposIntegrationModulePathConstant,
 				reposIntegrationLogLevelFlag,
 				reposIntegrationErrorLevel,
-				reposIntegrationRemotesCommand,
+				reposIntegrationRepoNamespaceCommand,
+				reposIntegrationRemoteNamespaceCommand,
+				reposIntegrationUpdateCanonicalAction,
 				reposIntegrationYesFlag,
 			},
 			expectedOutput: func(repositoryPath string) string {
@@ -266,7 +279,9 @@ func TestReposCommandIntegration(testInstance *testing.T) {
 				reposIntegrationModulePathConstant,
 				reposIntegrationLogLevelFlag,
 				reposIntegrationErrorLevel,
-				reposIntegrationRemotesCommand,
+				reposIntegrationRepoNamespaceCommand,
+				reposIntegrationRemoteNamespaceCommand,
+				reposIntegrationUpdateCanonicalAction,
 			},
 			expectedOutput: func(repositoryPath string) string {
 				return fmt.Sprintf("UPDATE-REMOTE-DONE: %s origin now https://github.com/canonical/example.git\n", repositoryPath)
@@ -309,7 +324,9 @@ func TestReposCommandIntegration(testInstance *testing.T) {
 				reposIntegrationModulePathConstant,
 				reposIntegrationLogLevelFlag,
 				reposIntegrationErrorLevel,
-				reposIntegrationRemotesCommand,
+				reposIntegrationRepoNamespaceCommand,
+				reposIntegrationRemoteNamespaceCommand,
+				reposIntegrationUpdateCanonicalAction,
 				reposIntegrationYesFlag,
 			},
 			expectedOutput: func(repositoryPath string) string {
@@ -342,7 +359,9 @@ func TestReposCommandIntegration(testInstance *testing.T) {
 				reposIntegrationModulePathConstant,
 				reposIntegrationLogLevelFlag,
 				reposIntegrationErrorLevel,
-				reposIntegrationProtocolCommand,
+				reposIntegrationRepoNamespaceCommand,
+				reposIntegrationRemoteNamespaceCommand,
+				reposIntegrationUpdateProtocolAction,
 				reposIntegrationYesFlag,
 				reposIntegrationFromFlag,
 				reposIntegrationHTTPSProtocol,
@@ -370,7 +389,9 @@ func TestReposCommandIntegration(testInstance *testing.T) {
 				reposIntegrationModulePathConstant,
 				reposIntegrationLogLevelFlag,
 				reposIntegrationErrorLevel,
-				reposIntegrationProtocolCommand,
+				reposIntegrationRepoNamespaceCommand,
+				reposIntegrationRemoteNamespaceCommand,
+				reposIntegrationUpdateProtocolAction,
 			},
 			expectedOutput: func(repositoryPath string) string {
 				return fmt.Sprintf("CONVERT-DONE: %s origin now ssh://git@github.com/canonical/example.git\n", repositoryPath)
@@ -402,7 +423,9 @@ func TestReposCommandIntegration(testInstance *testing.T) {
 				reposIntegrationModulePathConstant,
 				reposIntegrationLogLevelFlag,
 				reposIntegrationErrorLevel,
-				reposIntegrationProtocolCommand,
+				reposIntegrationRepoNamespaceCommand,
+				reposIntegrationRemoteNamespaceCommand,
+				reposIntegrationUpdateProtocolAction,
 				reposIntegrationDryRunFlag,
 			},
 			expectedOutput: func(repositoryPath string) string {
@@ -465,7 +488,9 @@ func TestReposProtocolCommandDisplaysHelpWhenProtocolsMissing(testInstance *test
 				reposIntegrationModulePathConstant,
 				reposIntegrationLogLevelFlag,
 				reposIntegrationErrorLevel,
-				reposIntegrationProtocolCommand,
+				reposIntegrationRepoNamespaceCommand,
+				reposIntegrationRemoteNamespaceCommand,
+				reposIntegrationUpdateProtocolAction,
 			},
 			expectedSnippets: []string{
 				integrationHelpUsagePrefixConstant,

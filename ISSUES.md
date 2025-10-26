@@ -56,16 +56,16 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
 
 ## Improvements
 
-    - [ ] [GX-01] Refactor the command line syntax
+    - [x] [GX-01] Refactor the command line syntax — Resolved by introducing hierarchical namespaces with short aliases, updated docs, and regression tests.
         Command	Short Command	subcommand	action	filter	Summary	Key flags / example
-        audit	a				Audit and reconcile local GitHub repositories	Flags: --root, --log-level. Example: go run . audit --log-level=debug --root ~/Development
-        repo-folders-rename	r	folder	rename		Rename repository directories to match canonical GitHub names	Flags: --dry-run, --yes, --require-clean, --owner. Example: go run . repo-folders-rename --yes --require-clean --owner --root ~/Development
-        repo-remote-update	r	remote	update-to-canonical		Update origin URLs to match canonical GitHub repositories	Flags: --dry-run, --yes, --owner. Example: go run . repo-remote-update --dry-run --owner canonical --root ~/Development
-        repo-protocol-convert	r	remote	update-protocol		Convert repository origin remotes between protocols	Flags: --from, --to, --dry-run, --yes. Example: go run . repo-protocol-convert --from https --to ssh --yes --root ~/Development
-        repo-prs-purge	r	prs	delete	merged|all|open	Remove remote and local branches for closed pull requests	Flags: --remote, --limit, --dry-run. Example: go run . repo-prs-purge --remote origin --limit 100 --root ~/Development
-        branch-migrate	b	migrate			Migrate repository defaults from main to master	Flags: --from, --to. Example: go run . branch-migrate --from main --to master --root ~/Development/project-repo
-        repo-packages-purge	r	packages	delete	untagged|all	Delete untagged GHCR versions	Flags: --package (override), --dry-run, --root. Example: go run . repo-packages-purge --dry-run --root ~/Development
-        workflow	w				Run a workflow configuration file	Flags: --root, --dry-run, --yes. Example: go run . workflow config.yaml --root ~/Development --dry-run
+        audit	a				Audit and reconcile local GitHub repositories	Flags: --roots, --log-level. Example: go run . audit --log-level=debug --roots ~/Development
+        repo	r	folder	rename		Normalize repository directories to match canonical GitHub names	Flags: --dry-run, --yes, --require-clean, --owner. Example: go run . repo folder rename --yes --require-clean --owner --roots ~/Development
+        repo	r	remote	update-to-canonical		Update origin URLs to match canonical GitHub repositories	Flags: --dry-run, --yes, --owner. Example: go run . repo remote update-to-canonical --dry-run --owner canonical --roots ~/Development
+        repo	r	remote	update-protocol		Convert repository origin remotes between protocols	Flags: --from, --to, --dry-run, --yes. Example: go run . repo remote update-protocol --from https --to ssh --yes --roots ~/Development
+        repo	r	prs	delete	merged|all|open	Remove remote and local branches for closed pull requests	Flags: --remote, --limit, --dry-run. Example: go run . repo prs delete --remote origin --limit 100 --roots ~/Development
+        branch	b	migrate			Migrate repository defaults from main to master	Flags: --from, --to. Example: go run . branch migrate --from main --to master --roots ~/Development/project-repo
+        repo	r	packages	delete	untagged|all	Delete untagged GHCR versions	Flags: --package (override), --dry-run, --roots. Example: go run . repo packages delete --dry-run --roots ~/Development
+        workflow	w				Run a workflow configuration file	Flags: --roots, --dry-run, --yes. Example: go run . workflow config.yaml --roots ~/Development --dry-run
 
 ## BugFixes
 
