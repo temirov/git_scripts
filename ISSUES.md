@@ -77,8 +77,8 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
     - [ ] [GX-12] Remove INFO logging. Make the default logging NONE or whatever we can do so there will be no logging by default
     ```
     11:42:19 tyemirov@computercat:~/Development/gix [master] $ gix --version
-INFO    configuration initialized | log level=info | log format=console | config file=/home/tyemirov/Development/gix/config.yaml
-gix version: v0.0.8
+    INFO    configuration initialized | log level=info | log format=console | config file=/home/tyemirov/Development/gix/config.yaml
+    gix version: v0.0.8
     ```
     - [ ] [GX-13] `commit message` subcommand belongs to the `branch` command and the `changelog` subcommand commands belongs to the `repo` command
 
