@@ -30,6 +30,7 @@
 - Clarified owner constraint skip message for better understanding.
 - Logged configuration banner at debug level for cleaner logs.
 - Various bug fixes to enhance stability.
+- Restored the `--owner` flag for `repo remote update-to-canonical` so CLI workflows can keep owner-scoped folder plans aligned while still tolerating canonical owner migrations.
 
 ### Testing 🧪
 - Added tests and improved test coverage in CLI application and remotes.
