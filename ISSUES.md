@@ -353,11 +353,12 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
         Resolution: Branch fetch now records the remote for logging, message formatter falls back to "all remotes" instead of "unknown," and tests cover the new behavior.
     - [x] [GX-16] I have introduced a bugin GX-14 and GX-12. The initialization shall be DEBUG level, reporting regular operations shall be INFO level logging.
         Resolution: Initialization banners now emit at DEBUG severity while operational activity continues to log at INFO, with regression tests enforcing the expected levels.
-    - [ ] [GX-17] The message is unclear: `owner constraint mismatch: expected true, actual tyemirov`. Rephrase the error message to indicate why has rename not being performed
-    ```shell
-    00:05:14 tyemirov@computercat:~/Development/Research/namespace-rewrite [master] $ gix repo remote update-to-canonical --owner true --roots ~/Development/
-    UPDATE-REMOTE-SKIP: /home/tyemirov/Development/BOSL2 (owner constraint mismatch: expected true, actual tyemirov)
-    ```
+    - [x] [GX-17] The message is unclear: `owner constraint mismatch: expected true, actual tyemirov`. Rephrase the error message to indicate why has rename not being performed
+        ```shell
+        00:05:14 tyemirov@computercat:~/Development/Research/namespace-rewrite [master] $ gix repo remote update-to-canonical --owner true --roots ~/Development/
+        UPDATE-REMOTE-SKIP: /home/tyemirov/Development/BOSL2 (owner constraint mismatch: expected true, actual tyemirov)
+        ```
+        Resolution: Remote updates now report `owner constraint unmet: required --owner <value> but detected owner <value>` so skipped repositories explain which owner failed the constraint.
 
 ## Maintenance
 

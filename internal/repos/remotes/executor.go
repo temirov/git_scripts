@@ -14,7 +14,7 @@ const (
 	skipCanonicalMessage             = "UPDATE-REMOTE-SKIP: %s (no upstream: no canonical redirect found)\n"
 	skipSameMessage                  = "UPDATE-REMOTE-SKIP: %s (already canonical)\n"
 	skipTargetMessage                = "UPDATE-REMOTE-SKIP: %s (error: could not construct target URL)\n"
-	skipOwnerConstraintMessage       = "UPDATE-REMOTE-SKIP: %s (owner constraint mismatch: expected %s, actual %s)\n"
+	skipOwnerConstraintMessage       = "UPDATE-REMOTE-SKIP: %s (owner constraint unmet: required --owner %s but detected owner %s)\n"
 	planMessage                      = "PLAN-UPDATE-REMOTE: %s origin %s → %s\n"
 	promptTemplate                   = "Update 'origin' in '%s' to canonical (%s → %s)? [a/N/y] "
 	declinedMessage                  = "UPDATE-REMOTE-SKIP: user declined for %s\n"

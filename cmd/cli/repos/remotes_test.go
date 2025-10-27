@@ -199,13 +199,13 @@ func TestRemotesCommandConfigurationPrecedence(testInstance *testing.T) {
 func TestRemotesCommandOwnerConstraint(testInstance *testing.T) {
 	expectedSuccessMessage := fmt.Sprintf("UPDATE-REMOTE-DONE: %s origin now https://github.com/canonical/example.git\n", remotesDiscoveredRepository)
 	expectedMismatchMessage := fmt.Sprintf(
-		"UPDATE-REMOTE-SKIP: %s (owner constraint mismatch: expected %s, actual %s)\n",
+		"UPDATE-REMOTE-SKIP: %s (owner constraint unmet: required --owner %s but detected owner %s)\n",
 		remotesDiscoveredRepository,
 		remotesOwnerMismatchConstant,
 		remotesOwnerConstraintConstant,
 	)
 	expectedFallbackMessage := fmt.Sprintf(
-		"UPDATE-REMOTE-SKIP: %s (owner constraint mismatch: expected %s, actual %s)\n",
+		"UPDATE-REMOTE-SKIP: %s (owner constraint unmet: required --owner %s but detected owner %s)\n",
 		remotesDiscoveredRepository,
 		remotesOwnerConstraintConstant,
 		"invalid",
