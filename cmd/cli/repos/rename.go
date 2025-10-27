@@ -181,10 +181,11 @@ func prepareRenameRequests(
 
 	for _, inspection := range inspections {
 		plan := directoryPlanner.Plan(includeOwner, inspection.FinalOwnerRepo, inspection.DesiredFolderName)
+		desiredFolderName := plan.FolderName
 		if plan.IsNoop(inspection.Path, inspection.FolderName) {
-			continue
+			desiredFolderName = inspection.FolderName
 		}
-		trimmedFolderName := strings.TrimSpace(plan.FolderName)
+		trimmedFolderName := strings.TrimSpace(desiredFolderName)
 		if len(trimmedFolderName) == 0 {
 			continue
 		}
@@ -192,7 +193,7 @@ func prepareRenameRequests(
 		request := renameRequest{
 			options: rename.Options{
 				RepositoryPath:          inspection.Path,
-				DesiredFolderName:       plan.FolderName,
+				DesiredFolderName:       trimmedFolderName,
 				DryRun:                  dryRun,
 				RequireCleanWorktree:    requireClean,
 				IncludeOwner:            plan.IncludeOwner,

@@ -116,7 +116,7 @@ with the registered command names and flags.
 |------------------------------------|-----------------------------|---------------------------------------------------------------|---------------------------------------------------------------------------------------------------------|
 | `audit`                            | `a`                         | Audit and reconcile local GitHub repositories                 | `go run . a --log-level=debug --roots ~/Development --all`                                              |
 | `repo folder rename`               | `r folder rename`           | Rename repository directories to match canonical GitHub names | `go run . r folder rename --yes --require-clean --owner --roots ~/Development`                          |
-| `repo remote update-to-canonical`  | `r remote update-to-canonical` | Sync origin remotes to canonical GitHub repositories      | `go run . r remote update-to-canonical --dry-run --owner canonical --roots ~/Development`               |
+| `repo remote update-to-canonical`  | `r remote update-to-canonical` | Sync origin remotes to canonical GitHub repositories      | `go run . r remote update-to-canonical --dry-run --owner canonical --roots ~/Development`                                 |
 | `repo remote update-protocol`      | `r remote update-protocol`  | Convert repository origin remotes between protocols           | `go run . r remote update-protocol --from https --to ssh --yes --roots ~/Development`                   |
 | `repo prs delete`                  | `r prs delete`              | Remove remote and local branches for closed pull requests     | `go run . r prs delete --remote origin --limit 100 --roots ~/Development`                               |
 | `repo packages delete`             | `r packages delete`         | Delete untagged GHCR versions                                 | `go run . r packages delete --dry-run --roots ~/Development`                                            |
@@ -127,6 +127,9 @@ with the registered command names and flags.
 | `branch commit message`            | `b commit message`          | Draft a Conventional Commit message from staged or worktree changes | `go run . b commit message --roots . --dry-run`                                                     |
 | `repo changelog message`           | `r changelog message`       | Summarize recent history into a Markdown changelog section    | `go run . r changelog message --roots . --version v1.0.0 --since-tag v0.9.0 --dry-run`               |
 | `workflow`                         | `w`                         | Run a workflow configuration file                             | `go run . w config.yaml --roots ~/Development --dry-run`                                                |
+
+
+Use the `--owner <value>` flag (or `remotes.owner` configuration) with `repo remote update-to-canonical` to keep rename plans aligned with the expected GitHub account. Remote updates continue even when the detected canonical owner differs from the configured value so repositories migrated between accounts still converge on the canonical URLs.
 
 Persist defaults and workflow plans in a single configuration file to avoid long flag lists and keep the runner in sync:
 

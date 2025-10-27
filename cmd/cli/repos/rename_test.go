@@ -3,6 +3,7 @@ package repos_test
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -30,6 +31,7 @@ const (
 	renameConfiguredRootConstant        = "/tmp/rename-config-root"
 	renameCLIRepositoryRootConstant     = "/tmp/rename-cli-root"
 	renameDiscoveredRepositoryPath      = "/tmp/rename-repo"
+	renameCanonicalDirectoryPath        = "/tmp/canonical/example"
 	renameOriginURLConstant             = "https://github.com/origin/example.git"
 	renameCanonicalRepositoryConstant   = "canonical/example"
 	renameOwnerSegmentConstant          = "canonical"
@@ -47,6 +49,7 @@ func TestRenameCommandConfigurationPrecedence(testInstance *testing.T) {
 		name                       string
 		configuration              *repos.RenameConfiguration
 		arguments                  []string
+		discoveredRepositories     []string
 		expectedRoots              []string
 		expectedRootsBuilder       func(testing.TB) []string
 		expectError                bool
@@ -56,6 +59,7 @@ func TestRenameCommandConfigurationPrecedence(testInstance *testing.T) {
 		expectedCleanChecks        int
 		expectedRenameTargets      []renameOperation
 		expectedCreatedDirectories []string
+		expectedStdout             string
 	}{
 		{
 			name: "configuration_supplies_defaults",
@@ -277,12 +281,35 @@ func TestRenameCommandConfigurationPrecedence(testInstance *testing.T) {
 			},
 			expectedCreatedDirectories: []string{filepath.Join(renameParentDirectoryPathConstant, renameOwnerSegmentConstant)},
 		},
+		{
+			name: "already_normalized_skips_with_message",
+			configuration: &repos.RenameConfiguration{
+				DryRun:               false,
+				AssumeYes:            true,
+				RequireCleanWorktree: false,
+				IncludeOwner:         true,
+				RepositoryRoots:      []string{renameConfiguredRootConstant},
+			},
+			arguments: []string{
+				renameAssumeYesFlagConstant,
+			},
+			discoveredRepositories: []string{renameCanonicalDirectoryPath},
+			expectedRoots:          []string{renameConfiguredRootConstant},
+			expectedPromptCalls:    0,
+			expectedRenameCalls:    0,
+			expectedCleanChecks:    0,
+			expectedStdout:         fmt.Sprintf("SKIP (already normalized): %s\n", renameCanonicalDirectoryPath),
+		},
 	}
 
 	for testCaseIndex := range testCases {
 		testCase := testCases[testCaseIndex]
 		testInstance.Run(testCase.name, func(subtest *testing.T) {
-			discoverer := &fakeRepositoryDiscoverer{repositories: []string{renameDiscoveredRepositoryPath}}
+			repositories := testCase.discoveredRepositories
+			if len(repositories) == 0 {
+				repositories = []string{renameDiscoveredRepositoryPath}
+			}
+			discoverer := &fakeRepositoryDiscoverer{repositories: repositories}
 			executor := &fakeGitExecutor{}
 			manager := &fakeGitRepositoryManager{
 				remoteURL:                  renameOriginURLConstant,
@@ -293,10 +320,15 @@ func TestRenameCommandConfigurationPrecedence(testInstance *testing.T) {
 			}
 			resolver := &fakeGitHubResolver{metadata: githubcli.RepositoryMetadata{NameWithOwner: renameCanonicalRepositoryConstant, DefaultBranch: renameMetadataDefaultBranchConstant}}
 			prompter := &recordingPrompter{result: shared.ConfirmationResult{Confirmed: true}}
-			fileSystem := newRecordingFileSystem([]string{
-				renameParentDirectoryPathConstant,
-				renameDiscoveredRepositoryPath,
-			})
+			existingPaths := []string{renameParentDirectoryPathConstant}
+			for _, repositoryPath := range repositories {
+				existingPaths = append(existingPaths, repositoryPath)
+				parentPath := filepath.Dir(repositoryPath)
+				if parentPath != repositoryPath {
+					existingPaths = append(existingPaths, parentPath)
+				}
+			}
+			fileSystem := newRecordingFileSystem(existingPaths)
 
 			var configurationProvider func() repos.RenameConfiguration
 			if testCase.configuration != nil {
@@ -360,6 +392,9 @@ func TestRenameCommandConfigurationPrecedence(testInstance *testing.T) {
 				require.Equal(subtest, testCase.expectedRenameTargets, fileSystem.renameOperations)
 			}
 			require.Equal(subtest, testCase.expectedCreatedDirectories, fileSystem.createdDirectories)
+			if len(testCase.expectedStdout) > 0 {
+				require.Equal(subtest, testCase.expectedStdout, stdoutBuffer.String())
+			}
 		})
 	}
 }

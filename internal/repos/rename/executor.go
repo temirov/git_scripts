@@ -12,20 +12,20 @@ import (
 )
 
 const (
-	planSkipAlreadyMessage            = "PLAN-SKIP (already named): %s\n"
+	planSkipAlreadyMessage            = "PLAN-SKIP (already normalized): %s\n"
 	planSkipDirtyMessage              = "PLAN-SKIP (dirty worktree): %s\n"
 	planSkipParentMissingMessage      = "PLAN-SKIP (target parent missing): %s\n"
 	planSkipParentNotDirectoryMessage = "PLAN-SKIP (target parent not directory): %s\n"
 	planSkipExistsMessage             = "PLAN-SKIP (target exists): %s\n"
 	planCaseOnlyMessage               = "PLAN-CASE-ONLY: %s → %s (two-step move required)\n"
 	planReadyMessage                  = "PLAN-OK: %s → %s\n"
-	errorAlreadyNamedMessage          = "ERROR: already named: %s\n"
 	errorParentMissingMessage         = "ERROR: target parent missing: %s\n"
 	errorParentNotDirectoryMessage    = "ERROR: target parent is not a directory: %s\n"
 	errorTargetExistsMessage          = "ERROR: target exists: %s\n"
 	promptTemplate                    = "Rename '%s' → '%s'? [a/N/y] "
 	skipMessage                       = "SKIP: %s\n"
 	skipDirtyMessage                  = "SKIP (dirty worktree): %s\n"
+	skipAlreadyNormalizedMessage      = "SKIP (already normalized): %s\n"
 	successMessage                    = "Renamed %s → %s\n"
 	failureMessage                    = "ERROR: rename failed for %s → %s\n"
 	intermediateRenameTemplate        = "%s.rename.%d"
@@ -161,7 +161,7 @@ func (executor *Executor) validatePrerequisites(executionContext context.Context
 	parentDetails := executor.parentDirectoryDetails(newAbsolutePath)
 
 	if oldAbsolutePath == newAbsolutePath {
-		executor.printfError(errorAlreadyNamedMessage, oldAbsolutePath)
+		executor.printfOutput(skipAlreadyNormalizedMessage, oldAbsolutePath)
 		return false
 	}
 

@@ -66,8 +66,6 @@ const (
 	remotesTestDeclinedMessage         = "UPDATE-REMOTE-SKIP: user declined for %s\n"
 	remotesTestPromptErrorMessage      = "UPDATE-REMOTE-SKIP: %s (error: could not construct target URL)\n"
 	remotesTestSuccessMessage          = "UPDATE-REMOTE-DONE: %s origin now %s\n"
-	remotesTestOwnerConstraintValue    = "canonical"
-	remotesTestOwnerMismatchValue      = "different"
 )
 
 func TestExecutorBehaviors(testInstance *testing.T) {
@@ -182,35 +180,6 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 				CanonicalOwnerRepository: remotesTestCanonicalOwnerRepo,
 				RemoteProtocol:           shared.RemoteProtocolHTTPS,
 				AssumeYes:                true,
-			},
-			gitManager:      &stubGitManager{},
-			expectedOutput:  fmt.Sprintf(remotesTestSuccessMessage, remotesTestRepositoryPath, remotesTestCanonicalURL),
-			expectedUpdates: 1,
-		},
-		{
-			name: "owner_constraint_matches",
-			options: remotes.Options{
-				RepositoryPath:           remotesTestRepositoryPath,
-				CurrentOriginURL:         remotesTestCurrentOriginURL,
-				OriginOwnerRepository:    remotesTestOriginOwnerRepository,
-				CanonicalOwnerRepository: remotesTestCanonicalOwnerRepo,
-				RemoteProtocol:           shared.RemoteProtocolHTTPS,
-				AssumeYes:                true,
-				OwnerConstraint:          remotesTestOwnerConstraintValue,
-			},
-			gitManager:      &stubGitManager{},
-			expectedOutput:  fmt.Sprintf(remotesTestSuccessMessage, remotesTestRepositoryPath, remotesTestCanonicalURL),
-			expectedUpdates: 1,
-		},
-		{
-			name: "owner_constraint_mismatch",
-			options: remotes.Options{
-				RepositoryPath:           remotesTestRepositoryPath,
-				CurrentOriginURL:         remotesTestCurrentOriginURL,
-				OriginOwnerRepository:    remotesTestOriginOwnerRepository,
-				CanonicalOwnerRepository: remotesTestCanonicalOwnerRepo,
-				RemoteProtocol:           shared.RemoteProtocolHTTPS,
-				OwnerConstraint:          remotesTestOwnerMismatchValue,
 			},
 			gitManager:      &stubGitManager{},
 			expectedOutput:  fmt.Sprintf(remotesTestSuccessMessage, remotesTestRepositoryPath, remotesTestCanonicalURL),

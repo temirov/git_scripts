@@ -335,6 +335,24 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 			expectedRenames: 0,
 		},
 		{
+			name: "already_normalized_skip",
+			options: rename.Options{
+				RepositoryPath:    renameTestProjectFolderPath,
+				DesiredFolderName: filepath.Base(renameTestProjectFolderPath),
+				AssumeYes:         true,
+			},
+			fileSystem: &stubFileSystem{
+				existingPaths: map[string]bool{
+					renameTestRootDirectory:     true,
+					renameTestProjectFolderPath: true,
+				},
+			},
+			gitManager:      stubGitManager{clean: true},
+			expectedOutput:  fmt.Sprintf("SKIP (already normalized): %s\n", renameTestProjectFolderPath),
+			expectedErrors:  "",
+			expectedRenames: 0,
+		},
+		{
 			name: "execute_missing_parent_without_creation",
 			options: rename.Options{
 				RepositoryPath:          renameTestProjectFolderPath,
