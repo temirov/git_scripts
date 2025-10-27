@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased]
+
+### Improvements ⚙️
+- Refined the `--init` flag help to present `<LOCAL|user>` with the default scope highlighted and clearer destination details.
+
+### Testing 🧪
+- Added choice placeholder formatting coverage and ensured CLI configuration precedence honors explicit `--config` flags.
+
+### Docs 📚
+- Documented the capitalized `LOCAL` scope in the configuration initialization section of the README.
+
 ## [v0.1.2]
 
 ### Features ✨

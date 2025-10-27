@@ -85,7 +85,7 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
     ```
     - [x] [GX-13] `commit message` subcommand belongs to the `branch` command and the `changelog` subcommand commands belongs to the `repo` command
         Resolution: Moved the `commit message` command under `branch` and the `changelog message` command under `repo`, updating tests and documentation for the new paths.
-    - [ ] [GX-14] Implement a full erasure of a file from git. Make it a subcommand under `history` command (abbreviated as `h`). Call it `rm`. Look at the script below. Use if for inspiration -- dont copy the flow/logic but underetsnad the steps required for the removela of a file from git history
+    - [ ] [GX-14] Implement a full erasure of a file from git. Make it a subcommand under `repo` command. Call it `rm`. Look at the script below. Use if for inspiration -- dont copy the flow/logic but understand the steps required for the removal of a file from the git history
     ```shell
     #!/usr/bin/env bash
     set -euo pipefail
@@ -287,6 +287,7 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
 
     echo "Purged from history: ${purge_paths[*]}"
     ```
+    - [ ] [GX-21] Implement a task to perform replacements in files. The input is a glob to be used to identify the files (*.go, *.sum etc), a string to find, a string to replace, a command to run after the successfull replacement, a safeguard before the execution(the conditioons can be clean tree, master branch, a presence of some file or folder). Look at tols ns-rewrite for an example of a specialized case where we replace a package name.
 
 ## BugFixes
 
@@ -375,7 +376,7 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
     Renamed /tmp/repos/netflix → /tmp/repos/MarcoPoloResearchLab/netflix
     ```
         Resolution: Repo folder rename now prints `SKIP (already normalized)` for directories whose names already match the canonical plan across CLI, workflows, and executor flows, with regression tests covering the skip banner.
-    - [ ] [GX-20] The help message for creating initial configs is cryptic. --init string[="local"] is incorrect. Remove any mentioning of the implementation details, such as string. 
+    - [x] [GX-20] The help message for creating initial configs is cryptic. --init string[="local"] is incorrect. Remove any mentioning of the implementation details, such as string. 
         1. Add --init <LOCAL|user> and explain the differences between the choices. 
             `--init string[="local"]   Write the embedded default configuration to the selected scope (local or user). (default "local")`
             ```
@@ -387,6 +388,7 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
 
             Ensure that we read the configuration in the following order of precedence: CLI -> local -> user.
         2. Have a helper that highlights the default choice in capital letters, if not already
+        Resolution: Replaced the flag usage with `<LOCAL|user>`, added a reusable choice placeholder formatter, expanded CLI and configuration loader tests to cover explicit `--config` precedence, and documented the capitalized `LOCAL` scope in the README.
 
 ## Maintenance
 
