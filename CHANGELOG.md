@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [v0.1.3]
 
 ### Improvements ⚙️
 - Refined the `--init` flag help to present `<LOCAL|user>` with the default scope highlighted and clearer destination details.
