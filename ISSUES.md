@@ -351,6 +351,12 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
 
     - [x] [GX-15] The message is misleading: `Fetching from unknown in .` We always know thwe current brnach and the branch we are switching to, so there can not be "unknown"
         Resolution: Branch fetch now records the remote for logging, message formatter falls back to "all remotes" instead of "unknown," and tests cover the new behavior.
+    - [ ] [GX-16] I have introduced a bugin GX-14 and GX-12. The initialization shall be DEBUG level, reporting regular operations shall be INFO level logging.
+    - [ ] [GX-17] The message is unclear: `owner constraint mismatch: expected true, actual tyemirov`. Rephrase the error message to indicate why has rename not being performed
+    ```shell
+    00:05:14 tyemirov@computercat:~/Development/Research/namespace-rewrite [master] $ gix repo remote update-to-canonical --owner true --roots ~/Development/
+    UPDATE-REMOTE-SKIP: /home/tyemirov/Development/BOSL2 (owner constraint mismatch: expected true, actual tyemirov)
+    ```
 
 ## Maintenance
 
