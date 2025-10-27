@@ -61,6 +61,7 @@
 - Downgraded the configuration initialization banner to DEBUG so standard operations continue logging at INFO severity only.
 - Clarified the remote owner constraint skip message to spell out the required `--owner` value and detected repository owner.
 - Allowed canonical remote updates to proceed regardless of the configured `--owner` constraint, supporting repositories that migrated between accounts.
+- Added `SKIP (already normalized)` messaging to `repo folder rename` so re-running normalization reports repositories that already match canonical naming.
 
 ### Testing 🧪
 - Added application command hierarchy coverage to ensure aliases and nested commands resolve to the existing operations.
