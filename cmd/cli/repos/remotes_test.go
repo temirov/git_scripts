@@ -198,18 +198,7 @@ func TestRemotesCommandConfigurationPrecedence(testInstance *testing.T) {
 
 func TestRemotesCommandOwnerConstraint(testInstance *testing.T) {
 	expectedSuccessMessage := fmt.Sprintf("UPDATE-REMOTE-DONE: %s origin now https://github.com/canonical/example.git\n", remotesDiscoveredRepository)
-	expectedMismatchMessage := fmt.Sprintf(
-		"UPDATE-REMOTE-SKIP: %s (owner constraint unmet: required --owner %s but detected owner %s)\n",
-		remotesDiscoveredRepository,
-		remotesOwnerMismatchConstant,
-		remotesOwnerConstraintConstant,
-	)
-	expectedFallbackMessage := fmt.Sprintf(
-		"UPDATE-REMOTE-SKIP: %s (owner constraint unmet: required --owner %s but detected owner %s)\n",
-		remotesDiscoveredRepository,
-		remotesOwnerConstraintConstant,
-		"invalid",
-	)
+	expectedInvalidOwnerMessage := fmt.Sprintf("UPDATE-REMOTE-DONE: %s origin now https://github.com/invalid.git\n", remotesDiscoveredRepository)
 
 	testCases := []struct {
 		name                    string
@@ -236,8 +225,8 @@ func TestRemotesCommandOwnerConstraint(testInstance *testing.T) {
 				RepositoryRoots: []string{remotesConfiguredRootConstant},
 			},
 			arguments:       []string{remotesAssumeYesFlagConstant},
-			expectedUpdates: 0,
-			expectedOutput:  expectedMismatchMessage,
+			expectedUpdates: 1,
+			expectedOutput:  expectedSuccessMessage,
 		},
 		{
 			name: "flag_overrides_configuration",
@@ -262,8 +251,8 @@ func TestRemotesCommandOwnerConstraint(testInstance *testing.T) {
 				remotesAssumeYesFlagConstant,
 			},
 			metadataOwnerRepository: "invalid",
-			expectedUpdates:         0,
-			expectedOutput:          expectedFallbackMessage,
+			expectedUpdates:         1,
+			expectedOutput:          expectedInvalidOwnerMessage,
 		},
 	}
 

@@ -359,6 +359,8 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
         UPDATE-REMOTE-SKIP: /home/tyemirov/Development/BOSL2 (owner constraint mismatch: expected true, actual tyemirov)
         ```
         Resolution: Remote updates now report `owner constraint unmet: required --owner <value> but detected owner <value>` so skipped repositories explain which owner failed the constraint.
+    - [x] [GX-18] Remove the check that the canonical owner matches the current owner for the repo remote update-to-canonical command. `gix repo remote update-to-canonical --owner true` shall succeed for repositories migrated between accounts (for example, temirov/gix → tyemirov/gix).
+        Resolution: Remote updates now ignore the owner inequality guard so canonical remotes apply even when the configured owner string differs from the detected canonical owner; CLI and executor tests cover the renamed-account path.
 
 ## Maintenance
 
