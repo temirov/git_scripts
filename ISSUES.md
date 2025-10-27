@@ -85,7 +85,7 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
     ```
     - [x] [GX-13] `commit message` subcommand belongs to the `branch` command and the `changelog` subcommand commands belongs to the `repo` command
         Resolution: Moved the `commit message` command under `branch` and the `changelog message` command under `repo`, updating tests and documentation for the new paths.
-    - [ ] [GX-14] Implement a full erasure of a file from git. Make it a subcommand under `history` command (abbreviated as `h`). Call it `rm`. Look at the script below. Use if for inspiration -- dont copy the flow/logic but underetsnad the steps required for the removela of a file from git history
+    - [ ] [GX-14] Implement a full erasure of a file from git. Make it a subcommand under `repo` command. Call it `rm`. Look at the script below. Use if for inspiration -- dont copy the flow/logic but understand the steps required for the removal of a file from the git history
     ```shell
     #!/usr/bin/env bash
     set -euo pipefail
