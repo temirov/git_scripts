@@ -19,6 +19,7 @@
 - Ensured `repo release` falls back to the embedded `.` repository root when user configuration omits the operation defaults.
 - Updated `workflow` help text to surface the required configuration path and example usage.
 - Disabled default CLI info logging and set the default log level to `error` so commands run silently unless verbosity is explicitly requested.
+- Downgraded the configuration initialization banner to DEBUG so standard operations continue logging at INFO severity only.
 
 ### Testing 🧪
 - Added application command hierarchy coverage to ensure aliases and nested commands resolve to the existing operations.

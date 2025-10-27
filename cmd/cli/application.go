@@ -899,11 +899,11 @@ func (application *Application) logConfigurationInitialization() {
 			application.configuration.Common.LogFormat,
 			application.configurationMetadata.ConfigFileUsed,
 		)
-		application.consoleLogger.Info(bannerMessage)
+		application.consoleLogger.Debug(bannerMessage)
 		return
 	}
 
-	application.logger.Info(
+	application.logger.Debug(
 		configurationInitializedMessageConstant,
 		zap.String(configurationLogLevelFieldConstant, application.configuration.Common.LogLevel),
 		zap.String(configurationLogFormatFieldConstant, application.configuration.Common.LogFormat),

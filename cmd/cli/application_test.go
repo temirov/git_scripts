@@ -213,6 +213,10 @@ func TestApplicationInitializationLoggingModes(testInstance *testing.T) {
 				var logEntry map[string]any
 				require.NoError(t, json.Unmarshal([]byte(logLines[0]), &logEntry))
 
+				levelValue, levelExists := logEntry["level"].(string)
+				require.True(t, levelExists)
+				require.Equal(t, "debug", strings.ToLower(levelValue))
+
 				messageValue, messageValueExists := logEntry["msg"].(string)
 				require.True(t, messageValueExists)
 				require.Equal(t, configurationInitializedMessageTextConstant, messageValue)
@@ -249,6 +253,16 @@ func TestApplicationInitializationLoggingModes(testInstance *testing.T) {
 
 				require.Contains(t, trimmedOutput, expectedBanner)
 				require.NotContains(t, trimmedOutput, "\""+configurationLogLevelFieldNameConstant+"\"")
+
+				var bannerLine string
+				for _, candidateLine := range strings.Split(trimmedOutput, "\n") {
+					if strings.Contains(candidateLine, expectedBanner) {
+						bannerLine = strings.TrimSpace(candidateLine)
+						break
+					}
+				}
+				require.NotEmpty(t, bannerLine)
+				require.True(t, strings.HasPrefix(bannerLine, "DEBUG"))
 			},
 		},
 	}
