@@ -42,6 +42,7 @@
 - Disabled default CLI info logging and set the default log level to `error` so commands run silently unless verbosity is explicitly requested.
 - Downgraded the configuration initialization banner to DEBUG so standard operations continue logging at INFO severity only.
 - Clarified the remote owner constraint skip message to spell out the required `--owner` value and detected repository owner.
+- Allowed canonical remote updates to proceed regardless of the configured `--owner` constraint, supporting repositories that migrated between accounts.
 
 ### Testing 🧪
 - Added application command hierarchy coverage to ensure aliases and nested commands resolve to the existing operations.

@@ -66,7 +66,6 @@ const (
 	remotesTestDeclinedMessage         = "UPDATE-REMOTE-SKIP: user declined for %s\n"
 	remotesTestPromptErrorMessage      = "UPDATE-REMOTE-SKIP: %s (error: could not construct target URL)\n"
 	remotesTestSuccessMessage          = "UPDATE-REMOTE-DONE: %s origin now %s\n"
-	remotesTestOwnerConstraintMessage  = "UPDATE-REMOTE-SKIP: %s (owner constraint unmet: required --owner %s but detected owner %s)\n"
 	remotesTestOwnerConstraintValue    = "canonical"
 	remotesTestOwnerMismatchValue      = "different"
 )
@@ -214,8 +213,8 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 				OwnerConstraint:          remotesTestOwnerMismatchValue,
 			},
 			gitManager:      &stubGitManager{},
-			expectedOutput:  fmt.Sprintf(remotesTestOwnerConstraintMessage, remotesTestRepositoryPath, remotesTestOwnerMismatchValue, remotesTestOwnerConstraintValue),
-			expectedUpdates: 0,
+			expectedOutput:  fmt.Sprintf(remotesTestSuccessMessage, remotesTestRepositoryPath, remotesTestCanonicalURL),
+			expectedUpdates: 1,
 		},
 	}
 
