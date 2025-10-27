@@ -73,6 +73,7 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
         workflow	w				Run a workflow configuration file	Flags: --roots, --dry-run, --yes. Example: go run . workflow config.yaml --roots ~/Development --dry-run
     - [ ] [GX-07] Migrate the implementatio of all commands to task interface. We want a universal task runner to be responsible for every execution or every command. All github commmands and other commands must get a task definition, and run as tasks without changing their external API, so they will invoked by the same parameters that they are invoked now.
         - extend and develop internal tasks DSL. Ensure that we generalize the solution of every problem.
+        - add requrired details to current task interface. Have a plan to migrate current commands to task and use a generalize definition, sufficient for satisfaction of the requirements of existing tasks.
     - [x] [GX-09] Improve the Command catalog in the @README.md. Reflect the current catalog of commands. Do not include any reference to the past and what the command used to be called. Users are the intended audience
         Resolution: Rewrote the README command catalog table with current command paths, shortcuts, and examples while dropping legacy command references.
     - [ ] [GX-12] Remove INFO logging. Make the default logging NONE or whatever we can do so there will be no logging by default
