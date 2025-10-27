@@ -89,7 +89,7 @@ Provide `--config path/to/override.yaml` when you need to load a file outside of
 
 Run `gix --init` to write the embedded defaults into `./config.yaml`. Pass a scope to control the destination:
 
-- `gix --init local` (default) writes to the current working directory.
+- `gix --init LOCAL` (default) writes to the current working directory.
 - `gix --init user` writes to the persistent user location (`$XDG_CONFIG_HOME/gix/config.yaml` or `$HOME/.gix/config.yaml`).
 
 Append `--force` when you want to overwrite an existing configuration file in the selected scope.

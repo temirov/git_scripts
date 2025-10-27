@@ -45,7 +45,7 @@ const (
 	logFormatFlagNameConstant                                        = "log-format"
 	logFormatFlagUsageConstant                                       = "Override the configured log format (structured or console)."
 	configurationInitializationFlagNameConstant                      = "init"
-	configurationInitializationFlagUsageConstant                     = "Write the embedded default configuration to the selected scope (local or user)."
+	configurationInitializationFlagUsageConstant                     = "Write the embedded default configuration to LOCAL (./config.yaml) or user ($XDG_CONFIG_HOME/gix/config.yaml, falling back to $HOME/.gix/config.yaml)."
 	configurationInitializationDefaultScopeConstant                  = "local"
 	configurationInitializationForceFlagNameConstant                 = "force"
 	configurationInitializationForceFlagUsageConstant                = "Overwrite an existing configuration file when initializing."
@@ -472,7 +472,14 @@ func NewApplication() *Application {
 	)
 	initializationFlag := cobraCommand.PersistentFlags().Lookup(configurationInitializationFlagNameConstant)
 	if initializationFlag != nil {
-		initializationFlag.NoOptDefVal = configurationInitializationDefaultScopeConstant
+		initializationFlag.Usage = flagutils.FormatChoiceUsage(
+			configurationInitializationDefaultScopeConstant,
+			[]string{
+				configurationInitializationScopeLocalConstant,
+				configurationInitializationScopeUserConstant,
+			},
+			configurationInitializationFlagUsageConstant,
+		)
 	}
 	cobraCommand.PersistentFlags().BoolVar(
 		&application.configurationInitializationForced,
@@ -714,7 +721,9 @@ func NewApplication() *Application {
 
 // Execute runs the configured Cobra command hierarchy and ensures logger flushing.
 func (application *Application) Execute() error {
-	application.rootCommand.SetArgs(flagutils.NormalizeToggleArguments(os.Args[1:]))
+	normalizedArguments := flagutils.NormalizeToggleArguments(os.Args[1:])
+	normalizedArguments = normalizeInitializationScopeArguments(normalizedArguments)
+	application.rootCommand.SetArgs(normalizedArguments)
 
 	executionError := application.rootCommand.Execute()
 	if syncError := application.flushLogger(); syncError != nil {
@@ -726,6 +735,47 @@ func (application *Application) Execute() error {
 // Execute builds a fresh application instance and executes the root command hierarchy.
 func Execute() error {
 	return NewApplication().Execute()
+}
+
+func normalizeInitializationScopeArguments(arguments []string) []string {
+	if len(arguments) == 0 {
+		return nil
+	}
+
+	normalizedArguments := make([]string, 0, len(arguments))
+	flagPrefix := "--" + configurationInitializationFlagNameConstant
+
+	for index := 0; index < len(arguments); index++ {
+		currentArgument := arguments[index]
+
+		if strings.HasPrefix(currentArgument, flagPrefix+"=") {
+			value := strings.TrimSpace(strings.TrimPrefix(currentArgument, flagPrefix+"="))
+			if len(value) == 0 {
+				normalizedArguments = append(
+					normalizedArguments,
+					fmt.Sprintf("%s=%s", flagPrefix, configurationInitializationDefaultScopeConstant),
+				)
+				continue
+			}
+			normalizedArguments = append(normalizedArguments, currentArgument)
+			continue
+		}
+
+		if currentArgument == flagPrefix {
+			nextIndex := index + 1
+			if nextIndex >= len(arguments) || strings.HasPrefix(arguments[nextIndex], "-") {
+				normalizedArguments = append(
+					normalizedArguments,
+					fmt.Sprintf("%s=%s", flagPrefix, configurationInitializationDefaultScopeConstant),
+				)
+				continue
+			}
+		}
+
+		normalizedArguments = append(normalizedArguments, currentArgument)
+	}
+
+	return normalizedArguments
 }
 
 func (application *Application) resolveConfigurationSearchPaths() []string {

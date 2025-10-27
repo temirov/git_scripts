@@ -234,3 +234,30 @@ func TestConfigurationLoaderSearchPaths(testInstance *testing.T) {
 		})
 	}
 }
+
+func TestConfigurationLoaderExplicitFileOverridesSearchPaths(t *testing.T) {
+	tempRoot := t.TempDir()
+	searchDirectory := filepath.Join(tempRoot, "search")
+	explicitDirectory := filepath.Join(tempRoot, "explicit")
+
+	require.NoError(t, os.MkdirAll(searchDirectory, 0o755))
+	require.NoError(t, os.MkdirAll(explicitDirectory, 0o755))
+
+	searchConfigPath := filepath.Join(searchDirectory, testConfigFileNameConstant)
+	explicitConfigPath := filepath.Join(explicitDirectory, testConfigFileNameConstant)
+
+	require.NoError(t, os.WriteFile(searchConfigPath, []byte(fmt.Sprintf(testConfigContentTemplateConstant, testConfiguredLogLevelConstant)), 0o600))
+	require.NoError(t, os.WriteFile(explicitConfigPath, []byte(fmt.Sprintf(testConfigContentTemplateConstant, testOverriddenLogLevelConstant)), 0o600))
+
+	loader := utils.NewConfigurationLoader(testConfigurationNameConstant, testConfigurationTypeConstant, testEnvironmentPrefixConstant, []string{searchDirectory})
+
+	defaultValues := map[string]any{
+		testLogLevelKeyConstant: testDefaultLogLevelConstant,
+	}
+
+	loadedConfiguration := configurationFixture{}
+	metadata, loadError := loader.LoadConfiguration(explicitConfigPath, defaultValues, &loadedConfiguration)
+	require.NoError(t, loadError)
+	require.Equal(t, testOverriddenLogLevelConstant, loadedConfiguration.Common.LogLevel)
+	require.Equal(t, explicitConfigPath, metadata.ConfigFileUsed)
+}

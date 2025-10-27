@@ -523,6 +523,81 @@ func TestApplicationConfigurationSearchPaths(testInstance *testing.T) {
 	}
 }
 
+func TestApplicationConfigurationCliFlagOverridesScopes(t *testing.T) {
+	workingDirectory := t.TempDir()
+	homeDirectory := t.TempDir()
+	xdgConfigHome := filepath.Join(homeDirectory, testXDGConfigHomeDirectoryNameConstant)
+
+	t.Setenv("HOME", homeDirectory)
+	t.Setenv("XDG_CONFIG_HOME", xdgConfigHome)
+	t.Setenv(testConfigurationSearchPathEnvironmentName, "")
+
+	require.NoError(t, os.MkdirAll(filepath.Join(homeDirectory, testUserConfigurationDirectoryNameConstant), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(xdgConfigHome, testUserConfigurationDirectoryNameConstant), 0o755))
+
+	originalWorkingDirectory, workingDirectoryError := os.Getwd()
+	require.NoError(t, workingDirectoryError)
+	require.NoError(t, os.Chdir(workingDirectory))
+	t.Cleanup(func() {
+		require.NoError(t, os.Chdir(originalWorkingDirectory))
+	})
+
+	localConfigurationPath := filepath.Join(workingDirectory, testConfigurationFileNameConstant)
+	xdgConfigurationPath := filepath.Join(xdgConfigHome, testUserConfigurationDirectoryNameConstant, testConfigurationFileNameConstant)
+	userConfigurationPath := filepath.Join(homeDirectory, testUserConfigurationDirectoryNameConstant, testConfigurationFileNameConstant)
+
+	buildHeader := func(logLevel string) string {
+		return fmt.Sprintf("common:\n  log_level: %s\n  log_format: structured\noperations:\n", logLevel)
+	}
+
+	writeConfigurationFile(t, localConfigurationPath, buildConfigurationContentWithHeader(buildHeader("info"), requiredOperationNames))
+	writeConfigurationFile(t, xdgConfigurationPath, buildConfigurationContentWithHeader(buildHeader("warn"), requiredOperationNames))
+	writeConfigurationFile(t, userConfigurationPath, buildConfigurationContentWithHeader(buildHeader("error"), requiredOperationNames))
+
+	cliConfigurationDirectory := t.TempDir()
+	cliConfigurationPath := filepath.Join(cliConfigurationDirectory, testConfigurationFileNameConstant)
+	writeConfigurationFile(t, cliConfigurationPath, buildConfigurationContentWithHeader(buildHeader("debug"), requiredOperationNames))
+
+	originalArgs := os.Args
+	t.Cleanup(func() {
+		os.Args = originalArgs
+	})
+
+	os.Args = []string{configurationInitializationApplicationNameConstant, "--config", cliConfigurationPath}
+
+	stdoutReader, stdoutWriter, stdoutPipeError := os.Pipe()
+	require.NoError(t, stdoutPipeError)
+	stderrReader, stderrWriter, stderrPipeError := os.Pipe()
+	require.NoError(t, stderrPipeError)
+
+	originalStdout := os.Stdout
+	originalStderr := os.Stderr
+	os.Stdout = stdoutWriter
+	os.Stderr = stderrWriter
+
+	application := cli.NewApplication()
+	executionError := application.Execute()
+
+	require.NoError(t, stdoutWriter.Close())
+	require.NoError(t, stderrWriter.Close())
+	os.Stdout = originalStdout
+	os.Stderr = originalStderr
+
+	_, stdoutReadError := io.ReadAll(stdoutReader)
+	require.NoError(t, stdoutReadError)
+	require.NoError(t, stdoutReader.Close())
+
+	_, stderrReadError := io.ReadAll(stderrReader)
+	require.NoError(t, stderrReadError)
+	require.NoError(t, stderrReader.Close())
+
+	require.NoError(t, executionError)
+
+	expectedConfigPath := resolveSymlinkedPath(t, cliConfigurationPath)
+	actualConfigPath := resolveSymlinkedPath(t, application.ConfigFileUsed())
+	require.Equal(t, expectedConfigPath, actualConfigPath)
+}
+
 func TestApplicationEmbeddedDefaultsProvideCommandConfigurations(testInstance *testing.T) {
 	operationIndex := buildEmbeddedOperationIndex(testInstance)
 

@@ -133,8 +133,58 @@ func TestRootCommandToggleHelpFormatting(t *testing.T) {
 
 	require.Contains(t, usage, "--dry-run <yes|NO>")
 	require.Contains(t, usage, "--yes <yes|NO>")
+	require.Contains(t, usage, "--init <LOCAL|user>")
+	require.NotContains(t, usage, "--init string")
+	require.NotContains(t, usage, "[=\"local\"]")
 	require.NotContains(t, usage, "__toggle_true__")
 	require.NotContains(t, usage, "toggle[")
+}
+
+func TestNormalizeInitializationScopeArguments(t *testing.T) {
+	testCases := []struct {
+		name         string
+		input        []string
+		expectedArgs []string
+	}{
+		{
+			name:         "NoArguments",
+			input:        nil,
+			expectedArgs: nil,
+		},
+		{
+			name:         "ImplicitLocalValue",
+			input:        []string{"--init"},
+			expectedArgs: []string{"--init=local"},
+		},
+		{
+			name:         "ImplicitLocalWithFollowingFlag",
+			input:        []string{"--init", "--force"},
+			expectedArgs: []string{"--init=local", "--force"},
+		},
+		{
+			name:         "ExplicitLocalValue",
+			input:        []string{"--init", "local"},
+			expectedArgs: []string{"--init", "local"},
+		},
+		{
+			name:         "ExplicitUserValue",
+			input:        []string{"--init=user"},
+			expectedArgs: []string{"--init=user"},
+		},
+		{
+			name:         "EmptyAssignmentDefaultsToLocal",
+			input:        []string{"--init="},
+			expectedArgs: []string{"--init=local"},
+		},
+	}
+
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			normalized := normalizeInitializationScopeArguments(testCase.input)
+			require.Equal(t, testCase.expectedArgs, normalized)
+		})
+	}
 }
 
 func TestApplicationCommandHierarchyAndAliases(t *testing.T) {

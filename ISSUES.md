@@ -376,7 +376,7 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
     Renamed /tmp/repos/netflix → /tmp/repos/MarcoPoloResearchLab/netflix
     ```
         Resolution: Repo folder rename now prints `SKIP (already normalized)` for directories whose names already match the canonical plan across CLI, workflows, and executor flows, with regression tests covering the skip banner.
-    - [ ] [GX-20] The help message for creating initial configs is cryptic. --init string[="local"] is incorrect. Remove any mentioning of the implementation details, such as string. 
+    - [x] [GX-20] The help message for creating initial configs is cryptic. --init string[="local"] is incorrect. Remove any mentioning of the implementation details, such as string. 
         1. Add --init <LOCAL|user> and explain the differences between the choices. 
             `--init string[="local"]   Write the embedded default configuration to the selected scope (local or user). (default "local")`
             ```
@@ -388,6 +388,7 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
 
             Ensure that we read the configuration in the following order of precedence: CLI -> local -> user.
         2. Have a helper that highlights the default choice in capital letters, if not already
+        Resolution: Replaced the flag usage with `<LOCAL|user>`, added a reusable choice placeholder formatter, expanded CLI and configuration loader tests to cover explicit `--config` precedence, and documented the capitalized `LOCAL` scope in the README.
 
 ## Maintenance
 
