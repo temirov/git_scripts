@@ -20,6 +20,7 @@
 - Updated `workflow` help text to surface the required configuration path and example usage.
 - Disabled default CLI info logging and set the default log level to `error` so commands run silently unless verbosity is explicitly requested.
 - Downgraded the configuration initialization banner to DEBUG so standard operations continue logging at INFO severity only.
+- Clarified the remote owner constraint skip message to spell out the required `--owner` value and detected repository owner.
 
 ### Testing 🧪
 - Added application command hierarchy coverage to ensure aliases and nested commands resolve to the existing operations.

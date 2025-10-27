@@ -66,7 +66,7 @@ const (
 	remotesTestDeclinedMessage         = "UPDATE-REMOTE-SKIP: user declined for %s\n"
 	remotesTestPromptErrorMessage      = "UPDATE-REMOTE-SKIP: %s (error: could not construct target URL)\n"
 	remotesTestSuccessMessage          = "UPDATE-REMOTE-DONE: %s origin now %s\n"
-	remotesTestOwnerConstraintMessage  = "UPDATE-REMOTE-SKIP: %s (owner constraint mismatch: expected %s, actual %s)\n"
+	remotesTestOwnerConstraintMessage  = "UPDATE-REMOTE-SKIP: %s (owner constraint unmet: required --owner %s but detected owner %s)\n"
 	remotesTestOwnerConstraintValue    = "canonical"
 	remotesTestOwnerMismatchValue      = "different"
 )
