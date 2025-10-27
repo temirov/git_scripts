@@ -363,7 +363,17 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
         Resolution: Remote updates now report `owner constraint unmet: required --owner <value> but detected owner <value>` so skipped repositories explain which owner failed the constraint.
     - [x] [GX-18] Remove the check that the canonical owner matches the current owner for the repo remote update-to-canonical command. `gix repo remote update-to-canonical --owner true` shall succeed for repositories migrated between accounts (for example, temirov/gix → tyemirov/gix).
         Resolution: Remote updates now ignore the owner inequality guard so canonical remotes apply even when the configured owner string differs from the detected canonical owner; CLI and executor tests cover the renamed-account path.
-
+    - [ ] [GX-19] Add a message when the folders are already normalized: `SKIP (already normalized)` when the folders are already normalized:
+    I was expecting to see `SKIP (already normalized): tmp/repos/MarcoPoloResearchLab/RSVP` for the three folders that were fixed already
+    ```
+    11:55:09 tyemirov@computercat:~/Development/gix [master] $ go run ./... repo folder rename --owner yes --roots /tmp/repos/
+    Renamed /tmp/repos/RSVP → /tmp/repos/MarcoPoloResearchLab/RSVP
+    Renamed /tmp/repos/ledger → /tmp/repos/tyemirov/ledger
+    Renamed /tmp/repos/loopaware → /tmp/repos/tyemirov/loopaware
+    SKIP (dirty worktree): /tmp/repos/netflix
+    11:59:04 tyemirov@computercat:~/Development/gix [master] $ go run ./... repo folder rename --owner yes --roots /tmp/repos/ --require-clean no
+    Renamed /tmp/repos/netflix → /tmp/repos/MarcoPoloResearchLab/netflix
+    ```
 ## Maintenance
 
 ## Planning 
