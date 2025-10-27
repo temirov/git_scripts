@@ -3,7 +3,6 @@ package repos_test
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -196,74 +195,60 @@ func TestRemotesCommandConfigurationPrecedence(testInstance *testing.T) {
 	}
 }
 
-func TestRemotesCommandOwnerConstraint(testInstance *testing.T) {
-	expectedSuccessMessage := fmt.Sprintf("UPDATE-REMOTE-DONE: %s origin now https://github.com/canonical/example.git\n", remotesDiscoveredRepository)
-	expectedMismatchMessage := fmt.Sprintf(
-		"UPDATE-REMOTE-SKIP: %s (owner constraint unmet: required --owner %s but detected owner %s)\n",
-		remotesDiscoveredRepository,
-		remotesOwnerMismatchConstant,
-		remotesOwnerConstraintConstant,
-	)
-	expectedFallbackMessage := fmt.Sprintf(
-		"UPDATE-REMOTE-SKIP: %s (owner constraint unmet: required --owner %s but detected owner %s)\n",
-		remotesDiscoveredRepository,
-		remotesOwnerConstraintConstant,
-		"invalid",
-	)
+func TestRemotesCommandOwnerOptions(testInstance *testing.T) {
+	expectedSuccessMessage := func(repositoryPath string, canonical string) string {
+		return "UPDATE-REMOTE-DONE: " + repositoryPath + " origin now https://github.com/" + canonical + ".git\n"
+	}
 
 	testCases := []struct {
 		name                    string
 		configuration           repos.RemotesConfiguration
 		arguments               []string
-		expectedUpdates         int
-		expectedOutput          string
 		metadataOwnerRepository string
+		expectedCanonical       string
 	}{
 		{
-			name: "configuration_owner_matches",
+			name: "configuration_owner_matches_canonical",
 			configuration: repos.RemotesConfiguration{
 				Owner:           remotesOwnerConstraintConstant,
+				AssumeYes:       true,
 				RepositoryRoots: []string{remotesConfiguredRootConstant},
 			},
-			arguments:       []string{remotesAssumeYesFlagConstant},
-			expectedUpdates: 1,
-			expectedOutput:  expectedSuccessMessage,
+			arguments:         []string{},
+			expectedCanonical: remotesCanonicalRepository,
 		},
 		{
-			name: "configuration_owner_mismatch",
+			name: "configuration_owner_mismatch_allows_update",
 			configuration: repos.RemotesConfiguration{
 				Owner:           remotesOwnerMismatchConstant,
+				AssumeYes:       true,
 				RepositoryRoots: []string{remotesConfiguredRootConstant},
 			},
-			arguments:       []string{remotesAssumeYesFlagConstant},
-			expectedUpdates: 0,
-			expectedOutput:  expectedMismatchMessage,
+			arguments:         []string{},
+			expectedCanonical: remotesCanonicalRepository,
 		},
 		{
 			name: "flag_overrides_configuration",
 			configuration: repos.RemotesConfiguration{
 				Owner:           remotesOwnerMismatchConstant,
+				AssumeYes:       true,
 				RepositoryRoots: []string{remotesConfiguredRootConstant},
 			},
 			arguments: []string{
-				remotesAssumeYesFlagConstant,
 				remotesOwnerFlagConstant, remotesOwnerConstraintConstant,
 			},
-			expectedUpdates: 1,
-			expectedOutput:  expectedSuccessMessage,
+			expectedCanonical: remotesCanonicalRepository,
 		},
 		{
-			name: "invalid_canonical_owner_uses_origin",
+			name: "invalid_canonical_owner_still_updates",
 			configuration: repos.RemotesConfiguration{
 				Owner:           remotesOwnerConstraintConstant,
+				AssumeYes:       true,
 				RepositoryRoots: []string{remotesConfiguredRootConstant},
 			},
-			arguments: []string{
-				remotesAssumeYesFlagConstant,
-			},
+			arguments:               []string{},
 			metadataOwnerRepository: "invalid",
-			expectedUpdates:         0,
-			expectedOutput:          expectedFallbackMessage,
+			expectedCanonical:       "invalid",
 		},
 	}
 
@@ -308,10 +293,13 @@ func TestRemotesCommandOwnerConstraint(testInstance *testing.T) {
 			executionError := command.Execute()
 			require.NoError(subtest, executionError)
 
-			require.Equal(subtest, []string{remotesConfiguredRootConstant}, discoverer.receivedRoots)
-			require.Equal(subtest, testCase.expectedUpdates, len(manager.setCalls))
 			combinedOutput := stdoutBuffer.String() + stderrBuffer.String()
-			require.Equal(subtest, testCase.expectedOutput, combinedOutput)
+			expectedMessage := expectedSuccessMessage(remotesDiscoveredRepository, testCase.expectedCanonical)
+			require.Equal(subtest, expectedMessage, combinedOutput)
+			require.Equal(subtest, []string{remotesConfiguredRootConstant}, discoverer.receivedRoots)
+			require.Equal(subtest, 1, len(manager.setCalls))
+			expectedURL := "https://github.com/" + testCase.expectedCanonical + ".git"
+			require.Equal(subtest, expectedURL, manager.remoteURL)
 		})
 	}
 }

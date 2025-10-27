@@ -46,10 +46,12 @@ func (operation *RenameOperation) Execute(executionContext context.Context, envi
 	for repositoryIndex := range state.Repositories {
 		repository := state.Repositories[repositoryIndex]
 		plan := directoryPlanner.Plan(operation.IncludeOwner, repository.Inspection.FinalOwnerRepo, repository.Inspection.DesiredFolderName)
+		desiredFolderName := plan.FolderName
 		if plan.IsNoop(repository.Path, repository.Inspection.FolderName) {
-			continue
+			desiredFolderName = repository.Inspection.FolderName
 		}
-		if len(strings.TrimSpace(plan.FolderName)) == 0 {
+		trimmedFolderName := strings.TrimSpace(desiredFolderName)
+		if len(trimmedFolderName) == 0 {
 			continue
 		}
 
@@ -62,7 +64,7 @@ func (operation *RenameOperation) Execute(executionContext context.Context, envi
 
 		options := rename.Options{
 			RepositoryPath:          originalPath,
-			DesiredFolderName:       plan.FolderName,
+			DesiredFolderName:       trimmedFolderName,
 			DryRun:                  environment.DryRun,
 			RequireCleanWorktree:    operation.RequireCleanWorktree,
 			AssumeYes:               assumeYes,

@@ -14,7 +14,6 @@ const (
 	skipCanonicalMessage             = "UPDATE-REMOTE-SKIP: %s (no upstream: no canonical redirect found)\n"
 	skipSameMessage                  = "UPDATE-REMOTE-SKIP: %s (already canonical)\n"
 	skipTargetMessage                = "UPDATE-REMOTE-SKIP: %s (error: could not construct target URL)\n"
-	skipOwnerConstraintMessage       = "UPDATE-REMOTE-SKIP: %s (owner constraint unmet: required --owner %s but detected owner %s)\n"
 	planMessage                      = "PLAN-UPDATE-REMOTE: %s origin %s → %s\n"
 	promptTemplate                   = "Update 'origin' in '%s' to canonical (%s → %s)? [a/N/y] "
 	declinedMessage                  = "UPDATE-REMOTE-SKIP: user declined for %s\n"
@@ -25,7 +24,6 @@ const (
 	gitProtocolURLTemplate           = "git@github.com:%s.git"
 	sshProtocolURLTemplate           = "ssh://git@github.com/%s.git"
 	httpsProtocolURLTemplate         = "https://github.com/%s.git"
-	ownerConstraintUnknownValue      = "unknown"
 	ownerRepositorySeparator         = "/"
 )
 
@@ -75,21 +73,6 @@ func (executor *Executor) Execute(executionContext context.Context, options Opti
 	if strings.EqualFold(trimmedOrigin, trimmedCanonical) {
 		executor.printfOutput(skipSameMessage, options.RepositoryPath)
 		return
-	}
-
-	requiredOwner := strings.TrimSpace(options.OwnerConstraint)
-	if len(requiredOwner) > 0 {
-		actualOwner := canonicalOwner(trimmedCanonical)
-		if len(actualOwner) == 0 {
-			actualOwner = canonicalOwner(trimmedOrigin)
-		}
-		if len(actualOwner) == 0 {
-			actualOwner = ownerConstraintUnknownValue
-		}
-		if !strings.EqualFold(actualOwner, requiredOwner) {
-			executor.printfOutput(skipOwnerConstraintMessage, options.RepositoryPath, requiredOwner, actualOwner)
-			return
-		}
 	}
 
 	targetURL, targetError := BuildRemoteURL(options.RemoteProtocol, trimmedCanonical)
