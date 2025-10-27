@@ -47,7 +47,7 @@ operations:
     with:
       roots:
         - .
-  - operation: branch-migrate
+  - operation: branch-default
     with:
       roots:
         - .

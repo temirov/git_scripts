@@ -102,7 +102,7 @@ const (
 	repoReleaseOperationNameConstant                                 = "repo-release"
 	workflowCommandOperationNameConstant                             = "workflow"
 	branchRefreshOperationNameConstant                               = "branch-refresh"
-	branchMigrateOperationNameConstant                               = "branch-migrate"
+	branchDefaultOperationNameConstant                               = "branch-default"
 	branchChangeOperationNameConstant                                = "branch-cd"
 	commitMessageOperationNameConstant                               = "commit-message"
 	changelogMessageOperationNameConstant                            = "changelog-message"
@@ -136,7 +136,7 @@ const (
 	branchNamespaceUseNameConstant                                   = "branch"
 	branchNamespaceAliasConstant                                     = "b"
 	branchNamespaceShortDescriptionConstant                          = "Branch management commands"
-	migrateCommandUseNameConstant                                    = "migrate"
+	defaultCommandUseNameConstant                                    = "default"
 	refreshCommandUseNameConstant                                    = "refresh"
 	branchChangeCommandUseNameConstant                               = "cd"
 	branchChangeCommandUsageTemplateConstant                         = branchChangeCommandUseNameConstant + " <branch>"
@@ -163,7 +163,7 @@ const (
 	updateProtocolLongDescriptionConstant                            = "repo remote update-protocol converts origin URLs to a desired protocol."
 	prsDeleteLongDescriptionConstant                                 = "repo prs delete removes remote and local Git branches whose pull requests are already closed."
 	packagesDeleteLongDescriptionConstant                            = "repo packages delete removes untagged container versions from GitHub Packages."
-	branchMigrateNestedLongDescriptionConstant                       = "branch migrate switches repository defaults from main to master with safety gates."
+	branchDefaultNestedLongDescriptionConstant                       = "branch default promotes a branch to the repository default, auto-detecting the current default branch before retargeting workflows and safety gates."
 	branchRefreshNestedLongDescriptionConstant                       = "branch refresh synchronizes repository branches by fetching, checking out, and pulling updates."
 	versionFlagNameConstant                                          = "version"
 	versionFlagUsageConstant                                         = "Print the application version and exit"
@@ -183,13 +183,13 @@ const (
 var commandOperationRequirements = map[string][]string{
 	auditOperationNameConstant:                                                {auditOperationNameConstant},
 	branchCleanupOperationNameConstant:                                        {branchCleanupOperationNameConstant},
-	branchMigrateOperationNameConstant:                                        {branchMigrateOperationNameConstant},
+	branchDefaultOperationNameConstant:                                        {branchDefaultOperationNameConstant},
 	branchRefreshOperationNameConstant:                                        {branchRefreshOperationNameConstant},
 	branchChangeOperationNameConstant:                                         {branchChangeOperationNameConstant},
 	repoReleaseOperationNameConstant:                                          {repoReleaseOperationNameConstant},
 	commitMessageCompositeKeyConstant:                                         {commitMessageOperationNameConstant},
 	changelogMessageCompositeKeyConstant:                                      {changelogMessageOperationNameConstant},
-	migrateCommandUseNameConstant:                                             {branchMigrateOperationNameConstant},
+	defaultCommandUseNameConstant:                                             {branchDefaultOperationNameConstant},
 	packagesPurgeOperationNameConstant:                                        {packagesPurgeOperationNameConstant},
 	repoPackagesDeleteCompositeKeyConstant:                                    {packagesPurgeOperationNameConstant},
 	repoPullRequestsDeleteCompositeKeyConstant:                                {branchCleanupOperationNameConstant},
@@ -550,12 +550,12 @@ func NewApplication() *Application {
 		ConfigurationProvider:        application.branchChangeConfiguration,
 	}
 
-	branchMigrationBuilder := migrate.CommandBuilder{
+	branchDefaultBuilder := migrate.CommandBuilder{
 		LoggerProvider: func() *zap.Logger {
 			return application.logger
 		},
 		HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
-		ConfigurationProvider:        application.branchMigrateConfiguration,
+		ConfigurationProvider:        application.branchDefaultConfiguration,
 	}
 
 	packagesBuilder := packages.CommandBuilder{
@@ -695,9 +695,9 @@ func NewApplication() *Application {
 	}
 
 	branchNamespaceCommand := newNamespaceCommand(branchNamespaceUseNameConstant, branchNamespaceShortDescriptionConstant, branchNamespaceAliasConstant)
-	if branchMigrateNestedCommand, branchMigrateNestedError := branchMigrationBuilder.Build(); branchMigrateNestedError == nil {
-		configureCommandMetadata(branchMigrateNestedCommand, migrateCommandUseNameConstant, branchMigrateNestedCommand.Short, branchMigrateNestedLongDescriptionConstant)
-		branchNamespaceCommand.AddCommand(branchMigrateNestedCommand)
+	if branchDefaultNestedCommand, branchDefaultNestedError := branchDefaultBuilder.Build(); branchDefaultNestedError == nil {
+		configureCommandMetadata(branchDefaultNestedCommand, defaultCommandUseNameConstant, branchDefaultNestedCommand.Short, branchDefaultNestedLongDescriptionConstant)
+		branchNamespaceCommand.AddCommand(branchDefaultNestedCommand)
 	}
 	if branchChangeCommand, branchChangeError := branchChangeBuilder.Build(); branchChangeError == nil {
 		configureCommandMetadata(branchChangeCommand, branchChangeCommandUsageTemplateConstant, branchChangeCommand.Short, branchChangeLongDescriptionConstant, branchChangeCommandAliasConstant)
@@ -1132,9 +1132,9 @@ func (application *Application) commitMessageConfiguration() commitcmd.MessageCo
 	return configuration.Sanitize()
 }
 
-func (application *Application) branchMigrateConfiguration() migrate.CommandConfiguration {
+func (application *Application) branchDefaultConfiguration() migrate.CommandConfiguration {
 	configuration := migrate.DefaultCommandConfiguration()
-	application.decodeOperationConfiguration(branchMigrateOperationNameConstant, &configuration)
+	application.decodeOperationConfiguration(branchDefaultOperationNameConstant, &configuration)
 	if strings.EqualFold(application.configuration.Common.LogLevel, string(utils.LogLevelDebug)) {
 		configuration.EnableDebugLogging = true
 	}

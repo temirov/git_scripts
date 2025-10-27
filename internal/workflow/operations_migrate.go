@@ -11,16 +11,18 @@ import (
 
 const (
 	defaultMigrationRemoteNameConstant                 = "origin"
-	defaultMigrationSourceBranchConstant               = "main"
 	defaultMigrationTargetBranchConstant               = "master"
 	defaultMigrationWorkflowsDirectoryConstant         = ".github/workflows"
-	migrationDryRunMessageTemplateConstant             = "WORKFLOW-PLAN: migrate %s (%s → %s)\n"
-	migrationSuccessMessageTemplateConstant            = "WORKFLOW-MIGRATE: %s (%s → %s) safe_to_delete=%t\n"
-	migrationIdentifierMissingMessageConstant          = "repository identifier unavailable for migration target"
-	migrationExecutionErrorTemplateConstant            = "branch migration failed: %w"
-	migrationRefreshErrorTemplateConstant              = "failed to refresh repository after branch migration: %w"
-	migrationDependenciesMissingMessageConstant        = "branch migration requires repository manager, git executor, and GitHub client"
-	migrationMultipleTargetsUnsupportedMessageConstant = "branch migration requires exactly one target configuration"
+	migrationDryRunMessageTemplateConstant             = "WORKFLOW-PLAN: default %s (%s → %s)\n"
+	migrationSuccessMessageTemplateConstant            = "WORKFLOW-DEFAULT: %s (%s → %s) safe_to_delete=%t\n"
+	migrationIdentifierMissingMessageConstant          = "repository identifier unavailable for default-branch target"
+	migrationExecutionErrorTemplateConstant            = "default branch update failed: %w"
+	migrationRefreshErrorTemplateConstant              = "failed to refresh repository after default branch update: %w"
+	migrationDependenciesMissingMessageConstant        = "default branch update requires repository manager, git executor, and GitHub client"
+	migrationMultipleTargetsUnsupportedMessageConstant = "default branch update requires exactly one target configuration"
+	migrationMetadataResolutionErrorTemplateConstant   = "default branch metadata resolution failed: %w"
+	migrationMetadataMissingMessageConstant            = "repository metadata missing default branch for update"
+	migrationSkipMessageTemplateConstant               = "WORKFLOW-DEFAULT-SKIP: %s already defaults to %s\n"
 )
 
 // BranchMigrationTarget describes branch migration behavior for discovered repositories.
@@ -39,7 +41,7 @@ type BranchMigrationOperation struct {
 
 // Name identifies the operation type.
 func (operation *BranchMigrationOperation) Name() string {
-	return string(OperationTypeBranchMigration)
+	return string(OperationTypeBranchDefault)
 }
 
 // Execute performs branch migration workflows for configured targets.
@@ -85,20 +87,46 @@ func (operation *BranchMigrationOperation) Execute(executionContext context.Cont
 			return identifierError
 		}
 
+		targetBranchValue := strings.TrimSpace(target.TargetBranch)
+		if len(targetBranchValue) == 0 {
+			targetBranchValue = defaultMigrationTargetBranchConstant
+		}
+		targetBranch := migrate.BranchName(targetBranchValue)
+
+		sourceBranchValue := strings.TrimSpace(target.SourceBranch)
+		if len(sourceBranchValue) == 0 {
+			metadata, metadataError := environment.GitHubClient.ResolveRepoMetadata(executionContext, repositoryIdentifier)
+			if metadataError != nil {
+				return fmt.Errorf(migrationMetadataResolutionErrorTemplateConstant, metadataError)
+			}
+			sourceBranchValue = strings.TrimSpace(metadata.DefaultBranch)
+			if len(sourceBranchValue) == 0 {
+				return errors.New(migrationMetadataMissingMessageConstant)
+			}
+		}
+		sourceBranch := migrate.BranchName(sourceBranchValue)
+
+		if sourceBranch == targetBranch {
+			if environment.Output != nil {
+				fmt.Fprintf(environment.Output, migrationSkipMessageTemplateConstant, repositoryState.Path, sourceBranchValue)
+			}
+			continue
+		}
+
 		options := migrate.MigrationOptions{
 			RepositoryPath:       repositoryState.Path,
 			RepositoryRemoteName: target.RemoteName,
 			RepositoryIdentifier: repositoryIdentifier,
 			WorkflowsDirectory:   defaultMigrationWorkflowsDirectoryConstant,
-			SourceBranch:         migrate.BranchName(target.SourceBranch),
-			TargetBranch:         migrate.BranchName(target.TargetBranch),
+			SourceBranch:         sourceBranch,
+			TargetBranch:         targetBranch,
 			PushUpdates:          target.PushToRemote,
 			DeleteSourceBranch:   target.DeleteSourceBranch,
 		}
 
 		if environment.DryRun {
 			if environment.Output != nil {
-				fmt.Fprintf(environment.Output, migrationDryRunMessageTemplateConstant, repositoryState.Path, target.SourceBranch, target.TargetBranch)
+				fmt.Fprintf(environment.Output, migrationDryRunMessageTemplateConstant, repositoryState.Path, sourceBranchValue, targetBranchValue)
 			}
 			continue
 		}
@@ -109,7 +137,7 @@ func (operation *BranchMigrationOperation) Execute(executionContext context.Cont
 		}
 
 		if environment.Output != nil {
-			fmt.Fprintf(environment.Output, migrationSuccessMessageTemplateConstant, repositoryState.Path, target.SourceBranch, target.TargetBranch, result.SafetyStatus.SafeToDelete)
+			fmt.Fprintf(environment.Output, migrationSuccessMessageTemplateConstant, repositoryState.Path, sourceBranchValue, targetBranchValue, result.SafetyStatus.SafeToDelete)
 		}
 
 		if refreshError := repositoryState.Refresh(executionContext, environment.AuditService); refreshError != nil {

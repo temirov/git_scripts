@@ -26,7 +26,7 @@ const (
 	OperationTypeProtocolConversion OperationType = OperationType("convert-protocol")
 	OperationTypeCanonicalRemote    OperationType = OperationType("update-canonical-remote")
 	OperationTypeRenameDirectories  OperationType = OperationType("rename-directories")
-	OperationTypeBranchMigration    OperationType = OperationType("migrate-branch")
+	OperationTypeBranchDefault      OperationType = OperationType("default-branch")
 	OperationTypeAuditReport        OperationType = OperationType("audit-report")
 	OperationTypeApplyTasks         OperationType = OperationType("apply-tasks")
 )

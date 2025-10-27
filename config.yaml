@@ -62,8 +62,8 @@ operations:
       roots:
         - ~/Development
 
-  - operation: branch-migrate
-    with: &branch_migrate_defaults
+  - operation: branch-default
+    with: &branch_default_defaults
       debug: false
       roots:
         - ~/Development
@@ -89,12 +89,11 @@ workflow:
 
   - step:
       order: 4
-      operation: migrate-branch
+      operation: default-branch
       with:
-        <<: *branch_migrate_defaults
+        <<: *branch_default_defaults
         targets:
           - remote_name: origin
-            source_branch: main
             target_branch: master
             push_to_remote: true
             delete_source_branch: false

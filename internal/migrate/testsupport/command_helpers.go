@@ -26,10 +26,11 @@ func (discoverer *RepositoryDiscovererStub) DiscoverRepositories(roots []string)
 
 // CommandExecutorStub records git and GitHub CLI invocations for assertions.
 type CommandExecutorStub struct {
-	RepositoryRemotes      map[string]string
-	RepositoryErrors       map[string]error
-	ExecutedGitCommands    []execshell.CommandDetails
-	ExecutedGitHubCommands []execshell.CommandDetails
+	RepositoryRemotes         map[string]string
+	RepositoryErrors          map[string]error
+	RepositoryDefaultBranches map[string]string
+	ExecutedGitCommands       []execshell.CommandDetails
+	ExecutedGitHubCommands    []execshell.CommandDetails
 }
 
 // ExecuteGit returns the configured remote output or error for the working directory.
@@ -51,6 +52,17 @@ func (executor *CommandExecutorStub) ExecuteGit(_ context.Context, details execs
 // ExecuteGitHubCLI records GitHub CLI commands without mutating state.
 func (executor *CommandExecutorStub) ExecuteGitHubCLI(_ context.Context, details execshell.CommandDetails) (execshell.ExecutionResult, error) {
 	executor.ExecutedGitHubCommands = append(executor.ExecutedGitHubCommands, details)
+	if len(details.Arguments) >= 3 && details.Arguments[0] == "repo" && details.Arguments[1] == "view" {
+		repositoryIdentifier := details.Arguments[2]
+		defaultBranch := "main"
+		if executor.RepositoryDefaultBranches != nil {
+			if branch, exists := executor.RepositoryDefaultBranches[repositoryIdentifier]; exists {
+				defaultBranch = branch
+			}
+		}
+		response := fmt.Sprintf(`{"nameWithOwner":"%s","description":"","defaultBranchRef":{"name":"%s"},"isInOrganization":false}`, repositoryIdentifier, defaultBranch)
+		return execshell.ExecutionResult{StandardOutput: response, ExitCode: 0}, nil
+	}
 	return execshell.ExecutionResult{ExitCode: 0}, nil
 }
 

@@ -23,33 +23,32 @@ import (
 )
 
 const (
-	rootFlagArgumentConstant               = "--roots"
-	multiRootFirstArgumentConstant         = "root-one"
-	multiRootSecondArgumentConstant        = "root-two"
-	repositoryOnePathConstant              = "/tmp/repository-one"
-	repositoryTwoPathConstant              = "/tmp/repository-two"
-	repositoryOneRemoteConstant            = "git@github.com:example/repository-one.git"
-	repositoryTwoRemoteConstant            = "git@github.com:example/repository-two.git"
-	repositoryOneIdentifierConstant        = "example/repository-one"
-	repositoryTwoIdentifierConstant        = "example/repository-two"
-	blockingReasonOpenPullRequestsConstant = "open pull requests still target source branch"
-	migrationCompletedMessageTextConstant  = "Branch migration completed"
-	migrationFailureMessageTextConstant    = "Repository migration failed"
-	safetyWarningMessageTextConstant       = "Branch deletion blocked by safety gates"
-	discoveryFailureMessageTextConstant    = "Repository discovery failed"
-	repositoryLogFieldNameConstant         = "repository"
-	rootsLogFieldNameConstant              = "roots"
-	workingDirectoryFallbackConstant       = "/workspace/root"
-	defaultRootRepositoryPathConstant      = "/workspace/root/project"
-	defaultRootRemoteConstant              = "git@github.com:example/default.git"
-	defaultRootIdentifierConstant          = "example/default"
-	configurationRootValueConstant         = "/tmp/configured-root"
-	cliRootOverrideConstant                = "/tmp/cli-root"
-	fromFlagArgumentConstant               = "--from"
-	toFlagArgumentConstant                 = "--to"
-	customSourceBranchNameConstant         = "release"
-	customTargetBranchNameConstant         = "stable"
-	missingRootsErrorMessageConstant       = "no repository roots provided; specify --roots or configure defaults"
+	rootFlagArgumentConstant                 = "--roots"
+	multiRootFirstArgumentConstant           = "root-one"
+	multiRootSecondArgumentConstant          = "root-two"
+	repositoryOnePathConstant                = "/tmp/repository-one"
+	repositoryTwoPathConstant                = "/tmp/repository-two"
+	repositoryOneRemoteConstant              = "git@github.com:example/repository-one.git"
+	repositoryTwoRemoteConstant              = "git@github.com:example/repository-two.git"
+	repositoryOneIdentifierConstant          = "example/repository-one"
+	repositoryTwoIdentifierConstant          = "example/repository-two"
+	blockingReasonOpenPullRequestsConstant   = "open pull requests still target source branch"
+	migrationCompletedMessageTextConstant    = "Default branch update completed"
+	migrationFailureMessageTextConstant      = "Default branch update failed"
+	safetyWarningMessageTextConstant         = "Branch deletion blocked by safety gates"
+	discoveryFailureMessageTextConstant      = "Repository discovery failed"
+	defaultAlreadyMatchesMessageTextConstant = "Default branch already matches target"
+	repositoryLogFieldNameConstant           = "repository"
+	rootsLogFieldNameConstant                = "roots"
+	workingDirectoryFallbackConstant         = "/workspace/root"
+	defaultRootRepositoryPathConstant        = "/workspace/root/project"
+	defaultRootRemoteConstant                = "git@github.com:example/default.git"
+	defaultRootIdentifierConstant            = "example/default"
+	configurationRootValueConstant           = "/tmp/configured-root"
+	cliRootOverrideConstant                  = "/tmp/cli-root"
+	toFlagArgumentConstant                   = "--to"
+	customTargetBranchNameConstant           = "stable"
+	missingRootsErrorMessageConstant         = "no repository roots provided; specify --roots or configure defaults"
 )
 
 func TestMigrateCommandRunScenarios(testInstance *testing.T) {
@@ -60,6 +59,7 @@ func TestMigrateCommandRunScenarios(testInstance *testing.T) {
 		discoveredRepositories       []string
 		discoveryError               error
 		repositoryRemotes            map[string]string
+		repositoryDefaultBranches    map[string]string
 		repositoryErrors             map[string]error
 		serviceOutcomes              map[string]testsupport.ServiceOutcome
 		expectedRoots                []string
@@ -201,8 +201,9 @@ func TestMigrateCommandRunScenarios(testInstance *testing.T) {
 			}
 
 			commandExecutor := &testsupport.CommandExecutorStub{
-				RepositoryRemotes: appendMap(testCase.repositoryRemotes),
-				RepositoryErrors:  appendErrorMap(testCase.repositoryErrors),
+				RepositoryRemotes:         appendMap(testCase.repositoryRemotes),
+				RepositoryErrors:          appendErrorMap(testCase.repositoryErrors),
+				RepositoryDefaultBranches: appendMap(testCase.repositoryDefaultBranches),
 			}
 
 			migrationService := &testsupport.ServiceStub{Outcomes: appendOutcomeMap(testCase.serviceOutcomes)}
@@ -311,24 +312,24 @@ func TestMigrateCommandDisplaysHelpWhenRootsMissing(testInstance *testing.T) {
 
 func TestMigrateCommandConfigurationPrecedence(testInstance *testing.T) {
 	testCases := []struct {
-		name                   string
-		configuration          migrate.CommandConfiguration
-		arguments              []string
-		workingDirectory       string
-		discoveredRepositories []string
-		repositoryRemotes      map[string]string
-		expectedRoots          []string
-		expectedDebugEnabled   bool
-		logLevel               string
-		expectedSourceBranch   migrate.BranchName
-		expectedTargetBranch   migrate.BranchName
+		name                      string
+		configuration             migrate.CommandConfiguration
+		arguments                 []string
+		workingDirectory          string
+		discoveredRepositories    []string
+		repositoryRemotes         map[string]string
+		repositoryDefaultBranches map[string]string
+		expectedRoots             []string
+		expectedDebugEnabled      bool
+		logLevel                  string
+		expectedSourceBranch      migrate.BranchName
+		expectedTargetBranch      migrate.BranchName
 	}{
 		{
 			name: "configuration_values_apply",
 			configuration: migrate.CommandConfiguration{
 				EnableDebugLogging: true,
 				RepositoryRoots:    []string{"  " + configurationRootValueConstant + "  "},
-				SourceBranch:       "  develop  ",
 				TargetBranch:       "  release  ",
 			},
 			arguments:              []string{rootFlagArgumentConstant, configurationRootValueConstant},
@@ -336,6 +337,9 @@ func TestMigrateCommandConfigurationPrecedence(testInstance *testing.T) {
 			discoveredRepositories: []string{repositoryOnePathConstant},
 			repositoryRemotes: map[string]string{
 				repositoryOnePathConstant: repositoryOneRemoteConstant,
+			},
+			repositoryDefaultBranches: map[string]string{
+				repositoryOneIdentifierConstant: "develop",
 			},
 			expectedRoots:        []string{configurationRootValueConstant},
 			expectedDebugEnabled: true,
@@ -350,7 +354,6 @@ func TestMigrateCommandConfigurationPrecedence(testInstance *testing.T) {
 			},
 			arguments: []string{
 				rootFlagArgumentConstant, cliRootOverrideConstant,
-				fromFlagArgumentConstant + "=" + customSourceBranchNameConstant,
 				toFlagArgumentConstant + "=" + customTargetBranchNameConstant,
 			},
 			workingDirectory:       workingDirectoryFallbackConstant,
@@ -361,7 +364,7 @@ func TestMigrateCommandConfigurationPrecedence(testInstance *testing.T) {
 			expectedRoots:        []string{cliRootOverrideConstant},
 			expectedDebugEnabled: true,
 			logLevel:             string(utils.LogLevelDebug),
-			expectedSourceBranch: migrate.BranchName(customSourceBranchNameConstant),
+			expectedSourceBranch: migrate.BranchMain,
 			expectedTargetBranch: migrate.BranchName(customTargetBranchNameConstant),
 		},
 		{
@@ -390,7 +393,8 @@ func TestMigrateCommandConfigurationPrecedence(testInstance *testing.T) {
 			}
 
 			commandExecutor := &testsupport.CommandExecutorStub{
-				RepositoryRemotes: appendMap(testCase.repositoryRemotes),
+				RepositoryRemotes:         appendMap(testCase.repositoryRemotes),
+				RepositoryDefaultBranches: appendMap(testCase.repositoryDefaultBranches),
 			}
 
 			migrationService := &testsupport.ServiceStub{}
@@ -444,15 +448,33 @@ func TestMigrateCommandConfigurationPrecedence(testInstance *testing.T) {
 	}
 }
 
-func TestMigrateCommandRejectsIdenticalBranches(testInstance *testing.T) {
-	commandExecutor := &testsupport.CommandExecutorStub{}
+func TestDefaultCommandSkipsWhenBranchMatchesTarget(testInstance *testing.T) {
+	repositoryDiscoverer := &testsupport.RepositoryDiscovererStub{
+		Repositories: []string{repositoryOnePathConstant},
+	}
+
+	logCore, observedLogs := observer.New(zap.InfoLevel)
+	logger := zap.New(logCore)
+
+	commandExecutor := &testsupport.CommandExecutorStub{
+		RepositoryRemotes: map[string]string{
+			repositoryOnePathConstant: repositoryOneRemoteConstant,
+		},
+		RepositoryDefaultBranches: map[string]string{
+			repositoryOneIdentifierConstant: "master",
+		},
+	}
+
 	migrationService := &testsupport.ServiceStub{}
+
 	builder := migrate.CommandBuilder{
-		Executor: commandExecutor,
+		LoggerProvider: func() *zap.Logger { return logger },
+		Executor:       commandExecutor,
 		ServiceProvider: func(migrate.ServiceDependencies) (migrate.MigrationExecutor, error) {
 			return migrationService, nil
 		},
-		WorkingDirectory: workingDirectoryFallbackConstant,
+		RepositoryDiscoverer: repositoryDiscoverer,
+		WorkingDirectory:     workingDirectoryFallbackConstant,
 	}
 
 	command, buildError := builder.Build()
@@ -460,11 +482,20 @@ func TestMigrateCommandRejectsIdenticalBranches(testInstance *testing.T) {
 	registerRootFlag(command)
 
 	command.SetContext(context.Background())
-	command.SetArgs([]string{rootFlagArgumentConstant, workingDirectoryFallbackConstant, fromFlagArgumentConstant, "main", toFlagArgumentConstant, "main"})
+	command.SetArgs([]string{rootFlagArgumentConstant, repositoryOnePathConstant, toFlagArgumentConstant + "=master"})
 
 	executionError := command.Execute()
-	require.Error(testInstance, executionError)
-	require.Equal(testInstance, "--from and --to must differ", executionError.Error())
+	require.NoError(testInstance, executionError)
+	require.Empty(testInstance, migrationService.ExecutedOptions)
+
+	infoEntries := findLogEntries(observedLogs.All(), zapcore.InfoLevel, defaultAlreadyMatchesMessageTextConstant)
+	require.Len(testInstance, infoEntries, 1)
+	repositoryValue, hasRepository := infoEntries[0].ContextMap()["repository"]
+	require.True(testInstance, hasRepository)
+	require.Equal(testInstance, filepath.Clean(repositoryOnePathConstant), repositoryValue)
+	targetValue, hasTarget := infoEntries[0].ContextMap()["target_branch"]
+	require.True(testInstance, hasTarget)
+	require.Equal(testInstance, "master", targetValue)
 }
 
 func registerRootFlag(command *cobra.Command) {

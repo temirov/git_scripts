@@ -237,11 +237,11 @@ func TestApplicationCommandHierarchyAndAliases(t *testing.T) {
 	require.NotNil(t, releaseCommand.Parent())
 	require.Equal(t, "repo", releaseCommand.Parent().Name())
 
-	branchMigrateCommand, _, branchMigrateError := rootCommand.Find([]string{"b", "migrate"})
-	require.NoError(t, branchMigrateError)
-	require.Equal(t, "migrate", branchMigrateCommand.Name())
-	require.NotNil(t, branchMigrateCommand.Parent())
-	require.Equal(t, "branch", branchMigrateCommand.Parent().Name())
+	branchDefaultCommand, _, branchDefaultError := rootCommand.Find([]string{"b", "default"})
+	require.NoError(t, branchDefaultError)
+	require.Equal(t, "default", branchDefaultCommand.Name())
+	require.NotNil(t, branchDefaultCommand.Parent())
+	require.Equal(t, "branch", branchDefaultCommand.Parent().Name())
 
 	branchChangeCommand, _, branchChangeError := rootCommand.Find([]string{"b", "cd"})
 	require.NoError(t, branchChangeError)
@@ -310,9 +310,9 @@ func TestApplicationHierarchicalCommandsLoadExpectedOperations(t *testing.T) {
 	require.NoError(t, packagesError)
 	require.Equal(t, []string{packagesPurgeOperationNameConstant}, application.operationsRequiredForCommand(repoPackagesCommand))
 
-	branchMigrateCommand, _, branchMigrateError := rootCommand.Find([]string{"b", "migrate"})
-	require.NoError(t, branchMigrateError)
-	require.Equal(t, []string{branchMigrateOperationNameConstant}, application.operationsRequiredForCommand(branchMigrateCommand))
+	branchDefaultCommand, _, branchDefaultError := rootCommand.Find([]string{"b", "default"})
+	require.NoError(t, branchDefaultError)
+	require.Equal(t, []string{branchDefaultOperationNameConstant}, application.operationsRequiredForCommand(branchDefaultCommand))
 
 	commitMessageCommand, _, commitMessageError := rootCommand.Find([]string{"b", "commit", "message"})
 	require.NoError(t, commitMessageError)

@@ -28,6 +28,10 @@ type stubGitHubOperations struct {
 	updatePagesFunc func(context.Context, string, githubcli.PagesConfiguration) error
 }
 
+func (stub *stubGitHubOperations) ResolveRepoMetadata(context.Context, string) (githubcli.RepositoryMetadata, error) {
+	return githubcli.RepositoryMetadata{}, nil
+}
+
 func (stub *stubGitHubOperations) GetPagesConfig(ctx context.Context, repository string) (githubcli.PagesStatus, error) {
 	if stub.getPagesFunc != nil {
 		return stub.getPagesFunc(ctx, repository)

@@ -26,13 +26,13 @@ const (
 	integrationRepositoryOneIdentifierConstant   = "integration/repository-one"
 	integrationRepositoryTwoIdentifierConstant   = "integration/repository-two"
 	integrationBlockingReasonConstant            = "open pull requests still target source branch"
-	integrationMigrationCompletedMessageConstant = "Branch migration completed"
+	integrationMigrationCompletedMessageConstant = "Default branch update completed"
 	integrationSafetyWarningMessageConstant      = "Branch deletion blocked by safety gates"
-	integrationFailureWarningMessageConstant     = "Repository migration failed"
+	integrationFailureWarningMessageConstant     = "Default branch update failed"
 	integrationRepositoryFieldNameConstant       = "repository"
 )
 
-func TestBranchMigrateCommandIntegration(testInstance *testing.T) {
+func TestBranchDefaultCommandIntegration(testInstance *testing.T) {
 	testCases := []struct {
 		name                  string
 		repositoryDefinitions []integrationRepositoryDefinition
@@ -96,6 +96,7 @@ func TestBranchMigrateCommandIntegration(testInstance *testing.T) {
 
 			repositoryRemotes := make(map[string]string, len(testCase.repositoryDefinitions))
 			serviceOutcomes := make(map[string]testsupport.ServiceOutcome, len(testCase.repositoryDefinitions))
+			defaultBranches := make(map[string]string, len(testCase.repositoryDefinitions))
 			expectedSafetyWarnings := make([]string, 0, len(testCase.repositoryDefinitions))
 			expectedFailureWarnings := make([]string, 0, len(testCase.repositoryDefinitions))
 			expectedIdentifiers := make(map[string]string, len(testCase.repositoryDefinitions))
@@ -110,6 +111,7 @@ func TestBranchMigrateCommandIntegration(testInstance *testing.T) {
 				repositoryRemotes[cleanedPath] = definition.remoteURL
 				serviceOutcomes[cleanedPath] = definition.outcome
 				expectedIdentifiers[cleanedPath] = definition.expectedIdentifier
+				defaultBranches[definition.expectedIdentifier] = "main"
 				expectedRepositories = append(expectedRepositories, cleanedPath)
 
 				if definition.expectSafetyWarning {
@@ -122,7 +124,10 @@ func TestBranchMigrateCommandIntegration(testInstance *testing.T) {
 
 			require.Len(subtest, expectedRepositories, len(testCase.repositoryDefinitions))
 
-			commandExecutor := &testsupport.CommandExecutorStub{RepositoryRemotes: repositoryRemotes}
+			commandExecutor := &testsupport.CommandExecutorStub{
+				RepositoryRemotes:         repositoryRemotes,
+				RepositoryDefaultBranches: defaultBranches,
+			}
 			migrationService := &testsupport.ServiceStub{Outcomes: serviceOutcomes}
 
 			logCore, observedLogs := observer.New(zap.DebugLevel)
