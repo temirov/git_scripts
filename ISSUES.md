@@ -74,6 +74,7 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
     - [ ] [GX-07] Migrate the implementatio of all commands to task interface. We want a universal task runner to be responsible for every execution or every command. All github commmands and other commands must get a task definition, and run as tasks without changing their external API, so they will invoked by the same parameters that they are invoked now.
         - extend and develop internal tasks DSL. Ensure that we generalize the solution of every problem.
         - add requrired details to current task interface. Have a plan to migrate current commands to task and use a generalize definition, sufficient for satisfaction of the requirements of existing tasks.
+        - this is a critical task, and I want it to be planned very carefully
     - [x] [GX-09] Improve the Command catalog in the @README.md. Reflect the current catalog of commands. Do not include any reference to the past and what the command used to be called. Users are the intended audience
         Resolution: Rewrote the README command catalog table with current command paths, shortcuts, and examples while dropping legacy command references.
     - [x] [GX-12] Remove INFO logging. Make the default logging NONE or whatever we can do so there will be no logging by default
@@ -362,7 +363,18 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
         Resolution: Remote updates now report `owner constraint unmet: required --owner <value> but detected owner <value>` so skipped repositories explain which owner failed the constraint.
     - [x] [GX-18] Remove the check that the canonical owner matches the current owner for the repo remote update-to-canonical command. `gix repo remote update-to-canonical --owner true` shall succeed for repositories migrated between accounts (for example, temirov/gix → tyemirov/gix).
         Resolution: Remote updates now ignore the owner inequality guard so canonical remotes apply even when the configured owner string differs from the detected canonical owner; CLI and executor tests cover the renamed-account path.
-
+    - [x] [GX-19] Add a message when the folders are already normalized: `SKIP (already normalized)` when the folders are already normalized:
+    I was expecting to see `SKIP (already normalized): tmp/repos/MarcoPoloResearchLab/RSVP` for the three folders that were fixed already
+    ```
+    11:55:09 tyemirov@computercat:~/Development/gix [master] $ go run ./... repo folder rename --owner yes --roots /tmp/repos/
+    Renamed /tmp/repos/RSVP → /tmp/repos/MarcoPoloResearchLab/RSVP
+    Renamed /tmp/repos/ledger → /tmp/repos/tyemirov/ledger
+    Renamed /tmp/repos/loopaware → /tmp/repos/tyemirov/loopaware
+    SKIP (dirty worktree): /tmp/repos/netflix
+    11:59:04 tyemirov@computercat:~/Development/gix [master] $ go run ./... repo folder rename --owner yes --roots /tmp/repos/ --require-clean no
+    Renamed /tmp/repos/netflix → /tmp/repos/MarcoPoloResearchLab/netflix
+    ```
+        Resolution: Repo folder rename now prints `SKIP (already normalized)` for directories whose names already match the canonical plan across CLI, workflows, and executor flows, with regression tests covering the skip banner.
 ## Maintenance
 
 ## Planning 

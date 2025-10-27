@@ -1,5 +1,23 @@
 # Changelog
 
+## [v0.1.2]
+
+### Features ✨
+- _No changes._
+
+### Improvements ⚙️
+- Rewrote README command catalog table to reflect current commands, removing legacy references.
+
+### Bug Fixes 🐛
+- Removed owner equality guard for canonical remotes to allow updates when repository ownership has changed.
+
+### Testing 🧪
+- Adjusted tests to cover the removal of the owner constraint guard on canonical remote updates.
+- Added coverage for command hierarchy and alias resolution.
+
+### Docs 📚
+- Updated ISSUES.md with new task planning details and resolutions related to command catalog and logging changes.
+
 ## [v0.1.1]
 
 ### Features ✨
@@ -43,6 +61,7 @@
 - Downgraded the configuration initialization banner to DEBUG so standard operations continue logging at INFO severity only.
 - Clarified the remote owner constraint skip message to spell out the required `--owner` value and detected repository owner.
 - Allowed canonical remote updates to proceed regardless of the configured `--owner` constraint, supporting repositories that migrated between accounts.
+- Added `SKIP (already normalized)` messaging to `repo folder rename` so re-running normalization reports repositories that already match canonical naming.
 
 ### Testing 🧪
 - Added application command hierarchy coverage to ensure aliases and nested commands resolve to the existing operations.
