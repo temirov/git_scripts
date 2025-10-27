@@ -48,7 +48,7 @@ func (operation *RenameOperation) Execute(executionContext context.Context, envi
 		plan := directoryPlanner.Plan(operation.IncludeOwner, repository.Inspection.FinalOwnerRepo, repository.Inspection.DesiredFolderName)
 		desiredFolderName := plan.FolderName
 		if plan.IsNoop(repository.Path, repository.Inspection.FolderName) {
-			desiredFolderName = repository.Inspection.FolderName
+			desiredFolderName = filepath.Base(repository.Path)
 		}
 		trimmedFolderName := strings.TrimSpace(desiredFolderName)
 		if len(trimmedFolderName) == 0 {
