@@ -76,7 +76,7 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
         - add requrired details to current task interface. Have a plan to migrate current commands to task and use a generalize definition, sufficient for satisfaction of the requirements of existing tasks.
     - [x] [GX-09] Improve the Command catalog in the @README.md. Reflect the current catalog of commands. Do not include any reference to the past and what the command used to be called. Users are the intended audience
         Resolution: Rewrote the README command catalog table with current command paths, shortcuts, and examples while dropping legacy command references.
-    - [ ] [GX-12] Remove INFO logging. Make the default logging NONE or whatever we can do so there will be no logging by default
+    - [x] [GX-12] Remove INFO logging. Make the default logging NONE or whatever we can do so there will be no logging by default
     ```
     11:42:19 tyemirov@computercat:~/Development/gix [master] $ gix --version
     INFO    configuration initialized | log level=info | log format=console | config file=/home/tyemirov/Development/gix/config.yaml
@@ -360,6 +360,7 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
         UPDATE-REMOTE-SKIP: /home/tyemirov/Development/BOSL2 (owner constraint mismatch: expected true, actual tyemirov)
         ```
         Resolution: Remote updates now report `owner constraint unmet: required --owner <value> but detected owner <value>` so skipped repositories explain which owner failed the constraint.
+    - [ ] [GX-18] Remove the check that the canonical owner matches the current owner for the repo remote update-to-canonical command. `gix repo remote update-to-canonical --owner true` shall succed for the cases when the account was renamed, e.g. used to be temirov/gix.git but became tyemirov/gix.git
 
 ## Maintenance
 
