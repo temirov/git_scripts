@@ -65,7 +65,7 @@ const (
 	reposIntegrationProtocolMissingFlagsMessage = "specify both --from and --to"
 	reposIntegrationConfigFlagName              = "--config"
 	reposIntegrationConfigFileName              = "config.yaml"
-	reposIntegrationConfigTemplate              = "common:\n  log_level: error\noperations:\n  - operation: repo-remote-update\n    with:\n      roots:\n        - %s\n      assume_yes: true\n      owner: canonical\n  - operation: repo-protocol-convert\n    with:\n      roots:\n        - %s\n      assume_yes: true\n      from: https\n      to: ssh\nworkflow: []\n"
+	reposIntegrationConfigTemplate              = "common:\n  log_level: error\noperations:\n  - operation: repo-remote-update\n    with:\n      roots:\n        - %s\n      assume_yes: true\n  - operation: repo-protocol-convert\n    with:\n      roots:\n        - %s\n      assume_yes: true\n      from: https\n      to: ssh\nworkflow: []\n"
 	reposIntegrationConfigSearchEnvName         = "GIX_CONFIG_SEARCH_PATH"
 	reposIntegrationHomeSymbolConstant          = "~"
 	reposIntegrationHomeRootPatternConstant     = "gix-home-root-*"
