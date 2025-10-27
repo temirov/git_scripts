@@ -1,5 +1,26 @@
 # Changelog
 
+## [v0.1.1]
+
+### Features ✨
+- _No changes._
+
+### Improvements ⚙️
+- Improved autonomous flow for better operation.
+
+### Bug Fixes 🐛
+- Clarified owner constraint skip message for better understanding.
+- Logged configuration banner at debug level for cleaner logs.
+- Various bug fixes to enhance stability.
+
+### Testing 🧪
+- Added tests and improved test coverage in CLI application and remotes.
+
+### Docs 📚
+- Updated AGENTS.md with detailed front-end coding standards and backend principles.
+- Enhanced documentation on validation policies and project structure.
+- Added review checklist and assistant workflow guidelines.
+
 ## [v0.1.0]
 
 ### Features ✨
