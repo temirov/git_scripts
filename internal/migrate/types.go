@@ -24,6 +24,7 @@ type MigrationExecutor interface {
 
 // GitHubOperations exposes the GitHub workflows required for migration.
 type GitHubOperations interface {
+	ResolveRepoMetadata(executionContext context.Context, repository string) (githubcli.RepositoryMetadata, error)
 	GetPagesConfig(executionContext context.Context, repository string) (githubcli.PagesStatus, error)
 	UpdatePagesConfig(executionContext context.Context, repository string, configuration githubcli.PagesConfiguration) error
 	ListPullRequests(executionContext context.Context, repository string, options githubcli.PullRequestListOptions) ([]githubcli.PullRequest, error)

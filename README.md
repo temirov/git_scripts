@@ -34,9 +34,8 @@ You can run the CLI in two complementary ways depending on how much orchestratio
 - **Directory reconciliation** – rename working directories to match the canonical repository name returned by GitHub.
 - **Remote normalization** – update `origin` to the canonical GitHub remote or convert between HTTPS, SSH, and `git`
   protocols.
-- **Branch maintenance** – delete remote/local branches once their pull requests are closed and migrate defaults from
-  `main` to
-  `master` with safety gates.
+- **Branch maintenance** – delete remote/local branches once their pull requests are closed and promote defaults to
+  `master` with safety gates, automatically detecting the current default branch.
 - **GitHub Packages upkeep** – remove untagged GHCR container versions via the official API.
 - **Workflow bundling** – describe ordered operations in YAML or JSON and execute them in one pass with shared
   discovery,
@@ -121,7 +120,7 @@ with the registered command names and flags.
 | `repo prs delete`                  | `r prs delete`              | Remove remote and local branches for closed pull requests     | `go run . r prs delete --remote origin --limit 100 --roots ~/Development`                               |
 | `repo packages delete`             | `r packages delete`         | Delete untagged GHCR versions                                 | `go run . r packages delete --dry-run --roots ~/Development`                                            |
 | `repo release`                     | `r release`                 | Annotate and push a release tag across repositories           | `go run . r release v1.2.3 --roots ~/Development`                                                      |
-| `branch migrate`                   | `b migrate`                 | Migrate repository defaults from main to master               | `go run . b migrate --from main --to master --roots ~/Development/project-repo`                         |
+| `branch default`                   | `b default`                 | Promote a branch to the repository default with safety gates  | `go run . b default master --roots ~/Development/project-repo`                                          |
 | `branch refresh`                   | `b refresh`                 | Fetch, checkout, and pull a branch with recovery options      | `go run . b refresh --branch main --roots ~/Development/project-repo --stash`                           |
 | `branch cd`                        | `b cd`                      | Switch repositories to a branch, creating it when missing     | `go run . b cd feature/rebrand --roots ~/Development/project-repo`                                      |
 | `branch commit message`            | `b commit message`          | Draft a Conventional Commit message from staged or worktree changes | `go run . b commit message --roots . --dry-run`                                                     |
@@ -202,8 +201,8 @@ operations:
       dry_run: false
       assume_yes: false
 
-  - operation: branch-migrate
-    with: &branch_migrate_defaults
+  - operation: branch-default
+    with: &branch_default_defaults
       debug: false
       roots:
         - ~/Development
@@ -229,12 +228,11 @@ workflow:
 
   - step:
       order: 4
-      operation: migrate-branch
+      operation: default-branch
       with:
-        <<: *branch_migrate_defaults
+        <<: *branch_default_defaults
         targets:
           - remote_name: origin
-            source_branch: main
             target_branch: master
             push_to_remote: true
             delete_source_branch: false
@@ -446,7 +444,7 @@ export GITHUB_PACKAGES_TOKEN=ghp_XXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
 - Provide explicit repository roots (or configure defaults) to operate on multiple directories; commands return an error when no roots are supplied.
 - Use `--dry-run` to preview changes. Combine with `--yes` once you are comfortable executing the plan without prompts.
-- Workflow configurations let you mix and match operations (for example, convert protocols, migrate branches, and audit)
+- Workflow configurations let you mix and match operations (for example, convert protocols, promote default branches, and audit)
   while
   sharing discovery costs.
 

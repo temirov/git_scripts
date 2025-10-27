@@ -36,7 +36,7 @@ const (
 	testOperationRootDirectoryConstant                       = "/tmp/config-root"
 	testConfigurationSearchPathEnvironmentName               = "GIX_CONFIG_SEARCH_PATH"
 	testPackagesCommandNameConstant                          = "repo-packages-purge"
-	testBranchMigrateCommandNameConstant                     = "branch-migrate"
+	testBranchDefaultCommandNameConstant                     = "branch-default"
 	testBranchRefreshCommandNameConstant                     = "branch-refresh"
 	testBranchCleanupCommandNameConstant                     = "repo-prs-purge"
 	testReposRemotesCommandNameConstant                      = "repo-remote-update"
@@ -51,7 +51,7 @@ const (
 	embeddedDefaultsReposRenameTestNameConstant              = "ReposRenameDefaults"
 	embeddedDefaultsWorkflowTestNameConstant                 = "WorkflowDefaults"
 	embeddedDefaultsBranchRefreshTestNameConstant            = "BranchRefreshDefaults"
-	embeddedDefaultsBranchMigrateTestNameConstant            = "BranchMigrateDefaults"
+	embeddedDefaultsBranchDefaultTestNameConstant            = "BranchDefaultDefaults"
 	embeddedDefaultsAuditTestNameConstant                    = "AuditDefaults"
 	embeddedDefaultRootPathConstant                          = "."
 	embeddedDefaultRemoteNameConstant                        = "origin"
@@ -93,7 +93,7 @@ var requiredOperationNames = []string{
 	"repo-release",
 	"workflow",
 	"branch-refresh",
-	"branch-migrate",
+	"branch-default",
 	"branch-cd",
 	"commit-message",
 	"changelog-message",
@@ -134,7 +134,7 @@ func TestApplicationInitializeConfiguration(t *testing.T) {
 				"workflow",
 				"branch-refresh",
 			},
-			commandUse: testBranchMigrateCommandNameConstant,
+			commandUse: testBranchDefaultCommandNameConstant,
 		},
 	}
 
@@ -715,9 +715,9 @@ func TestApplicationEmbeddedDefaultsProvideCommandConfigurations(testInstance *t
 			},
 		},
 		{
-			name:          embeddedDefaultsBranchMigrateTestNameConstant,
-			commandUse:    testBranchMigrateCommandNameConstant,
-			operationName: testBranchMigrateCommandNameConstant,
+			name:          embeddedDefaultsBranchDefaultTestNameConstant,
+			commandUse:    testBranchDefaultCommandNameConstant,
+			operationName: testBranchDefaultCommandNameConstant,
 			assertion: func(assertionTarget testing.TB, options map[string]any) {
 				assertionTarget.Helper()
 
@@ -727,6 +727,7 @@ func TestApplicationEmbeddedDefaultsProvideCommandConfigurations(testInstance *t
 
 				assertions := require.New(assertionTarget)
 				assertions.Equal([]string{embeddedDefaultRootPathConstant}, sanitized.RepositoryRoots)
+				assertions.Equal(migrate.BranchMaster, migrate.BranchName(sanitized.TargetBranch))
 			},
 		},
 		{

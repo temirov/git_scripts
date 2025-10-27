@@ -37,7 +37,7 @@ var expectedCommandOperations = map[string]struct{}{
 	"repo-protocol-convert": {},
 	"repo-folders-rename":   {},
 	"workflow":              {},
-	"branch-migrate":        {},
+	"branch-default":        {},
 }
 
 type readmeApplicationConfiguration struct {

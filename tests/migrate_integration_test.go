@@ -48,6 +48,7 @@ type recordingGitHubOperations struct {
 	retargetedPullRequests  []int
 	branchProtectionEnabled bool
 	remoteGitDirectoryPath  string
+	currentDefaultBranch    string
 }
 
 func (operations *recordingGitHubOperations) GetPagesConfig(_ context.Context, repository string) (githubcli.PagesStatus, error) {
@@ -77,6 +78,7 @@ func (operations *recordingGitHubOperations) UpdatePullRequestBase(_ context.Con
 func (operations *recordingGitHubOperations) SetDefaultBranch(_ context.Context, repository string, branchName string) error {
 	_ = repository
 	operations.defaultBranchTarget = branchName
+	operations.currentDefaultBranch = branchName
 	if len(operations.remoteGitDirectoryPath) == 0 {
 		return fmt.Errorf(symbolicRefMissingRemotePathErrorConstant)
 	}
@@ -100,6 +102,15 @@ func (operations *recordingGitHubOperations) SetDefaultBranch(_ context.Context,
 		return fmt.Errorf(symbolicRefFailureErrorTemplateConstant, symbolicRefError)
 	}
 	return nil
+}
+
+func (operations *recordingGitHubOperations) ResolveRepoMetadata(_ context.Context, repository string) (githubcli.RepositoryMetadata, error) {
+	_ = repository
+	defaultBranch := strings.TrimSpace(operations.currentDefaultBranch)
+	if len(defaultBranch) == 0 {
+		defaultBranch = "main"
+	}
+	return githubcli.RepositoryMetadata{NameWithOwner: repository, DefaultBranch: defaultBranch}, nil
 }
 
 func (operations *recordingGitHubOperations) CheckBranchProtection(_ context.Context, repository string, branchName string) (bool, error) {

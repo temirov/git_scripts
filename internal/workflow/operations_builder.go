@@ -12,7 +12,7 @@ const (
 	protocolConversionInvalidFromMessageConstant  = "convert-protocol step requires a valid 'from' protocol"
 	protocolConversionInvalidToMessageConstant    = "convert-protocol step requires a valid 'to' protocol"
 	protocolConversionSameProtocolMessageConstant = "convert-protocol step requires distinct source and target protocols"
-	branchMigrationTargetsRequiredMessageConstant = "migrate-branch step requires at least one target"
+	branchMigrationTargetsRequiredMessageConstant = "default-branch step requires at least one target"
 )
 
 // BuildOperations converts the declarative configuration into executable operations.
@@ -44,7 +44,7 @@ func buildOperationFromStep(step StepConfiguration) (Operation, error) {
 		return buildCanonicalRemoteOperation(normalizedOptions)
 	case OperationTypeRenameDirectories:
 		return buildRenameOperation(normalizedOptions)
-	case OperationTypeBranchMigration:
+	case OperationTypeBranchDefault:
 		return buildBranchMigrationOperation(normalizedOptions)
 	case OperationTypeAuditReport:
 		return buildAuditReportOperation(normalizedOptions)
@@ -203,7 +203,7 @@ func defaultSourceBranch(explicit bool, value string) string {
 			return trimmed
 		}
 	}
-	return defaultMigrationSourceBranchConstant
+	return ""
 }
 
 func defaultTargetBranch(explicit bool, value string) string {

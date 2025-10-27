@@ -51,11 +51,11 @@ const (
 	workflowIntegrationBranchCommitMessage     = "CI: switch workflow branch filters to master"
 	workflowIntegrationRepoViewJSONTemplate    = "{\"nameWithOwner\":\"canonical/example\",\"defaultBranchRef\":{\"name\":\"%s\"},\"description\":\"\"}\n"
 	workflowIntegrationConvertExpectedTemplate = "CONVERT-DONE: %s origin now ssh://git@github.com/canonical/example.git\n"
-	workflowIntegrationMigrateExpectedTemplate = "WORKFLOW-MIGRATE: %s (main → master) safe_to_delete=true\n"
+	workflowIntegrationDefaultExpectedTemplate = "WORKFLOW-DEFAULT: %s (main → master) safe_to_delete=true\n"
 	workflowIntegrationAuditExpectedTemplate   = "WORKFLOW-AUDIT: wrote report to %s\n"
 	workflowIntegrationCSVHeader               = "folder_name,final_github_repo,name_matches,remote_default_branch,local_branch,in_sync,remote_protocol,origin_matches_canonical\n"
 	workflowIntegrationSubtestNameTemplate     = "%d_%s"
-	workflowIntegrationDefaultCaseName         = "protocol_migrate_audit"
+	workflowIntegrationDefaultCaseName         = "protocol_default_audit"
 	workflowIntegrationConfigFlagCaseName      = "config_flag_without_positional"
 	workflowIntegrationRepositoryConfigCase    = "repository_root_configuration"
 	workflowIntegrationHelpCaseName            = "workflow_help_missing_configuration"
@@ -190,7 +190,7 @@ func TestWorkflowRunIntegration(testInstance *testing.T) {
 			filteredOutput := filterStructuredOutput(rawOutput)
 
 			expectedConversion := fmt.Sprintf(workflowIntegrationConvertExpectedTemplate, repositoryPath)
-			expectedMigration := fmt.Sprintf(workflowIntegrationMigrateExpectedTemplate, repositoryPath)
+			expectedMigration := fmt.Sprintf(workflowIntegrationDefaultExpectedTemplate, repositoryPath)
 			expectedAudit := fmt.Sprintf(workflowIntegrationAuditExpectedTemplate, auditPath)
 
 			require.Contains(subtest, filteredOutput, expectedConversion)
@@ -323,14 +323,13 @@ operations:
       assume_yes: true
       dry_run: false
       owner: canonical
-  - operation: branch-migrate
+  - operation: branch-default
     with: &migration_defaults
       roots:
         - .
       debug: false
       targets:
         - remote_name: origin
-          source_branch: main
           target_branch: master
           push_to_remote: false
           delete_source_branch: false
@@ -344,7 +343,7 @@ workflow:
       with:
         <<: *remote_defaults
   - step:
-      operation: migrate-branch
+      operation: default-branch
       with:
         <<: *migration_defaults
   - step:

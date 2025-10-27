@@ -20,34 +20,35 @@ import (
 )
 
 const (
-	commandUseConstant                           = "branch-migrate"
-	commandShortDescriptionConstant              = "Migrate repository defaults from main to master"
-	commandLongDescriptionConstant               = "branch-migrate retargets workflows, updates GitHub configuration, and evaluates safety gates before switching the default branch."
-	migrateCommandExecutionErrorTemplateConstant = "branch migration failed: %w"
-	defaultRemoteNameConstant                    = "origin"
-	sourceBranchFlagNameConstant                 = "from"
-	sourceBranchFlagUsageConstant                = "Source branch to migrate from"
-	targetBranchFlagNameConstant                 = "to"
-	targetBranchFlagUsageConstant                = "Target branch to migrate to"
-	identicalBranchesErrorMessageConstant        = "--from and --to must differ"
-	workflowsDirectoryConstant                   = ".github/workflows"
-	repositoryDiscoveryErrorTemplateConstant     = "repository discovery failed: %w"
-	repositoryResolutionErrorTemplateConstant    = "unable to resolve repository identifier: %w"
-	repositoryOwnerRepositoryFormatConstant      = "%s/%s"
-	repositoryManagerCreationErrorTemplate       = "unable to construct repository manager: %w"
-	githubClientCreationErrorTemplate            = "unable to construct GitHub client: %w"
-	migrationCompletedMessageConstant            = "Branch migration completed"
-	migratedWorkflowFilesFieldConstant           = "migrated_workflows"
-	defaultBranchUpdatedFieldConstant            = "default_branch_updated"
-	pagesConfigurationUpdatedFieldConstant       = "pages_configuration_updated"
-	retargetedPullRequestsFieldConstant          = "retargeted_pull_requests"
-	safeToDeleteFieldConstant                    = "safe_to_delete"
-	safetyGatesBlockingMessageConstant           = "Branch deletion blocked by safety gates"
-	safetyGateReasonsFieldConstant               = "blocking_reasons"
-	logMessageRepositoryDiscoveryFailedConstant  = "Repository discovery failed"
-	logMessageRepositoryMigrationFailedConstant  = "Repository migration failed"
-	logFieldRepositoryRootsConstant              = "roots"
-	logFieldRepositoryPathConstant               = "repository"
+	commandUseConstant                                = "branch-default"
+	commandShortDescriptionConstant                   = "Set the repository default branch"
+	commandLongDescriptionConstant                    = "branch-default retargets workflows, updates GitHub configuration, and evaluates safety gates before promoting the requested branch, automatically detecting the current default branch."
+	defaultCommandExecutionErrorTemplateConstant      = "default branch update failed: %w"
+	defaultRemoteNameConstant                         = "origin"
+	targetBranchFlagNameConstant                      = "to"
+	targetBranchFlagUsageConstant                     = "Target branch to promote to default"
+	workflowsDirectoryConstant                        = ".github/workflows"
+	repositoryDiscoveryErrorTemplateConstant          = "repository discovery failed: %w"
+	repositoryResolutionErrorTemplateConstant         = "unable to resolve repository identifier: %w"
+	repositoryMetadataResolutionErrorTemplateConstant = "unable to resolve repository metadata: %w"
+	repositoryMetadataDefaultBranchMissingMessage     = "repository metadata missing default branch"
+	repositoryOwnerRepositoryFormatConstant           = "%s/%s"
+	repositoryManagerCreationErrorTemplate            = "unable to construct repository manager: %w"
+	githubClientCreationErrorTemplate                 = "unable to construct GitHub client: %w"
+	defaultBranchUpdatedMessageConstant               = "Default branch update completed"
+	migratedWorkflowFilesFieldConstant                = "migrated_workflows"
+	defaultBranchUpdatedFieldConstant                 = "default_branch_updated"
+	pagesConfigurationUpdatedFieldConstant            = "pages_configuration_updated"
+	retargetedPullRequestsFieldConstant               = "retargeted_pull_requests"
+	safeToDeleteFieldConstant                         = "safe_to_delete"
+	safetyGatesBlockingMessageConstant                = "Branch deletion blocked by safety gates"
+	safetyGateReasonsFieldConstant                    = "blocking_reasons"
+	logMessageRepositoryDiscoveryFailedConstant       = "Repository discovery failed"
+	logMessageRepositoryDefaultUpdateFailedConstant   = "Default branch update failed"
+	defaultBranchAlreadyMatchesMessageConstant        = "Default branch already matches target"
+	logFieldRepositoryRootsConstant                   = "roots"
+	logFieldRepositoryPathConstant                    = "repository"
+	logFieldTargetBranchConstant                      = "target_branch"
 )
 
 // RepositoryDiscoverer locates Git repositories beneath provided roots.
@@ -61,14 +62,13 @@ type ServiceProvider func(dependencies ServiceDependencies) (MigrationExecutor, 
 type commandOptions struct {
 	debugLoggingEnabled bool
 	repositoryRoots     []string
-	sourceBranch        BranchName
 	targetBranch        BranchName
 }
 
 // LoggerProvider supplies a zap logger instance.
 type LoggerProvider func() *zap.Logger
 
-// CommandBuilder assembles the branch-migrate Cobra command.
+// CommandBuilder assembles the branch-default Cobra command.
 type CommandBuilder struct {
 	LoggerProvider               LoggerProvider
 	Executor                     CommandExecutor
@@ -79,7 +79,7 @@ type CommandBuilder struct {
 	ConfigurationProvider        func() CommandConfiguration
 }
 
-// Build constructs the branch-migrate command.
+// Build constructs the branch-default command.
 func (builder *CommandBuilder) Build() (*cobra.Command, error) {
 	command := &cobra.Command{
 		Use:           commandUseConstant,
@@ -88,16 +88,15 @@ func (builder *CommandBuilder) Build() (*cobra.Command, error) {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		Args:          cobra.NoArgs,
-		RunE:          builder.runMigrate,
+		RunE:          builder.runDefault,
 	}
 
-	command.Flags().String(sourceBranchFlagNameConstant, string(BranchMain), sourceBranchFlagUsageConstant)
 	command.Flags().String(targetBranchFlagNameConstant, string(BranchMaster), targetBranchFlagUsageConstant)
 
 	return command, nil
 }
 
-func (builder *CommandBuilder) runMigrate(command *cobra.Command, arguments []string) error {
+func (builder *CommandBuilder) runDefault(command *cobra.Command, arguments []string) error {
 	options, optionsError := builder.parseOptions(command, arguments)
 	if optionsError != nil {
 		return optionsError
@@ -152,7 +151,7 @@ func (builder *CommandBuilder) runMigrate(command *cobra.Command, arguments []st
 				return remoteError
 			}
 			failure := fmt.Errorf(repositoryResolutionErrorTemplateConstant, remoteError)
-			builder.logMigrationFailure(logger, normalizedRepositoryPath, failure)
+			builder.logDefaultBranchFailure(logger, normalizedRepositoryPath, failure)
 			migrationErrors = append(migrationErrors, failure)
 			continue
 		}
@@ -160,19 +159,50 @@ func (builder *CommandBuilder) runMigrate(command *cobra.Command, arguments []st
 		parsedRemote, parseError := gitrepo.ParseRemoteURL(remoteURL)
 		if parseError != nil {
 			failure := fmt.Errorf(repositoryResolutionErrorTemplateConstant, parseError)
-			builder.logMigrationFailure(logger, normalizedRepositoryPath, failure)
+			builder.logDefaultBranchFailure(logger, normalizedRepositoryPath, failure)
 			migrationErrors = append(migrationErrors, failure)
 			continue
 		}
 
 		repositoryIdentifier := fmt.Sprintf(repositoryOwnerRepositoryFormatConstant, parsedRemote.Owner, parsedRemote.Repository)
 
+		metadata, metadataError := githubClient.ResolveRepoMetadata(command.Context(), repositoryIdentifier)
+		if metadataError != nil {
+			if errors.Is(metadataError, context.Canceled) || errors.Is(metadataError, context.DeadlineExceeded) {
+				return metadataError
+			}
+			failure := fmt.Errorf(repositoryMetadataResolutionErrorTemplateConstant, metadataError)
+			builder.logDefaultBranchFailure(logger, normalizedRepositoryPath, failure)
+			migrationErrors = append(migrationErrors, failure)
+			continue
+		}
+
+		sourceBranchName := strings.TrimSpace(metadata.DefaultBranch)
+		if len(sourceBranchName) == 0 {
+			failure := fmt.Errorf("%s: %s", repositoryMetadataDefaultBranchMissingMessage, repositoryIdentifier)
+			builder.logDefaultBranchFailure(logger, normalizedRepositoryPath, failure)
+			migrationErrors = append(migrationErrors, failure)
+			continue
+		}
+
+		sourceBranch := BranchName(sourceBranchName)
+		if sourceBranch == options.targetBranch {
+			if logger != nil {
+				logger.Info(
+					defaultBranchAlreadyMatchesMessageConstant,
+					zap.String(logFieldRepositoryPathConstant, normalizedRepositoryPath),
+					zap.String(logFieldTargetBranchConstant, string(options.targetBranch)),
+				)
+			}
+			continue
+		}
+
 		migrationOptions := MigrationOptions{
 			RepositoryPath:       normalizedRepositoryPath,
 			RepositoryRemoteName: defaultRemoteNameConstant,
 			RepositoryIdentifier: repositoryIdentifier,
 			WorkflowsDirectory:   workflowsDirectoryConstant,
-			SourceBranch:         options.sourceBranch,
+			SourceBranch:         sourceBranch,
 			TargetBranch:         options.targetBranch,
 			PushUpdates:          true,
 			EnableDebugLogging:   options.debugLoggingEnabled,
@@ -183,8 +213,8 @@ func (builder *CommandBuilder) runMigrate(command *cobra.Command, arguments []st
 			if errors.Is(migrationError, context.Canceled) || errors.Is(migrationError, context.DeadlineExceeded) {
 				return migrationError
 			}
-			wrappedError := fmt.Errorf(migrateCommandExecutionErrorTemplateConstant, migrationError)
-			builder.logMigrationFailure(logger, normalizedRepositoryPath, wrappedError)
+			wrappedError := fmt.Errorf(defaultCommandExecutionErrorTemplateConstant, migrationError)
+			builder.logDefaultBranchFailure(logger, normalizedRepositoryPath, wrappedError)
 			migrationErrors = append(migrationErrors, wrappedError)
 			continue
 		}
@@ -217,43 +247,27 @@ func (builder *CommandBuilder) parseOptions(command *cobra.Command, arguments []
 		return commandOptions{}, resolveRootsError
 	}
 
-	sourceBranchName := strings.TrimSpace(configuration.SourceBranch)
-	if len(sourceBranchName) == 0 {
-		sourceBranchName = string(BranchMain)
-	}
 	targetBranchName := strings.TrimSpace(configuration.TargetBranch)
 	if len(targetBranchName) == 0 {
 		targetBranchName = string(BranchMaster)
 	}
 
 	if command != nil {
-		if command.Flags().Changed(sourceBranchFlagNameConstant) {
-			flagValue, _ := command.Flags().GetString(sourceBranchFlagNameConstant)
-			sourceBranchName = strings.TrimSpace(flagValue)
-		}
 		if command.Flags().Changed(targetBranchFlagNameConstant) {
 			flagValue, _ := command.Flags().GetString(targetBranchFlagNameConstant)
 			targetBranchName = strings.TrimSpace(flagValue)
 		}
 	}
 
-	if len(sourceBranchName) == 0 {
-		sourceBranchName = string(BranchMain)
-	}
 	if len(targetBranchName) == 0 {
 		targetBranchName = string(BranchMaster)
 	}
 
-	sourceBranch := BranchName(sourceBranchName)
 	targetBranch := BranchName(targetBranchName)
-	if sourceBranch == targetBranch {
-		return commandOptions{}, errors.New(identicalBranchesErrorMessageConstant)
-	}
 
 	return commandOptions{
 		debugLoggingEnabled: debugEnabled,
 		repositoryRoots:     repositoryRoots,
-		sourceBranch:        sourceBranch,
 		targetBranch:        targetBranch,
 	}, nil
 }
@@ -312,13 +326,13 @@ func (builder *CommandBuilder) resolveConfiguration() CommandConfiguration {
 	return provided.Sanitize()
 }
 
-func (builder *CommandBuilder) logMigrationFailure(logger *zap.Logger, repositoryPath string, failure error) {
+func (builder *CommandBuilder) logDefaultBranchFailure(logger *zap.Logger, repositoryPath string, failure error) {
 	if logger == nil {
 		return
 	}
 
 	logger.Warn(
-		logMessageRepositoryMigrationFailedConstant,
+		logMessageRepositoryDefaultUpdateFailedConstant,
 		zap.String(logFieldRepositoryPathConstant, repositoryPath),
 		zap.Error(failure),
 	)
@@ -330,7 +344,7 @@ func (builder *CommandBuilder) logSummary(logger *zap.Logger, repositoryPath str
 	}
 
 	logger.Info(
-		migrationCompletedMessageConstant,
+		defaultBranchUpdatedMessageConstant,
 		zap.String(logFieldRepositoryPathConstant, repositoryPath),
 		zap.Strings(migratedWorkflowFilesFieldConstant, result.WorkflowOutcome.UpdatedFiles),
 		zap.Bool(defaultBranchUpdatedFieldConstant, result.DefaultBranchUpdated),
