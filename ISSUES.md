@@ -288,6 +288,10 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
     echo "Purged from history: ${purge_paths[*]}"
     ```
     - [ ] [GX-21] Implement a task to perform replacements in files. The input is a glob to be used to identify the files (*.go, *.sum etc), a string to find, a string to replace, a command to run after the successfull replacement, a safeguard before the execution(the conditioons can be clean tree, master branch, a presence of some file or folder). Look at tols ns-rewrite for an example of a specialized case where we replace a package name.
+    - [ ] [GX-22] Replace the branch migrate semantics
+        1. Rename the `migrate` subcommand to `default`, e.g. `gix branch default`
+        2. We only need destination and we dont need source, as the source can be determined dynamically.
+        3. Perform all the changes and document: `gix b default master`
 
 ## BugFixes
 
