@@ -1,5 +1,28 @@
 # Changelog
 
+## [v0.1.4]
+
+### Features ✨
+- Renamed `branch migrate` command to `branch default` to promote a branch as the repository default.
+- Auto-detect current default branch via GitHub metadata, removing the need to specify source branch.
+- Updated CLI, workflow, tests, configs, and documentation to reflect the new `branch default` command.
+
+### Improvements ⚙️
+- Refreshed README and workflow examples to use `branch default` instead of `branch migrate`.
+- Enhanced safety gates and automation for default branch promotion.
+- Streamlined configuration and command hierarchy for branch management commands.
+
+### Bug Fixes 🐛
+- _No changes._
+
+### Testing 🧪
+- Updated internal and integration tests to cover the new `branch default` command behavior.
+- Refactored tests to remove references to `branch migrate`.
+
+### Docs 📚
+- Updated README and CLI design docs to document `branch default` command usage.
+- Added issue tracking entry for branch command rename and behavior changes.
+
 ## [v0.1.3]
 
 ### Improvements ⚙️
