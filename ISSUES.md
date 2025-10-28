@@ -57,6 +57,209 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
             }; f"
             NB: the command shall work across repos only through tasks interface with the additiona logic of how to version different repos
         Resolution: Added a `repo release` command that annotates tags with customizable messages, pushes them to the chosen remote, and supports dry-run safety checks across repositories.
+    - [ ] [GX-14] Implement a full erasure of a file from git. Make it a subcommand under `repo` command. Call it `rm`. Look at the script below. Use if for inspiration -- dont copy the flow/logic but understand the steps required for the removal of a file from the git history
+        ```shell
+        #!/usr/bin/env bash
+        set -euo pipefail
+
+        # git-history.sh
+        # Purge one or more paths from history, push rewritten history, then restore upstreams.
+        #
+        # Usage:
+        #   git-history.sh [--remote <name>] [--no-push] [--no-restore] [--push-missing] <path> [more paths...]
+        #
+        # Flags:
+        #   --remote <name>     Remote to use (default: detect from current upstream, else 'origin')
+        #   --no-push           Do not push after rewrite
+        #   --no-restore        Skip restoring upstream tracking after rewrite
+        #   --push-missing      If a local branch has no same-named remote branch, create it (git push -u)
+
+        remote_name="origin"
+        do_push_after_purge=1
+        do_restore_after_purge=1
+        push_missing=0
+
+        # ---------- parse args ----------
+        declare -a purge_paths
+        while (($#)); do
+        case "$1" in
+            --remote) shift; remote_name="${1:-}"; [[ -z "$remote_name" ]] && { echo "error: --remote needs a value" >&2; exit 2; } ;;
+            --no-push) do_push_after_purge=0 ;;
+            --no-restore) do_restore_after_purge=0 ;;
+            --push-missing) push_missing=1 ;;
+            --help|-h)
+            cat <<'EOF'
+        Usage:
+        git-history.sh [--remote <name>] [--no-push] [--no-restore] [--push-missing] <path> [more paths...]
+
+        Behavior:
+        - Requires at least one <path>.
+        - Adds paths to .gitignore (if missing), commits that change.
+        - Rewrites history with git-filter-repo to remove those paths.
+        - Re-adds the remote removed by git-filter-repo and force-pushes (unless --no-push).
+        - Restores upstream tracking for all local branches to same-named remote branches.
+            If --push-missing is set, also creates missing remote branches and sets upstream.
+        EOF
+            exit 0
+            ;;
+            --*) echo "unknown option: $1" >&2; exit 2 ;;
+            *) purge_paths+=("$1") ;;
+        esac
+        shift || true
+        done
+
+        # ---------- must have at least one path ----------
+        if [ "${#purge_paths[@]}" -eq 0 ]; then
+        echo "Error: you must provide at least one path to purge." >&2
+        exit 2
+        fi
+
+        # ---------- helpers ----------
+        ensure_repo_root() {
+        local repository_root
+        repository_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+        [[ -n "$repository_root" ]] || { echo "Not inside a git repository." >&2; exit 1; }
+        cd "$repository_root"
+        }
+
+        require_clean_worktree() {
+        if ! git diff --quiet || ! git diff --cached --quiet; then
+            echo "Error: working tree or index is dirty. Commit or stash first." >&2
+            exit 1
+        fi
+        }
+
+        ensure_filter_repo() {
+        if ! command -v git-filter-repo >/dev/null 2>&1; then
+            echo "Installing git-filter-repo to user site-packages..."
+            python3 -m pip install --user git-filter-repo >/dev/null
+            hash -r
+            command -v git-filter-repo >/dev/null 2>&1 || { echo "git-filter-repo not available." >&2; exit 1; }
+        fi
+        }
+
+        add_to_gitignore_and_commit() {
+        local added_any=0
+        local target_path normalized
+        for target_path in "$@"; do
+            normalized="${target_path#./}"
+            if [ ! -f .gitignore ] || ! grep -Fxq "$normalized" .gitignore; then
+            printf "%s\n" "$normalized" >> .gitignore
+            git add .gitignore
+            added_any=1
+            fi
+        done
+        if [ "$added_any" -eq 1 ]; then
+            git commit -m "chore: ignore purged paths" || true
+        fi
+        }
+
+        any_path_in_history() {
+        local p
+        for p in "$@"; do
+            if git rev-list --quiet --all -- "$p"; then
+            return 0
+            fi
+        done
+        return 1
+        }
+
+        restore_upstreams() {
+        local chosen_remote="$1"
+        git remote | grep -Fxq "$chosen_remote" || { echo "Remote '$chosen_remote' not configured." >&2; return 1; }
+        git fetch --prune "$chosen_remote" >/dev/null
+
+        local attached=0 already=0 missing=0 pushed=0
+
+        local local_branch desired current_upstream
+        while IFS= read -r local_branch; do
+            desired="${chosen_remote}/${local_branch}"
+            current_upstream="$(git for-each-ref --format='%(upstream:short)' "refs/heads/${local_branch}")"
+            if git show-ref -q "refs/remotes/${chosen_remote}/${local_branch}"; then
+            if [ "$current_upstream" != "$desired" ]; then
+                git branch --set-upstream-to="$desired" "$local_branch" >/dev/null
+                printf "ATTACH: %s -> %s\n" "$local_branch" "$desired"
+                attached=$((attached+1))
+            else
+                printf "ALREADY: %s -> %s\n" "$local_branch" "$desired"
+                already=$((already+1))
+            fi
+            else
+            if [ "$push_missing" -eq 1 ]; then
+                git push -u "$chosen_remote" "${local_branch}:${local_branch}" >/dev/null
+                printf "PUSHED+ATTACH: %s -> %s\n" "$local_branch" "$desired"
+                pushed=$((pushed+1))
+            else
+                printf "MISSING ON REMOTE: %s (use --push-missing to create)\n" "$local_branch"
+                missing=$((missing+1))
+            fi
+            fi
+        done < <(git for-each-ref --format='%(refname:short)' refs/heads/)
+
+        echo "Upstreams summary: attached=$attached already=$already missing=$missing pushed=$pushed"
+        }
+
+        # ---------- main flow ----------
+        ensure_repo_root
+        require_clean_worktree
+        ensure_filter_repo
+
+        # detect & remember remote before rewrite
+        if ! git remote | grep -Fxq "$remote_name"; then
+        upstream_full_ref="$(git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null || true)"
+        inferred_remote="${upstream_full_ref%%/*}"
+        if [ -n "${inferred_remote:-}" ] && git remote | grep -Fxq "$inferred_remote"; then
+            remote_name="$inferred_remote"
+        fi
+        fi
+        saved_remote_url="$(git remote get-url "$remote_name" 2>/dev/null || true)"
+
+        add_to_gitignore_and_commit "${purge_paths[@]}"
+
+        if ! any_path_in_history "${purge_paths[@]}"; then
+        echo "Nothing to purge (none of the paths exist in history)."
+        exit 0
+        fi
+
+        # build filter-repo args
+        declare -a filter_repo_args
+        for p in "${purge_paths[@]}"; do
+        filter_repo_args+=( --path "$p" )
+        done
+
+        # rewrite
+        git filter-repo "${filter_repo_args[@]}" --invert-paths --prune-empty always --force
+
+        # delete filter-repo backups safely (portable xargs)
+        refs="$(git for-each-ref --format='%(refname)' refs/filter-repo/ 2>/dev/null || true)"
+        if [ -n "$refs" ]; then
+        printf '%s\n' "$refs" | xargs -n1 git update-ref -d
+        fi
+        git reflog expire --expire=now --expire-unreachable=now --all
+        git gc --prune=now --aggressive
+        command -v git-lfs >/dev/null 2>&1 && git lfs prune || true
+
+        # restore remote removed by filter-repo, then push
+        if [ -n "$saved_remote_url" ]; then
+        git remote | grep -Fxq "$remote_name" || git remote add "$remote_name" "$saved_remote_url"
+        if [ "$do_push_after_purge" -eq 1 ]; then
+            git push --force --all "$remote_name"
+            git push --force --tags "$remote_name"
+        else
+            echo "Skipping push (--no-push)."
+        fi
+        else
+        echo "No remote restored (none detected before rewrite)."
+        fi
+
+        # restore upstreams (no dry-run modes here)
+        if [ "$do_restore_after_purge" -eq 1 ]; then
+        restore_upstreams "$remote_name"
+        fi
+
+        echo "Purged from history: ${purge_paths[*]}"
+        ```
+    - [ ] [GX-21] Implement a task to perform replacements in files. The input is a glob to be used to identify the files (*.go, *.sum etc), a string to find, a string to replace, a command to run after the successfull replacement, a safeguard before the execution(the conditioons can be clean tree, master branch, a presence of some file or folder). Look at tols ns-rewrite for an example of a specialized case where we replace a package name.
 
 
 ## Improvements
@@ -85,209 +288,7 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
     ```
     - [x] [GX-13] `commit message` subcommand belongs to the `branch` command and the `changelog` subcommand commands belongs to the `repo` command
         Resolution: Moved the `commit message` command under `branch` and the `changelog message` command under `repo`, updating tests and documentation for the new paths.
-    - [ ] [GX-14] Implement a full erasure of a file from git. Make it a subcommand under `repo` command. Call it `rm`. Look at the script below. Use if for inspiration -- dont copy the flow/logic but understand the steps required for the removal of a file from the git history
-    ```shell
-    #!/usr/bin/env bash
-    set -euo pipefail
-
-    # git-history.sh
-    # Purge one or more paths from history, push rewritten history, then restore upstreams.
-    #
-    # Usage:
-    #   git-history.sh [--remote <name>] [--no-push] [--no-restore] [--push-missing] <path> [more paths...]
-    #
-    # Flags:
-    #   --remote <name>     Remote to use (default: detect from current upstream, else 'origin')
-    #   --no-push           Do not push after rewrite
-    #   --no-restore        Skip restoring upstream tracking after rewrite
-    #   --push-missing      If a local branch has no same-named remote branch, create it (git push -u)
-
-    remote_name="origin"
-    do_push_after_purge=1
-    do_restore_after_purge=1
-    push_missing=0
-
-    # ---------- parse args ----------
-    declare -a purge_paths
-    while (($#)); do
-    case "$1" in
-        --remote) shift; remote_name="${1:-}"; [[ -z "$remote_name" ]] && { echo "error: --remote needs a value" >&2; exit 2; } ;;
-        --no-push) do_push_after_purge=0 ;;
-        --no-restore) do_restore_after_purge=0 ;;
-        --push-missing) push_missing=1 ;;
-        --help|-h)
-        cat <<'EOF'
-    Usage:
-    git-history.sh [--remote <name>] [--no-push] [--no-restore] [--push-missing] <path> [more paths...]
-
-    Behavior:
-    - Requires at least one <path>.
-    - Adds paths to .gitignore (if missing), commits that change.
-    - Rewrites history with git-filter-repo to remove those paths.
-    - Re-adds the remote removed by git-filter-repo and force-pushes (unless --no-push).
-    - Restores upstream tracking for all local branches to same-named remote branches.
-        If --push-missing is set, also creates missing remote branches and sets upstream.
-    EOF
-        exit 0
-        ;;
-        --*) echo "unknown option: $1" >&2; exit 2 ;;
-        *) purge_paths+=("$1") ;;
-    esac
-    shift || true
-    done
-
-    # ---------- must have at least one path ----------
-    if [ "${#purge_paths[@]}" -eq 0 ]; then
-    echo "Error: you must provide at least one path to purge." >&2
-    exit 2
-    fi
-
-    # ---------- helpers ----------
-    ensure_repo_root() {
-    local repository_root
-    repository_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
-    [[ -n "$repository_root" ]] || { echo "Not inside a git repository." >&2; exit 1; }
-    cd "$repository_root"
-    }
-
-    require_clean_worktree() {
-    if ! git diff --quiet || ! git diff --cached --quiet; then
-        echo "Error: working tree or index is dirty. Commit or stash first." >&2
-        exit 1
-    fi
-    }
-
-    ensure_filter_repo() {
-    if ! command -v git-filter-repo >/dev/null 2>&1; then
-        echo "Installing git-filter-repo to user site-packages..."
-        python3 -m pip install --user git-filter-repo >/dev/null
-        hash -r
-        command -v git-filter-repo >/dev/null 2>&1 || { echo "git-filter-repo not available." >&2; exit 1; }
-    fi
-    }
-
-    add_to_gitignore_and_commit() {
-    local added_any=0
-    local target_path normalized
-    for target_path in "$@"; do
-        normalized="${target_path#./}"
-        if [ ! -f .gitignore ] || ! grep -Fxq "$normalized" .gitignore; then
-        printf "%s\n" "$normalized" >> .gitignore
-        git add .gitignore
-        added_any=1
-        fi
-    done
-    if [ "$added_any" -eq 1 ]; then
-        git commit -m "chore: ignore purged paths" || true
-    fi
-    }
-
-    any_path_in_history() {
-    local p
-    for p in "$@"; do
-        if git rev-list --quiet --all -- "$p"; then
-        return 0
-        fi
-    done
-    return 1
-    }
-
-    restore_upstreams() {
-    local chosen_remote="$1"
-    git remote | grep -Fxq "$chosen_remote" || { echo "Remote '$chosen_remote' not configured." >&2; return 1; }
-    git fetch --prune "$chosen_remote" >/dev/null
-
-    local attached=0 already=0 missing=0 pushed=0
-
-    local local_branch desired current_upstream
-    while IFS= read -r local_branch; do
-        desired="${chosen_remote}/${local_branch}"
-        current_upstream="$(git for-each-ref --format='%(upstream:short)' "refs/heads/${local_branch}")"
-        if git show-ref -q "refs/remotes/${chosen_remote}/${local_branch}"; then
-        if [ "$current_upstream" != "$desired" ]; then
-            git branch --set-upstream-to="$desired" "$local_branch" >/dev/null
-            printf "ATTACH: %s -> %s\n" "$local_branch" "$desired"
-            attached=$((attached+1))
-        else
-            printf "ALREADY: %s -> %s\n" "$local_branch" "$desired"
-            already=$((already+1))
-        fi
-        else
-        if [ "$push_missing" -eq 1 ]; then
-            git push -u "$chosen_remote" "${local_branch}:${local_branch}" >/dev/null
-            printf "PUSHED+ATTACH: %s -> %s\n" "$local_branch" "$desired"
-            pushed=$((pushed+1))
-        else
-            printf "MISSING ON REMOTE: %s (use --push-missing to create)\n" "$local_branch"
-            missing=$((missing+1))
-        fi
-        fi
-    done < <(git for-each-ref --format='%(refname:short)' refs/heads/)
-
-    echo "Upstreams summary: attached=$attached already=$already missing=$missing pushed=$pushed"
-    }
-
-    # ---------- main flow ----------
-    ensure_repo_root
-    require_clean_worktree
-    ensure_filter_repo
-
-    # detect & remember remote before rewrite
-    if ! git remote | grep -Fxq "$remote_name"; then
-    upstream_full_ref="$(git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null || true)"
-    inferred_remote="${upstream_full_ref%%/*}"
-    if [ -n "${inferred_remote:-}" ] && git remote | grep -Fxq "$inferred_remote"; then
-        remote_name="$inferred_remote"
-    fi
-    fi
-    saved_remote_url="$(git remote get-url "$remote_name" 2>/dev/null || true)"
-
-    add_to_gitignore_and_commit "${purge_paths[@]}"
-
-    if ! any_path_in_history "${purge_paths[@]}"; then
-    echo "Nothing to purge (none of the paths exist in history)."
-    exit 0
-    fi
-
-    # build filter-repo args
-    declare -a filter_repo_args
-    for p in "${purge_paths[@]}"; do
-    filter_repo_args+=( --path "$p" )
-    done
-
-    # rewrite
-    git filter-repo "${filter_repo_args[@]}" --invert-paths --prune-empty always --force
-
-    # delete filter-repo backups safely (portable xargs)
-    refs="$(git for-each-ref --format='%(refname)' refs/filter-repo/ 2>/dev/null || true)"
-    if [ -n "$refs" ]; then
-    printf '%s\n' "$refs" | xargs -n1 git update-ref -d
-    fi
-    git reflog expire --expire=now --expire-unreachable=now --all
-    git gc --prune=now --aggressive
-    command -v git-lfs >/dev/null 2>&1 && git lfs prune || true
-
-    # restore remote removed by filter-repo, then push
-    if [ -n "$saved_remote_url" ]; then
-    git remote | grep -Fxq "$remote_name" || git remote add "$remote_name" "$saved_remote_url"
-    if [ "$do_push_after_purge" -eq 1 ]; then
-        git push --force --all "$remote_name"
-        git push --force --tags "$remote_name"
-    else
-        echo "Skipping push (--no-push)."
-    fi
-    else
-    echo "No remote restored (none detected before rewrite)."
-    fi
-
-    # restore upstreams (no dry-run modes here)
-    if [ "$do_restore_after_purge" -eq 1 ]; then
-    restore_upstreams "$remote_name"
-    fi
-
-    echo "Purged from history: ${purge_paths[*]}"
-    ```
-    - [ ] [GX-21] Implement a task to perform replacements in files. The input is a glob to be used to identify the files (*.go, *.sum etc), a string to find, a string to replace, a command to run after the successfull replacement, a safeguard before the execution(the conditioons can be clean tree, master branch, a presence of some file or folder). Look at tols ns-rewrite for an example of a specialized case where we replace a package name.
+    
     - [x] [GX-22] Replace the branch migrate semantics
         1. Rename the `migrate` subcommand to `default`, e.g. `gix branch default`
         2. We only need destination and we dont need source, as the source can be determined dynamically.
@@ -399,3 +400,6 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
 
 ## Planning 
 do not work on the issues below, not ready
+
+    - [ ] [GX-22] Implement adding licenses to repos. The prototype is under tools/licenser
+    - [ ] [GX-23] Implement git retag, which allows to alter git history and straigtens up the git tags based on the timeline. The prototype is under tools/git_retag
