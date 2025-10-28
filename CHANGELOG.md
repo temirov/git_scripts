@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+### Docs 📚
+- Re-centered the README on user workflows and added `ARCHITECTURE.md` to document command wiring, package layout, and configuration internals.
+- Expanded `ARCHITECTURE.md` with current package responsibilities, dependency resolution, and workflow step registration details.
+- Added GX-402 refactor roadmap capturing policy gaps, phased domain/error refactors, and test expansion tasks.
+
 ## [v0.1.4]
 
 ### Features ✨
