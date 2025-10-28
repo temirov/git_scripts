@@ -14,11 +14,20 @@ gix is a Go 1.24 command-line application built with Cobra and Viper. The binary
 └── tests            # behavior-driven integration tests
 ```
 
+## Execution Flow
+
+1. The binary entrypoint (`main.go`) invokes `cli.Execute`, which builds the Cobra root command inside `cmd/cli/application.go`.
+2. `cmd/cli` initialises Viper, loads configuration files via `internal/utils/flags`, and prepares a structured Zap logger.
+3. Each namespace (`audit`, `repo`, `branch`, `commit`, `workflow`, etc.) registers subcommands that accept shared flags (`--roots`, `--dry-run`, `--yes`) before delegating to domain services.
+4. Domain services resolve their collaborators through `internal/repos/dependencies`, which supplies defaults for repository discovery, filesystem access, Git execution, and GitHub metadata unless tests inject fakes.
+5. Commands perform work through `internal/...` packages (for example, `internal/repos/rename.Run`), returning contextual errors that bubble back to Cobra for consistent exit handling.
+
 ## Command Surface
 
 The Cobra application (`cmd/cli/application.go`) initialises the root command and nests feature namespaces below it (`audit`, `repo`, `branch`, `commit`, `workflow`, and others). Each namespace hosts subcommands that ultimately depend on injected services from `internal/...` packages. Commands share common flag parsing helpers (`internal/utils/flags`) and prompt utilities.
 
 - `cmd/cli/repos` registers multi-command groups such as `repo folder rename`, `repo remote update-to-canonical`, `repo prs delete`, and `repo files replace`.
+- `cmd/cli/repos/release` contains the `repo release` tagging workflow.
 - `cmd/cli/changelog`, `cmd/cli/commit`, and `cmd/cli/workflow` expose focused entrypoints for changelog generation, AI-assisted commit messaging, and workflow execution.
 - `cmd/cli/default_configuration.go` houses the embedded default YAML used by the `gix --init` flag.
 
@@ -28,21 +37,33 @@ All commands accept shared flags for log level, log format, dry-run previews, re
 
 Each feature area resides in `internal/<domain>` and exposes structs with methods instead of package-level functions. The primary packages are:
 
-- `internal/audit`: Repository discovery, metadata reconciliation, and CSV reporting.
-- `internal/branches`: Branch cleanup utilities (`cd`, `refresh`, PR deletion) built on top of Git adapters.
-- `internal/repos`: Namespace containing subpackages for discovery, rename plans, remote/protocol updates, history rewriting, prompts, safeguards, and dependencies.
-- `internal/packages`: GitHub Packages deletion workflow using the GitHub API.
-- `internal/releases`: Tagging helpers for releases.
-- `internal/workflow`: YAML/JSON workflow runner, shared step registry, and execution environment.
-- `internal/utils`: Shell execution adapters, logging setup, filesystem helpers, and flag utilities.
-- `internal/version`: Version reporting and build metadata.
-- `internal/migrate`: Support for repository migrations such as default-branch transitions.
+- `internal/audit`: Repository discovery, metadata reconciliation, CSV export, and CLI integration (`internal/audit/cli`).
+- `internal/branches`: Branch maintenance commands (`cd`, `refresh`, default promotion) and supporting adapters.
+- `internal/changelog`, `internal/commitmsg`: Generators that transform Git history and staged changes into formatted text.
+- `internal/repos`: Subpackages for repository workflows:
+  - `dependencies`: Dependency resolution for discovery, filesystem, Git, and GitHub integrations.
+  - `discovery`: Filesystem scanning for Git repositories.
+  - `filesystem`: Filesystem abstractions used by rename/history flows.
+  - `history`: Wrapper around git-filter-repo operations for `repo rm`.
+  - `prompt`: End-user confirmation and message formatting.
+  - `protocol`, `remotes`, `rename`: Operations that update remotes, protocols, and directory names.
+  - `shared`: Shared interfaces (Git executor, GitHub resolver, repository manager).
+- `internal/packages`: GitHub Packages purge workflow including GHCR API clients.
+- `internal/releases`: Annotated tag creation and push orchestration used by `repo release`.
+- `internal/workflow`: YAML/JSON workflow runner, step registry, and execution environment.
+- `internal/execshell`, `internal/gitrepo`, `internal/githubcli`: Adapters for running Git commands, interacting with repositories, and resolving metadata through the GitHub CLI.
+- `internal/utils`: Logging factories, command flag helpers, filesystem path utilities, and repository root deduplication.
+- `internal/ghcr`, `internal/version`, `internal/migrate`: Specialized helpers for GHCR interactions, version embedding, and repository migration flows.
 
-External integrations (for example, GitHub CLI wrappers, GHCR API clients, and shell execution) are isolated behind interfaces, enabling injection of fakes or mocks in tests.
+External integrations (for example, Git/GitHub shells and GHCR APIs) are isolated behind interfaces, enabling injection of fakes or mocks in tests.
 
-## Workflow Runner
+## Workflow Runner and Step Registration
 
-The workflow command consumes declarative YAML or JSON plans describing ordered actions. `internal/workflow` resolves steps into concrete executors registered through `internal/repos/dependencies` and other domain services. Discovery of repositories, confirmation prompts, and logging contexts are reused across steps to minimise duplicate code. Each workflow step enforces dry-run previews and respect the global confirmation strategy.
+The workflow command consumes declarative YAML or JSON plans describing ordered actions. `internal/workflow` resolves steps into concrete executors registered through `internal/repos/dependencies` and other domain services. Discovery of repositories, confirmation prompts, and logging contexts are reused across steps to minimise duplicate code.
+
+- Workflow steps call domain executors such as `repo folders rename`, `repo protocol convert`, `apply-tasks`, and audit report generation.
+- Additional utilities (for example, template rendering or safeguards) live alongside the executors so they can be reused across CLI and workflow entrypoints.
+Each workflow step enforces dry-run previews and respects the global confirmation strategy. Discovery and prompting are shared with direct CLI invocations so adopters can migrate between ad-hoc and scripted automation without rewriting plumbing.
 
 ## Configuration and Logging
 
@@ -169,3 +190,5 @@ workflow:
 ## Testing Strategy
 
 Domain packages rely on table-driven unit tests using injected fakes for Git, GitHub, and filesystem interactions. Integration coverage lives under `tests/`, where high-level flows execute through the public CLI surfaces to ensure behavior matches the documented commands. All tests are designed to run in isolated temporary directories (`t.TempDir`) without polluting the developer filesystem.
+
+Documentation tests in `docs/readme_config_test.go` ensure the workflow configuration referenced above stays in sync with the executable configuration loader.
