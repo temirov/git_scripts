@@ -24,6 +24,7 @@ const (
 	optionTaskFilesKeyConstant         = "files"
 	optionTaskCommitMessageKeyConstant = "commit_message"
 	optionTaskPullRequestKeyConstant   = "pull_request"
+	optionTaskActionsKeyConstant       = "actions"
 
 	optionTaskBranchNameKeyConstant       = "name"
 	optionTaskBranchStartPointKeyConstant = "start_point"
@@ -34,10 +35,12 @@ const (
 	optionTaskFileModeKeyConstant        = "mode"
 	optionTaskFilePermissionsKeyConstant = "permissions"
 
-	optionTaskPRTitleKeyConstant = "title"
-	optionTaskPRBodyKeyConstant  = "body"
-	optionTaskPRBaseKeyConstant  = "base"
-	optionTaskPRDraftKeyConstant = "draft"
+	optionTaskPRTitleKeyConstant       = "title"
+	optionTaskPRBodyKeyConstant        = "body"
+	optionTaskPRBaseKeyConstant        = "base"
+	optionTaskPRDraftKeyConstant       = "draft"
+	optionTaskActionTypeKeyConstant    = "type"
+	optionTaskActionOptionsKeyConstant = "options"
 )
 
 const (
@@ -71,6 +74,7 @@ type TaskDefinition struct {
 	EnsureClean bool
 	Branch      TaskBranchDefinition
 	Files       []TaskFileDefinition
+	Actions     []TaskActionDefinition
 	Commit      TaskCommitDefinition
 	PullRequest *TaskPullRequestDefinition
 }
@@ -95,6 +99,12 @@ type TaskCommitDefinition struct {
 	MessageTemplate string
 }
 
+// TaskActionDefinition describes an imperative action executed as part of a task.
+type TaskActionDefinition struct {
+	Type    string
+	Options map[string]any
+}
+
 // TaskPullRequestDefinition configures optional pull request creation.
 type TaskPullRequestDefinition struct {
 	TitleTemplate string
@@ -112,11 +122,14 @@ type TaskTemplateData struct {
 
 // TaskRepositoryTemplateData provides repository metadata for templating.
 type TaskRepositoryTemplateData struct {
-	Path          string
-	Owner         string
-	Name          string
-	FullName      string
-	DefaultBranch string
+	Path                  string
+	Owner                 string
+	Name                  string
+	FullName              string
+	DefaultBranch         string
+	PathDepth             int
+	InitialClean          bool
+	HasNestedRepositories bool
 }
 
 // Name identifies the operation type.
@@ -155,6 +168,14 @@ func (operation *TaskOperation) executeTask(executionContext context.Context, en
 
 	if environment.DryRun {
 		plan.describe(environment, taskLogPrefixPlan)
+		if len(plan.actions) > 0 {
+			actionExecutor := newTaskActionExecutor(environment)
+			for _, action := range plan.actions {
+				if err := actionExecutor.execute(executionContext, repository, action); err != nil {
+					return err
+				}
+			}
+		}
 		return nil
 	}
 
@@ -213,8 +234,12 @@ func buildTaskDefinition(raw map[string]any) (TaskDefinition, error) {
 	if filesError != nil {
 		return TaskDefinition{}, filesError
 	}
-	if len(files) == 0 {
-		return TaskDefinition{}, fmt.Errorf("task %s must declare at least one file", name)
+	actions, actionsError := buildTaskActions(reader)
+	if actionsError != nil {
+		return TaskDefinition{}, actionsError
+	}
+	if len(files) == 0 && len(actions) == 0 {
+		return TaskDefinition{}, fmt.Errorf("task %s must declare at least one file or action", name)
 	}
 
 	commitDefinition, commitError := buildTaskCommitDefinition(reader)
@@ -232,6 +257,7 @@ func buildTaskDefinition(raw map[string]any) (TaskDefinition, error) {
 		EnsureClean: ensureClean,
 		Branch:      branchDefinition,
 		Files:       files,
+		Actions:     actions,
 		Commit:      commitDefinition,
 		PullRequest: pullRequestDefinition,
 	}, nil
@@ -320,6 +346,47 @@ func buildTaskFiles(reader optionReader) ([]TaskFileDefinition, error) {
 	return files, nil
 }
 
+func buildTaskActions(reader optionReader) ([]TaskActionDefinition, error) {
+	actionEntries, exists, err := reader.mapSlice(optionTaskActionsKeyConstant)
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, nil
+	}
+
+	actions := make([]TaskActionDefinition, 0, len(actionEntries))
+	for _, entry := range actionEntries {
+		actionReader := newOptionReader(entry)
+
+		typeValue, typeExists, typeError := actionReader.stringValue(optionTaskActionTypeKeyConstant)
+		if typeError != nil {
+			return nil, typeError
+		}
+		trimmedType := strings.TrimSpace(typeValue)
+		if !typeExists || len(trimmedType) == 0 {
+			return nil, errors.New("task action type must be provided")
+		}
+
+		options, _, optionsError := actionReader.mapValue(optionTaskActionOptionsKeyConstant)
+		if optionsError != nil {
+			return nil, optionsError
+		}
+
+		normalizedOptions := make(map[string]any, len(options))
+		for key, value := range options {
+			normalizedOptions[key] = value
+		}
+
+		actions = append(actions, TaskActionDefinition{
+			Type:    trimmedType,
+			Options: normalizedOptions,
+		})
+	}
+
+	return actions, nil
+}
+
 func buildTaskCommitDefinition(reader optionReader) (TaskCommitDefinition, error) {
 	messageTemplate, exists, err := reader.stringValue(optionTaskCommitMessageKeyConstant)
 	if err != nil {
@@ -404,11 +471,14 @@ func buildTaskTemplateData(repository *RepositoryState, task TaskDefinition) Tas
 	return TaskTemplateData{
 		Task: task,
 		Repository: TaskRepositoryTemplateData{
-			Path:          repository.Path,
-			Owner:         owner,
-			Name:          name,
-			FullName:      repository.Inspection.FinalOwnerRepo,
-			DefaultBranch: defaultBranch,
+			Path:                  repository.Path,
+			Owner:                 owner,
+			Name:                  name,
+			FullName:              repository.Inspection.FinalOwnerRepo,
+			DefaultBranch:         defaultBranch,
+			PathDepth:             repository.PathDepth,
+			InitialClean:          repository.InitialCleanWorktree,
+			HasNestedRepositories: repository.HasNestedRepositories,
 		},
 		Environment: map[string]string{},
 	}
@@ -436,6 +506,7 @@ type taskPlan struct {
 	commitMessage     string
 	pullRequest       *taskPlanPullRequest
 	fileChanges       []taskFileChange
+	actions           []taskAction
 	skipReason        string
 	skipped           bool
 	cleanedBranchName string
@@ -456,6 +527,11 @@ type taskFileChange struct {
 	permissions  fs.FileMode
 	skipReason   string
 	apply        bool
+}
+
+type taskAction struct {
+	actionType string
+	parameters map[string]any
 }
 
 type taskPlanner struct {
@@ -502,6 +578,12 @@ func (planner taskPlanner) BuildPlan(environment *Environment, repository *Repos
 	}
 	plan.fileChanges = fileChanges
 
+	actions, actionsError := planner.planActions()
+	if actionsError != nil {
+		return taskPlan{}, actionsError
+	}
+	plan.actions = actions
+
 	if planner.task.PullRequest != nil {
 		pr, prError := planner.planPullRequest(*planner.task.PullRequest)
 		if prError != nil {
@@ -510,7 +592,7 @@ func (planner taskPlanner) BuildPlan(environment *Environment, repository *Repos
 		plan.pullRequest = pr
 	}
 
-	if !hasApplicableChanges(plan.fileChanges) {
+	if !hasApplicableChanges(plan.fileChanges) && len(plan.actions) == 0 {
 		plan.skipped = true
 		plan.skipReason = "no changes"
 	}
@@ -576,6 +658,39 @@ func (planner taskPlanner) planFileChanges(environment *Environment, repository 
 	})
 
 	return changes, nil
+}
+
+func (planner taskPlanner) planActions() ([]taskAction, error) {
+	planned := make([]taskAction, 0, len(planner.task.Actions))
+	for _, definition := range planner.task.Actions {
+		if len(strings.TrimSpace(definition.Type)) == 0 {
+			continue
+		}
+
+		parameters := make(map[string]any, len(definition.Options))
+		for key, value := range definition.Options {
+			normalizedKey := strings.ToLower(strings.TrimSpace(key))
+			if len(normalizedKey) == 0 {
+				continue
+			}
+			switch typedValue := value.(type) {
+			case string:
+				rendered, renderError := planner.renderTemplate(typedValue, "")
+				if renderError != nil {
+					return nil, renderError
+				}
+				parameters[normalizedKey] = strings.TrimSpace(rendered)
+			default:
+				parameters[normalizedKey] = typedValue
+			}
+		}
+
+		planned = append(planned, taskAction{
+			actionType: definition.Type,
+			parameters: parameters,
+		})
+	}
+	return planned, nil
 }
 
 func (planner taskPlanner) planPullRequest(definition TaskPullRequestDefinition) (*taskPlanPullRequest, error) {
@@ -666,6 +781,11 @@ func (plan taskPlan) describe(environment *Environment, prefix string) {
 		return
 	}
 
+	if len(plan.fileChanges) == 0 && plan.pullRequest == nil {
+		// Action-only tasks defer to the underlying operation outputs.
+		return
+	}
+
 	fmt.Fprintf(environment.Output, "%s: %s %s branch=%s base=%s\n", prefix, plan.task.Name, plan.repository.Path, plan.branchName, plan.startPoint)
 	for _, change := range plan.fileChanges {
 		action := "write"
@@ -675,9 +795,32 @@ func (plan taskPlan) describe(environment *Environment, prefix string) {
 		fmt.Fprintf(environment.Output, "%s: %s file=%s action=%s\n", prefix, plan.task.Name, change.relativePath, action)
 	}
 
+	for _, action := range plan.actions {
+		fmt.Fprintf(environment.Output, "%s: %s action=%s params=%s\n", prefix, plan.task.Name, action.actionType, formatActionParameters(action.parameters))
+	}
+
 	if plan.pullRequest != nil {
 		fmt.Fprintf(environment.Output, "%s: %s pull-request title=%q base=%s draft=%t\n", prefix, plan.task.Name, plan.pullRequest.title, plan.pullRequest.base, plan.pullRequest.draft)
 	}
+}
+
+func formatActionParameters(parameters map[string]any) string {
+	if len(parameters) == 0 {
+		return "{}"
+	}
+
+	keys := make([]string, 0, len(parameters))
+	for key := range parameters {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	values := make([]string, 0, len(keys))
+	for _, key := range keys {
+		values = append(values, fmt.Sprintf("%s=%v", key, parameters[key]))
+	}
+
+	return strings.Join(values, ", ")
 }
 
 type taskExecutor struct {
@@ -700,6 +843,9 @@ func (executor taskExecutor) Execute(executionContext context.Context) error {
 		return nil
 	}
 
+	hasFileChanges := hasApplicableChanges(executor.plan.fileChanges)
+	hasActions := len(executor.plan.actions) > 0
+
 	if executor.plan.task.EnsureClean {
 		clean, cleanError := executor.environment.RepositoryManager.CheckCleanWorktree(executionContext, executor.repository.Path)
 		if cleanError != nil {
@@ -711,65 +857,90 @@ func (executor taskExecutor) Execute(executionContext context.Context) error {
 		}
 	}
 
-	if branchExists, existsError := executor.branchExists(executionContext, executor.plan.branchName); existsError != nil {
-		return existsError
-	} else if branchExists {
-		executor.logf(taskLogPrefixSkip, "branch exists", map[string]any{"branch": executor.plan.branchName})
-		return nil
-	}
+	originalBranch := ""
+	cleanup := func() {}
 
-	originalBranch, branchError := executor.environment.RepositoryManager.GetCurrentBranch(executionContext, executor.repository.Path)
-	if branchError != nil {
-		return branchError
-	}
-
-	cleanup := func() {
-		if len(strings.TrimSpace(originalBranch)) == 0 {
-			return
+	if hasFileChanges {
+		if branchExists, existsError := executor.branchExists(executionContext, executor.plan.branchName); existsError != nil {
+			return existsError
+		} else if branchExists {
+			executor.logf(taskLogPrefixSkip, "branch exists", map[string]any{"branch": executor.plan.branchName})
+			return nil
 		}
-		_ = executor.checkoutBranch(executionContext, originalBranch)
+
+		var branchError error
+		originalBranch, branchError = executor.environment.RepositoryManager.GetCurrentBranch(executionContext, executor.repository.Path)
+		if branchError != nil {
+			return branchError
+		}
+
+		cleanup = func() {
+			if len(strings.TrimSpace(originalBranch)) == 0 {
+				return
+			}
+			_ = executor.checkoutBranch(executionContext, originalBranch)
+		}
+
+		if len(strings.TrimSpace(executor.plan.startPoint)) > 0 {
+			if err := executor.checkoutBranch(executionContext, executor.plan.startPoint); err != nil {
+				cleanup()
+				return err
+			}
+		}
+
+		if err := executor.checkoutOrCreateTaskBranch(executionContext); err != nil {
+			cleanup()
+			return err
+		}
+
+		if err := executor.applyFileChanges(); err != nil {
+			cleanup()
+			return err
+		}
+
+		if err := executor.stageChanges(executionContext); err != nil {
+			cleanup()
+			return err
+		}
+
+		if err := executor.commitChanges(executionContext); err != nil {
+			cleanup()
+			return err
+		}
+
+		if err := executor.pushBranch(executionContext); err != nil {
+			cleanup()
+			return err
+		}
+
+		if executor.plan.pullRequest != nil {
+			if err := executor.createPullRequest(executionContext); err != nil {
+				cleanup()
+				return err
+			}
+		}
 	}
 
-	if len(strings.TrimSpace(executor.plan.startPoint)) > 0 {
-		if err := executor.checkoutBranch(executionContext, executor.plan.startPoint); err != nil {
+	if hasActions {
+		if err := executor.executeActions(executionContext); err != nil {
 			cleanup()
 			return err
 		}
 	}
 
-	if err := executor.checkoutOrCreateTaskBranch(executionContext); err != nil {
-		cleanup()
-		return err
-	}
-
-	if err := executor.applyFileChanges(); err != nil {
-		cleanup()
-		return err
-	}
-
-	if err := executor.stageChanges(executionContext); err != nil {
-		cleanup()
-		return err
-	}
-
-	if err := executor.commitChanges(executionContext); err != nil {
-		cleanup()
-		return err
-	}
-
-	if err := executor.pushBranch(executionContext); err != nil {
-		cleanup()
-		return err
-	}
-
-	if executor.plan.pullRequest != nil {
-		if err := executor.createPullRequest(executionContext); err != nil {
-			cleanup()
-			return err
+	if hasFileChanges || executor.plan.pullRequest != nil {
+		logFields := map[string]any{}
+		if hasFileChanges {
+			logFields["branch"] = executor.plan.branchName
 		}
+		if hasActions {
+			logFields["actions"] = len(executor.plan.actions)
+		}
+		if len(logFields) == 0 {
+			logFields = nil
+		}
+		executor.logf(taskLogPrefixApply, "applied", logFields)
 	}
-
-	executor.logf(taskLogPrefixApply, "applied", map[string]any{"branch": executor.plan.branchName})
 
 	cleanup()
 	return nil
@@ -868,6 +1039,16 @@ func (executor taskExecutor) createPullRequest(executionContext context.Context)
 		Draft:      pr.draft,
 	}
 	return createPullRequest(executionContext, executor.environment, options)
+}
+
+func (executor taskExecutor) executeActions(executionContext context.Context) error {
+	actionExecutor := newTaskActionExecutor(executor.environment)
+	for _, action := range executor.plan.actions {
+		if err := actionExecutor.execute(executionContext, executor.repository, action); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (executor taskExecutor) logf(prefix string, message string, fields map[string]any) {

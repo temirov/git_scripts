@@ -2,16 +2,18 @@ package release
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 
 	"github.com/spf13/cobra"
 
-	"github.com/temirov/gix/internal/releases"
+	repocli "github.com/temirov/gix/cmd/cli/repos"
+	"github.com/temirov/gix/internal/githubcli"
+	"github.com/temirov/gix/internal/gitrepo"
 	"github.com/temirov/gix/internal/repos/dependencies"
 	"github.com/temirov/gix/internal/repos/shared"
 	flagutils "github.com/temirov/gix/internal/utils/flags"
 	rootutils "github.com/temirov/gix/internal/utils/roots"
+	"github.com/temirov/gix/internal/workflow"
 )
 
 const (
@@ -23,15 +25,18 @@ const (
 	messageFlagName         = "message"
 	messageFlagUsage        = "Override the tag message"
 	missingTagErrorMessage  = "tag name is required"
-	releaseSuccessTemplate  = "RELEASED: %s -> %s"
 )
 
 // CommandBuilder assembles the release command.
 type CommandBuilder struct {
 	LoggerProvider               LoggerProvider
+	Discoverer                   shared.RepositoryDiscoverer
 	GitExecutor                  shared.GitExecutor
+	GitManager                   shared.GitRepositoryManager
+	FileSystem                   shared.FileSystem
 	HumanReadableLoggingProvider func() bool
 	ConfigurationProvider        func() CommandConfiguration
+	TaskRunnerFactory            func(workflow.Dependencies) repocli.TaskRunnerExecutor
 }
 
 // Build constructs the repo release command.
@@ -106,27 +111,77 @@ func (builder *CommandBuilder) run(command *cobra.Command, arguments []string) e
 		return executorError
 	}
 
-	service, serviceError := releases.NewService(releases.ServiceDependencies{GitExecutor: gitExecutor})
-	if serviceError != nil {
-		return serviceError
+	gitManager, managerError := dependencies.ResolveGitRepositoryManager(builder.GitManager, gitExecutor)
+	if managerError != nil {
+		return managerError
 	}
 
-	for _, repository := range repositoryRoots {
-		result, releaseError := service.Release(command.Context(), releases.Options{
-			RepositoryPath: repository,
-			TagName:        tagName,
-			Message:        messageValue,
-			RemoteName:     remoteName,
-			DryRun:         dryRun,
-		})
-		if releaseError != nil {
-			return releaseError
+	resolvedManager := gitManager
+	repositoryManager := (*gitrepo.RepositoryManager)(nil)
+	if concreteManager, ok := resolvedManager.(*gitrepo.RepositoryManager); ok {
+		repositoryManager = concreteManager
+	} else {
+		constructedManager, constructedManagerError := gitrepo.NewRepositoryManager(gitExecutor)
+		if constructedManagerError != nil {
+			return constructedManagerError
 		}
-
-		fmt.Fprintln(command.OutOrStdout(), fmt.Sprintf(releaseSuccessTemplate, result.RepositoryPath, result.TagName))
+		repositoryManager = constructedManager
 	}
 
-	return nil
+	repositoryDiscoverer := dependencies.ResolveRepositoryDiscoverer(builder.Discoverer)
+	fileSystem := dependencies.ResolveFileSystem(builder.FileSystem)
+
+	githubClient, clientError := githubcli.NewClient(gitExecutor)
+	if clientError != nil {
+		return clientError
+	}
+
+	taskDependencies := workflow.Dependencies{
+		Logger:               logger,
+		RepositoryDiscoverer: repositoryDiscoverer,
+		GitExecutor:          gitExecutor,
+		RepositoryManager:    repositoryManager,
+		GitHubClient:         githubClient,
+		FileSystem:           fileSystem,
+		Prompter:             nil,
+		Output:               command.OutOrStdout(),
+		Errors:               command.ErrOrStderr(),
+	}
+
+	taskRunner := repocli.ResolveTaskRunner(builder.TaskRunnerFactory, taskDependencies)
+
+	taskName := "Create release tag"
+	if len(tagName) > 0 {
+		taskName = "Create release tag " + tagName
+	}
+
+	actionOptions := map[string]any{
+		"tag": tagName,
+	}
+	if len(messageValue) > 0 {
+		actionOptions["message"] = messageValue
+	}
+	if len(remoteName) > 0 {
+		actionOptions["remote"] = remoteName
+	}
+
+	taskDefinition := workflow.TaskDefinition{
+		Name:        taskName,
+		EnsureClean: false,
+		Actions: []workflow.TaskActionDefinition{
+			{Type: "repo.release.tag", Options: actionOptions},
+		},
+		Commit: workflow.TaskCommitDefinition{},
+	}
+
+	assumeYes := false
+	if executionFlagsAvailable && executionFlags.AssumeYesSet {
+		assumeYes = executionFlags.AssumeYes
+	}
+
+	runtimeOptions := workflow.RuntimeOptions{DryRun: dryRun, AssumeYes: assumeYes}
+
+	return taskRunner.Run(command.Context(), repositoryRoots, []workflow.TaskDefinition{taskDefinition}, runtimeOptions)
 }
 
 func (builder *CommandBuilder) resolveConfiguration() CommandConfiguration {

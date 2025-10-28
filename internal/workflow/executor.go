@@ -5,6 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path/filepath"
+	"sort"
+	"strings"
 
 	"go.uber.org/zap"
 
@@ -14,8 +17,6 @@ import (
 	"github.com/temirov/gix/internal/repos/shared"
 	pathutils "github.com/temirov/gix/internal/utils/path"
 )
-
-var workflowExecutorRepositoryPathSanitizer = pathutils.NewRepositoryPathSanitizerWithConfiguration(nil, pathutils.RepositoryPathSanitizerConfiguration{PruneNestedPaths: true})
 
 const (
 	workflowExecutionErrorTemplateConstant = "workflow operation %s failed: %w"
@@ -39,8 +40,11 @@ type Dependencies struct {
 
 // RuntimeOptions captures user-provided execution modifiers.
 type RuntimeOptions struct {
-	DryRun    bool
-	AssumeYes bool
+	DryRun                               bool
+	AssumeYes                            bool
+	IncludeNestedRepositories            bool
+	ProcessRepositoriesByDescendingDepth bool
+	CaptureInitialWorktreeStatus         bool
 }
 
 // Executor coordinates workflow operation execution.
@@ -60,7 +64,9 @@ func (executor *Executor) Execute(executionContext context.Context, roots []stri
 		return errors.New(workflowExecutorDependenciesMessage)
 	}
 
-	sanitizedRoots := workflowExecutorRepositoryPathSanitizer.Sanitize(roots)
+	sanitizerConfiguration := pathutils.RepositoryPathSanitizerConfiguration{PruneNestedPaths: !runtimeOptions.IncludeNestedRepositories}
+	repositoryPathSanitizer := pathutils.NewRepositoryPathSanitizerWithConfiguration(nil, sanitizerConfiguration)
+	sanitizedRoots := repositoryPathSanitizer.Sanitize(roots)
 	if len(sanitizedRoots) == 0 {
 		return errors.New(workflowExecutorMissingRootsMessage)
 	}
@@ -81,7 +87,28 @@ func (executor *Executor) Execute(executionContext context.Context, roots []stri
 
 	repositoryStates := make([]*RepositoryState, 0, len(inspections))
 	for inspectionIndex := range inspections {
-		repositoryStates = append(repositoryStates, NewRepositoryState(inspections[inspectionIndex]))
+		state := NewRepositoryState(inspections[inspectionIndex])
+		state.PathDepth = repositoryPathDepth(state.Path)
+		repositoryStates = append(repositoryStates, state)
+	}
+
+	if runtimeOptions.IncludeNestedRepositories {
+		markNestedRepositoryAncestors(repositoryStates)
+	}
+
+	if runtimeOptions.CaptureInitialWorktreeStatus {
+		captureInitialCleanStatuses(executionContext, executor.dependencies.RepositoryManager, repositoryStates)
+	}
+
+	if runtimeOptions.ProcessRepositoriesByDescendingDepth {
+		sort.SliceStable(repositoryStates, func(firstIndex int, secondIndex int) bool {
+			first := repositoryStates[firstIndex]
+			second := repositoryStates[secondIndex]
+			if first.PathDepth == second.PathDepth {
+				return first.Path < second.Path
+			}
+			return first.PathDepth > second.PathDepth
+		})
 	}
 
 	promptState := NewPromptState(runtimeOptions.AssumeYes)
@@ -113,4 +140,57 @@ func (executor *Executor) Execute(executionContext context.Context, roots []stri
 	}
 
 	return nil
+}
+
+func repositoryPathDepth(path string) int {
+	cleaned := filepath.Clean(path)
+	if len(cleaned) == 0 || cleaned == "." {
+		return 0
+	}
+	normalized := filepath.ToSlash(cleaned)
+	return strings.Count(normalized, "/")
+}
+
+func markNestedRepositoryAncestors(repositories []*RepositoryState) {
+	for ancestorIndex := range repositories {
+		ancestorPath := repositories[ancestorIndex].Path
+		for candidateIndex := range repositories {
+			if ancestorIndex == candidateIndex {
+				continue
+			}
+			descendantPath := repositories[candidateIndex].Path
+			if isAncestorPath(ancestorPath, descendantPath) {
+				repositories[ancestorIndex].HasNestedRepositories = true
+				break
+			}
+		}
+	}
+}
+
+func isAncestorPath(potentialAncestor string, potentialDescendant string) bool {
+	if len(strings.TrimSpace(potentialAncestor)) == 0 || len(strings.TrimSpace(potentialDescendant)) == 0 {
+		return false
+	}
+	relativePath, relativeError := filepath.Rel(potentialAncestor, potentialDescendant)
+	if relativeError != nil {
+		return false
+	}
+	if relativePath == "." {
+		return false
+	}
+	return !strings.HasPrefix(relativePath, "..")
+}
+
+func captureInitialCleanStatuses(executionContext context.Context, manager *gitrepo.RepositoryManager, repositories []*RepositoryState) {
+	if manager == nil {
+		return
+	}
+	for repositoryIndex := range repositories {
+		repository := repositories[repositoryIndex]
+		clean, cleanError := manager.CheckCleanWorktree(executionContext, repository.Path)
+		if cleanError != nil {
+			continue
+		}
+		repository.InitialCleanWorktree = clean
+	}
 }
