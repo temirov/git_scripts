@@ -201,3 +201,50 @@ func TestDefaultRepositoryMetadataResolverPropagatesErrors(testInstance *testing
 		})
 	}
 }
+
+type stubRepositoryManager struct {
+	remoteURLByPath map[string]string
+	errorByPath     map[string]error
+}
+
+func (manager *stubRepositoryManager) CheckCleanWorktree(context.Context, string) (bool, error) {
+	return true, nil
+}
+
+func (manager *stubRepositoryManager) GetCurrentBranch(context.Context, string) (string, error) {
+	return "main", nil
+}
+
+func (manager *stubRepositoryManager) GetRemoteURL(_ context.Context, repositoryPath string, _ string) (string, error) {
+	if manager.errorByPath != nil {
+		if err, exists := manager.errorByPath[repositoryPath]; exists {
+			return "", err
+		}
+	}
+	if manager.remoteURLByPath == nil {
+		return "", errors.New("remote not configured")
+	}
+	if remote, exists := manager.remoteURLByPath[repositoryPath]; exists {
+		return remote, nil
+	}
+	return "", errors.New("remote not configured")
+}
+
+func (manager *stubRepositoryManager) SetRemoteURL(context.Context, string, string, string) error {
+	return nil
+}
+
+type stubGitHubResolver struct {
+	metadata       githubcli.RepositoryMetadata
+	metadataByRepo map[string]githubcli.RepositoryMetadata
+	err            error
+}
+
+func (resolver *stubGitHubResolver) ResolveRepoMetadata(_ context.Context, repository string) (githubcli.RepositoryMetadata, error) {
+	if resolver.metadataByRepo != nil {
+		if metadata, exists := resolver.metadataByRepo[repository]; exists {
+			return metadata, resolver.err
+		}
+	}
+	return resolver.metadata, resolver.err
+}

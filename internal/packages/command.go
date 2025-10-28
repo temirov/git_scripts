@@ -1,22 +1,23 @@
 package packages
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 
 	"github.com/temirov/gix/internal/ghcr"
+	"github.com/temirov/gix/internal/githubcli"
+	"github.com/temirov/gix/internal/gitrepo"
 	"github.com/temirov/gix/internal/repos/dependencies"
 	"github.com/temirov/gix/internal/repos/shared"
 	"github.com/temirov/gix/internal/utils"
 	flagutils "github.com/temirov/gix/internal/utils/flags"
 	rootutils "github.com/temirov/gix/internal/utils/roots"
+	"github.com/temirov/gix/internal/workflow"
 )
 
 const (
@@ -69,6 +70,7 @@ type CommandBuilder struct {
 	RepositoryMetadataResolver RepositoryMetadataResolver
 	WorkingDirectoryResolver   WorkingDirectoryResolver
 	RepositoryDiscoverer       shared.RepositoryDiscoverer
+	TaskRunnerFactory          func(workflow.Dependencies) TaskRunnerExecutor
 }
 
 // WorkingDirectoryResolver resolves the directory containing the active repository.
@@ -118,75 +120,83 @@ func (builder *CommandBuilder) runPurge(command *cobra.Command, arguments []stri
 		return metadataResolverError
 	}
 
+	humanReadable := false
+	gitExecutor, executorError := dependencies.ResolveGitExecutor(builder.GitExecutor, logger, humanReadable)
+	if executorError != nil {
+		return executorError
+	}
+
+	resolvedRepositoryManager, managerError := dependencies.ResolveGitRepositoryManager(builder.RepositoryManager, gitExecutor)
+	if managerError != nil {
+		return managerError
+	}
+
+	var repositoryManager *gitrepo.RepositoryManager
+	if typedManager, ok := resolvedRepositoryManager.(*gitrepo.RepositoryManager); ok {
+		repositoryManager = typedManager
+	} else {
+		constructedManager, constructedManagerError := gitrepo.NewRepositoryManager(gitExecutor)
+		if constructedManagerError != nil {
+			return constructedManagerError
+		}
+		repositoryManager = constructedManager
+	}
+
+	resolvedGitHubResolver, resolverError := dependencies.ResolveGitHubResolver(builder.GitHubResolver, gitExecutor)
+	if resolverError != nil {
+		return resolverError
+	}
+
+	var githubClient *githubcli.Client
+	if typedClient, ok := resolvedGitHubResolver.(*githubcli.Client); ok {
+		githubClient = typedClient
+	} else {
+		constructedClient, constructedClientError := githubcli.NewClient(gitExecutor)
+		if constructedClientError != nil {
+			return constructedClientError
+		}
+		githubClient = constructedClient
+	}
+
 	repositoryDiscoverer := dependencies.ResolveRepositoryDiscoverer(builder.RepositoryDiscoverer)
-	repositoryPaths, discoveryError := repositoryDiscoverer.DiscoverRepositories(executionOptions.RepositoryRoots)
-	if discoveryError != nil {
-		logger.Error(
-			repositoryDiscoveryFailedMessageConstant,
-			zap.Strings(repositoryRootsLogFieldNameConstant, executionOptions.RepositoryRoots),
-			zap.Error(discoveryError),
-		)
-		return fmt.Errorf(repositoryDiscoveryErrorTemplateConstant, discoveryError)
+	fileSystem := dependencies.ResolveFileSystem(nil)
+
+	taskDependencies := workflow.Dependencies{
+		Logger:               logger,
+		RepositoryDiscoverer: repositoryDiscoverer,
+		GitExecutor:          gitExecutor,
+		RepositoryManager:    repositoryManager,
+		GitHubClient:         githubClient,
+		FileSystem:           fileSystem,
+		Prompter:             nil,
+		Output:               command.OutOrStdout(),
+		Errors:               command.ErrOrStderr(),
 	}
 
-	var executionErrors []error
+	taskRunner := resolveTaskRunner(builder.TaskRunnerFactory, taskDependencies)
 
-	for _, repositoryPath := range repositoryPaths {
-		normalizedRepositoryPath := filepath.Clean(repositoryPath)
-
-		repositoryMetadata, metadataError := repositoryMetadataResolver.ResolveMetadata(command.Context(), normalizedRepositoryPath)
-		if metadataError != nil {
-			if errors.Is(metadataError, context.Canceled) || errors.Is(metadataError, context.DeadlineExceeded) {
-				return metadataError
-			}
-
-			logger.Error(
-				repositoryMetadataFailedMessageConstant,
-				zap.String(repositoryPathLogFieldNameConstant, normalizedRepositoryPath),
-				zap.Error(metadataError),
-			)
-
-			wrappedMetadataError := fmt.Errorf(repositoryMetadataResolutionErrorTemplateConstant, metadataError)
-			executionErrors = append(executionErrors, wrappedMetadataError)
-			continue
-		}
-
-		packageName := strings.TrimSpace(executionOptions.PackageNameOverride)
-		if len(packageName) == 0 {
-			packageName = repositoryMetadata.DefaultPackageName
-		}
-
-		purgeOptions := PurgeOptions{
-			Owner:       repositoryMetadata.Owner,
-			PackageName: packageName,
-			OwnerType:   repositoryMetadata.OwnerType,
-			TokenSource: executionOptions.TokenSource,
-			DryRun:      executionOptions.DryRun,
-		}
-
-		_, executionError := purgeService.Execute(command.Context(), purgeOptions)
-		if executionError != nil {
-			if errors.Is(executionError, context.Canceled) || errors.Is(executionError, context.DeadlineExceeded) {
-				return executionError
-			}
-
-			logger.Error(
-				repositoryPurgeFailedMessageConstant,
-				zap.String(repositoryPathLogFieldNameConstant, normalizedRepositoryPath),
-				zap.Error(executionError),
-			)
-
-			wrappedExecutionError := fmt.Errorf(commandExecutionErrorTemplateConstant, executionError)
-			executionErrors = append(executionErrors, wrappedExecutionError)
-			continue
-		}
+	actionOptions := map[string]any{
+		"service":           purgeService,
+		"metadata_resolver": repositoryMetadataResolver,
+		"token_source":      executionOptions.TokenSource,
+		"package_override":  executionOptions.PackageNameOverride,
+		"dry_run":           executionOptions.DryRun,
 	}
 
-	if len(executionErrors) > 0 {
-		return errors.Join(executionErrors...)
+	taskDefinition := workflow.TaskDefinition{
+		Name:        "Purge package versions",
+		EnsureClean: false,
+		Actions: []workflow.TaskActionDefinition{
+			{Type: taskActionPackagesPurge, Options: actionOptions},
+		},
 	}
 
-	return nil
+	runtimeOptions := workflow.RuntimeOptions{
+		DryRun:    executionOptions.DryRun,
+		AssumeYes: executionFlags.AssumeYes,
+	}
+
+	return taskRunner.Run(command.Context(), executionOptions.RepositoryRoots, []workflow.TaskDefinition{taskDefinition}, runtimeOptions)
 }
 
 func (builder *CommandBuilder) parseCommandOptions(command *cobra.Command, arguments []string, executionFlags utils.ExecutionFlags, executionFlagsAvailable bool) (commandExecutionOptions, error) {
