@@ -11,6 +11,7 @@
 - Refreshed README and workflow examples to use `branch default` instead of `branch migrate`.
 - Enhanced safety gates and automation for default branch promotion.
 - Streamlined configuration and command hierarchy for branch management commands.
+- Added `repo rm` command to purge history via git-filter-repo with task-runner orchestration and dry-run previews.
 - Routed the workflow CLI through the shared task runner so declarative steps execute via workflow tasks while retaining legacy audit report file output and stdout banners.
 
 ### Bug Fixes 🐛

@@ -24,6 +24,7 @@ const (
 	reposIntegrationRenameActionCommand         = "rename"
 	reposIntegrationUpdateCanonicalAction       = "update-to-canonical"
 	reposIntegrationUpdateProtocolAction        = "update-protocol"
+	reposIntegrationHistoryCommand              = "rm"
 	reposIntegrationDryRunFlag                  = "--dry-run"
 	reposIntegrationYesFlag                     = "--yes"
 	reposIntegrationOwnerFlag                   = "--owner"
@@ -60,6 +61,7 @@ const (
 	reposIntegrationProtocolCaseName            = "convert_protocol"
 	reposIntegrationProtocolConfigCaseName      = "convert_protocol_config"
 	reposIntegrationProtocolConfigDryRunCase    = "convert_protocol_config_dry_run_literal"
+	reposIntegrationHistoryRemoveCaseName       = "history_remove_dry_run"
 	reposIntegrationProtocolHelpCaseName        = "protocol_help_missing_flags"
 	reposIntegrationProtocolUsageSnippet        = "gix repo remote update-protocol [flags]"
 	reposIntegrationProtocolMissingFlagsMessage = "specify both --from and --to"
@@ -447,6 +449,49 @@ func TestReposCommandIntegration(testInstance *testing.T) {
 				*arguments = append(*arguments, reposIntegrationConfigFlagName, configPath)
 			},
 			omitRepositoryArgument: true,
+		},
+		{
+			name: reposIntegrationHistoryRemoveCaseName,
+			setup: func(testInstance *testing.T) (string, string) {
+				repositoryPath, extendedPath := initializeRepositoryWithStub(testInstance)
+				secretFilePath := filepath.Join(repositoryPath, "secrets.txt")
+				require.NoError(testInstance, os.WriteFile(secretFilePath, []byte("classified\n"), 0o644))
+
+				nameConfig := exec.Command(reposIntegrationGitExecutable, "-C", repositoryPath, "config", "user.name", reposIntegrationGitUserName)
+				nameConfig.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+				require.NoError(testInstance, nameConfig.Run())
+
+				emailConfig := exec.Command(reposIntegrationGitExecutable, "-C", repositoryPath, "config", "user.email", reposIntegrationGitUserEmail)
+				emailConfig.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+				require.NoError(testInstance, emailConfig.Run())
+
+				addCommand := exec.Command(reposIntegrationGitExecutable, "-C", repositoryPath, "add", "secrets.txt")
+				addCommand.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+				require.NoError(testInstance, addCommand.Run())
+
+				commitCommand := exec.Command(reposIntegrationGitExecutable, "-C", repositoryPath, "commit", "-m", "add secret")
+				commitCommand.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+				require.NoError(testInstance, commitCommand.Run())
+
+				return repositoryPath, extendedPath
+			},
+			arguments: []string{
+				reposIntegrationRunSubcommand,
+				reposIntegrationModulePathConstant,
+				reposIntegrationLogLevelFlag,
+				reposIntegrationErrorLevel,
+				reposIntegrationRepoNamespaceCommand,
+				reposIntegrationHistoryCommand,
+				reposIntegrationDryRunFlag + "=yes",
+				"secrets.txt",
+			},
+			expectedOutput: func(repositoryPath string) string {
+				return fmt.Sprintf("PLAN-HISTORY-PURGE: %s paths=secrets.txt remote=origin push=true restore=true push_missing=false\n", repositoryPath)
+			},
+			verify: func(testInstance *testing.T, repositoryPath string) {
+				_, statError := os.Stat(filepath.Join(repositoryPath, "secrets.txt"))
+				require.NoError(testInstance, statError)
+			},
 		},
 	}
 

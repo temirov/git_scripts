@@ -11,6 +11,7 @@ type ToolsConfiguration struct {
 	Remotes  RemotesConfiguration  `mapstructure:"remotes"`
 	Protocol ProtocolConfiguration `mapstructure:"protocol"`
 	Rename   RenameConfiguration   `mapstructure:"rename"`
+	Remove   RemoveConfiguration   `mapstructure:"remove"`
 }
 
 // RemotesConfiguration describes configuration values for repo-remote-update.
@@ -39,6 +40,17 @@ type RenameConfiguration struct {
 	IncludeOwner         bool     `mapstructure:"include_owner"`
 }
 
+// RemoveConfiguration describes configuration values for repo history removal.
+type RemoveConfiguration struct {
+	DryRun          bool     `mapstructure:"dry_run"`
+	AssumeYes       bool     `mapstructure:"assume_yes"`
+	RepositoryRoots []string `mapstructure:"roots"`
+	Remote          string   `mapstructure:"remote"`
+	Push            bool     `mapstructure:"push"`
+	Restore         bool     `mapstructure:"restore"`
+	PushMissing     bool     `mapstructure:"push_missing"`
+}
+
 // DefaultToolsConfiguration returns baseline configuration values for repository commands.
 func DefaultToolsConfiguration() ToolsConfiguration {
 	return ToolsConfiguration{
@@ -61,6 +73,15 @@ func DefaultToolsConfiguration() ToolsConfiguration {
 			RequireCleanWorktree: false,
 			RepositoryRoots:      nil,
 			IncludeOwner:         false,
+		},
+		Remove: RemoveConfiguration{
+			DryRun:          false,
+			AssumeYes:       false,
+			RepositoryRoots: nil,
+			Remote:          "",
+			Push:            true,
+			Restore:         true,
+			PushMissing:     false,
 		},
 	}
 }
@@ -87,4 +108,17 @@ func (configuration RenameConfiguration) sanitize() RenameConfiguration {
 	sanitized := configuration
 	sanitized.RepositoryRoots = rootutils.SanitizeConfigured(configuration.RepositoryRoots)
 	return sanitized
+}
+
+// sanitize normalizes remove configuration values.
+func (configuration RemoveConfiguration) sanitize() RemoveConfiguration {
+	sanitized := configuration
+	sanitized.RepositoryRoots = rootutils.SanitizeConfigured(configuration.RepositoryRoots)
+	sanitized.Remote = strings.TrimSpace(configuration.Remote)
+	return sanitized
+}
+
+// Sanitize normalizes remove configuration values.
+func (configuration RemoveConfiguration) Sanitize() RemoveConfiguration {
+	return configuration.sanitize()
 }

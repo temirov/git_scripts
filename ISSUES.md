@@ -57,7 +57,7 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
             }; f"
             NB: the command shall work across repos only through tasks interface with the additiona logic of how to version different repos
         Resolution: Added a `repo release` command that annotates tags with customizable messages, pushes them to the chosen remote, and supports dry-run safety checks across repositories.
-    - [ ] [GX-14] Implement a full erasure of a file from git. Make it a subcommand under `repo` command. Call it `rm`. Look at the script below. Use if for inspiration -- dont copy the flow/logic but understand the steps required for the removal of a file from the git history
+    - [x] [GX-14] Implement a full erasure of a file from git. Make it a subcommand under `repo` command. Call it `rm`. Look at the script below. Use if for inspiration -- dont copy the flow/logic but understand the steps required for the removal of a file from the git history
         ```shell
         #!/usr/bin/env bash
         set -euo pipefail
@@ -259,6 +259,7 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
 
         echo "Purged from history: ${purge_paths[*]}"
         ```
+        Resolution: Added a task-runner-backed `repo rm` command and history purge action that wraps git-filter-repo, supports dry-run planning, restores remotes/upstreams, and updates docs/tests.
     - [ ] [GX-21] Implement a task to perform replacements in files. The input is a glob to be used to identify the files (*.go, *.sum etc), a string to find, a string to replace, a command to run after the successfull replacement, a safeguard before the execution(the conditioons can be clean tree, master branch, a presence of some file or folder). Look at tols ns-rewrite for an example of a specialized case where we replace a package name.
 
 
