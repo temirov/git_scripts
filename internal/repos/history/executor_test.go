@@ -188,6 +188,7 @@ func TestExecutorRunsFilterRepoAndPush(testInstance *testing.T) {
 
 	require.Contains(testInstance, executedCommands, "fetch --prune --tags origin")
 	require.Contains(testInstance, executedCommands, "filter-repo --path missing.txt --path secrets.txt --invert-paths --prune-empty always --force")
+	require.Contains(testInstance, executedCommands, "filter-repo --path secrets.txt --invert-paths --prune-empty always --force")
 	require.Contains(testInstance, executedCommands, "push --force --all origin")
 	require.Contains(testInstance, executedCommands, "push --force --tags origin")
 }
