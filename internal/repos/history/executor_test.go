@@ -108,9 +108,7 @@ func TestExecutorDryRunProducesPlan(testInstance *testing.T) {
 func TestExecutorSkipsWhenPathsMissing(testInstance *testing.T) {
 	executor := newScriptedGitExecutor()
 	executor.setResponse([]string{"rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"}, execshell.ExecutionResult{StandardOutput: "origin/main\n"})
-	executor.setError([]string{"rev-list", "--quiet", "--all", "--", "secrets.txt"}, func(details execshell.CommandDetails) error {
-		return execshell.CommandFailedError{Command: execshell.ShellCommand{Name: execshell.CommandGit, Details: details}, Result: execshell.ExecutionResult{ExitCode: 1}}
-	})
+	executor.setResponse([]string{"rev-list", "--all", "--", "secrets.txt"}, execshell.ExecutionResult{StandardOutput: ""})
 
 	repoManager := stubRepositoryManager{remoteURL: "https://github.com/example/repo.git"}
 	outputBuffer := &strings.Builder{}
@@ -142,14 +140,15 @@ func TestExecutorSkipsWhenPathsMissing(testInstance *testing.T) {
 	}
 
 	require.Contains(testInstance, commandHistory, []string{"add", ".gitignore"})
-	require.Contains(testInstance, commandHistory, []string{"rev-list", "--quiet", "--all", "--", "secrets.txt"})
+	require.Contains(testInstance, commandHistory, []string{"rev-list", "--all", "--", "secrets.txt"})
 	require.Contains(testInstance, outputBuffer.String(), "HISTORY-SKIP")
 }
 
 func TestExecutorRunsFilterRepoAndPush(testInstance *testing.T) {
 	executor := newScriptedGitExecutor()
 	executor.setResponse([]string{"rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"}, execshell.ExecutionResult{StandardOutput: "origin/main\n"})
-	executor.setResponse([]string{"rev-list", "--quiet", "--all", "--", "secrets.txt"}, execshell.ExecutionResult{})
+	executor.setResponse([]string{"rev-list", "--all", "--", "missing.txt"}, execshell.ExecutionResult{StandardOutput: ""})
+	executor.setResponse([]string{"rev-list", "--all", "--", "secrets.txt"}, execshell.ExecutionResult{StandardOutput: "abcd1234\n"})
 	executor.setResponse([]string{"for-each-ref", "--format=%(refname)", "refs/filter-repo/"}, execshell.ExecutionResult{StandardOutput: ""})
 	executor.setResponse([]string{"remote"}, execshell.ExecutionResult{StandardOutput: "origin\n"})
 	executor.setResponse([]string{"for-each-ref", "--format=%(refname)", "refs/heads/"}, execshell.ExecutionResult{StandardOutput: "refs/heads/main"})
@@ -169,7 +168,7 @@ func TestExecutorRunsFilterRepoAndPush(testInstance *testing.T) {
 	repoPath := testInstance.TempDir()
 	options := history.Options{
 		RepositoryPath: repoPath,
-		Paths:          []string{"secrets.txt"},
+		Paths:          []string{"missing.txt", "secrets.txt"},
 		RemoteName:     "",
 		Push:           true,
 		Restore:        true,
@@ -186,7 +185,7 @@ func TestExecutorRunsFilterRepoAndPush(testInstance *testing.T) {
 		executedCommands = append(executedCommands, strings.Join(details.Arguments, " "))
 	}
 
-	require.Contains(testInstance, executedCommands, "filter-repo --path secrets.txt --invert-paths --prune-empty always --force")
+	require.Contains(testInstance, executedCommands, "filter-repo --path missing.txt --path secrets.txt --invert-paths --prune-empty always --force")
 	require.Contains(testInstance, executedCommands, "push --force --all origin")
 	require.Contains(testInstance, executedCommands, "push --force --tags origin")
 }
