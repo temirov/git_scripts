@@ -3,18 +3,20 @@ package branches
 import (
 	"context"
 	"errors"
-	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 
-	"github.com/temirov/gix/internal/execshell"
-	"github.com/temirov/gix/internal/repos/discovery"
+	"github.com/temirov/gix/internal/githubcli"
+	"github.com/temirov/gix/internal/gitrepo"
+	"github.com/temirov/gix/internal/repos/dependencies"
 	"github.com/temirov/gix/internal/repos/prompt"
 	"github.com/temirov/gix/internal/repos/shared"
 	flagutils "github.com/temirov/gix/internal/utils/flags"
 	rootutils "github.com/temirov/gix/internal/utils/roots"
+	"github.com/temirov/gix/internal/workflow"
 )
 
 const (
@@ -26,11 +28,6 @@ const (
 	flagLimitDescriptionConstant                = "Maximum number of closed pull requests to examine"
 	invalidRemoteNameErrorMessageConstant       = "remote name must not be empty or whitespace"
 	invalidPullRequestLimitErrorMessageConstant = "limit must be greater than zero"
-	repositoryDiscoveryErrorTemplateConstant    = "repository discovery failed: %w"
-	logMessageRepositoryDiscoveryFailedConstant = "Repository discovery failed"
-	logMessageRepositoryCleanupFailedConstant   = "Repository cleanup failed"
-	logFieldRepositoryRootsConstant             = "roots"
-	logFieldRepositoryPathConstant              = "repository"
 )
 
 // RepositoryDiscoverer locates Git repositories beneath the provided roots.
@@ -44,12 +41,27 @@ type LoggerProvider func() *zap.Logger
 // CommandBuilder assembles the repo-prs-purge Cobra command.
 type CommandBuilder struct {
 	LoggerProvider               LoggerProvider
-	Executor                     CommandExecutor
-	WorkingDirectory             string
-	RepositoryDiscoverer         RepositoryDiscoverer
+	Discoverer                   shared.RepositoryDiscoverer
+	GitExecutor                  shared.GitExecutor
+	GitManager                   shared.GitRepositoryManager
+	FileSystem                   shared.FileSystem
 	HumanReadableLoggingProvider func() bool
 	ConfigurationProvider        func() CommandConfiguration
 	PrompterFactory              func(*cobra.Command) shared.ConfirmationPrompter
+	TaskRunnerFactory            func(workflow.Dependencies) TaskRunnerExecutor
+}
+
+// TaskRunnerExecutor coordinates workflow task execution.
+type TaskRunnerExecutor interface {
+	Run(ctx context.Context, roots []string, definitions []workflow.TaskDefinition, options workflow.RuntimeOptions) error
+}
+
+type taskRunnerAdapter struct {
+	runner workflow.TaskRunner
+}
+
+func (adapter taskRunnerAdapter) Run(ctx context.Context, roots []string, definitions []workflow.TaskDefinition, options workflow.RuntimeOptions) error {
+	return adapter.runner.Run(ctx, roots, definitions, options)
 }
 
 // Build constructs the repo-prs-purge command.
@@ -74,47 +86,72 @@ func (builder *CommandBuilder) run(command *cobra.Command, arguments []string) e
 	}
 
 	logger := builder.resolveLogger()
-	executor, executorError := builder.resolveExecutor(logger)
+	humanReadable := false
+	if builder.HumanReadableLoggingProvider != nil {
+		humanReadable = builder.HumanReadableLoggingProvider()
+	}
+
+	gitExecutor, executorError := dependencies.ResolveGitExecutor(builder.GitExecutor, logger, humanReadable)
 	if executorError != nil {
 		return executorError
 	}
 
+	gitManager, managerError := dependencies.ResolveGitRepositoryManager(builder.GitManager, gitExecutor)
+	if managerError != nil {
+		return managerError
+	}
+
+	repositoryManager, ok := gitManager.(*gitrepo.RepositoryManager)
+	if !ok {
+		constructedManager, constructedManagerError := gitrepo.NewRepositoryManager(gitExecutor)
+		if constructedManagerError != nil {
+			return constructedManagerError
+		}
+		repositoryManager = constructedManager
+	}
+
+	repositoryDiscoverer := dependencies.ResolveRepositoryDiscoverer(builder.Discoverer)
+	fileSystem := dependencies.ResolveFileSystem(builder.FileSystem)
 	prompter := builder.resolvePrompter(command)
 
-	repositoryDiscoverer := builder.resolveRepositoryDiscoverer()
-	repositories, discoveryError := repositoryDiscoverer.DiscoverRepositories(options.RepositoryRoots)
-	if discoveryError != nil {
-		logger.Error(logMessageRepositoryDiscoveryFailedConstant,
-			zap.Strings(logFieldRepositoryRootsConstant, options.RepositoryRoots),
-			zap.Error(discoveryError),
-		)
-		return fmt.Errorf(repositoryDiscoveryErrorTemplateConstant, discoveryError)
+	githubClient, clientError := githubcli.NewClient(gitExecutor)
+	if clientError != nil {
+		return clientError
 	}
 
-	service, serviceError := NewService(logger, executor, prompter)
-	if serviceError != nil {
-		return serviceError
+	taskDependencies := workflow.Dependencies{
+		Logger:               logger,
+		RepositoryDiscoverer: repositoryDiscoverer,
+		GitExecutor:          gitExecutor,
+		RepositoryManager:    repositoryManager,
+		GitHubClient:         githubClient,
+		FileSystem:           fileSystem,
+		Prompter:             prompter,
+		Output:               command.OutOrStdout(),
+		Errors:               command.ErrOrStderr(),
 	}
 
-	for repositoryIndex := range repositories {
-		repositoryPath := repositories[repositoryIndex]
-		repositoryOptions := options.CleanupOptions
-		repositoryOptions.WorkingDirectory = repositoryPath
+	taskRunner := builder.resolveTaskRunner(taskDependencies)
 
-		cleanupError := service.Cleanup(command.Context(), repositoryOptions)
-		if cleanupError != nil {
-			logger.Warn(logMessageRepositoryCleanupFailedConstant,
-				zap.String(logFieldRepositoryPathConstant, repositoryPath),
-				zap.Error(cleanupError),
-			)
-
-			if errors.Is(cleanupError, context.Canceled) || errors.Is(cleanupError, context.DeadlineExceeded) {
-				return cleanupError
-			}
-		}
+	actionOptions := map[string]any{
+		"remote": options.CleanupOptions.RemoteName,
+		"limit":  strconv.Itoa(options.CleanupOptions.PullRequestLimit),
 	}
 
-	return nil
+	taskDefinition := workflow.TaskDefinition{
+		Name:        "Cleanup pull request branches",
+		EnsureClean: false,
+		Actions: []workflow.TaskActionDefinition{
+			{Type: "repo.branches.cleanup", Options: actionOptions},
+		},
+		Commit: workflow.TaskCommitDefinition{},
+	}
+
+	runtimeOptions := workflow.RuntimeOptions{
+		DryRun:    options.CleanupOptions.DryRun,
+		AssumeYes: options.CleanupOptions.AssumeYes,
+	}
+	return taskRunner.Run(command.Context(), options.RepositoryRoots, []workflow.TaskDefinition{taskDefinition}, runtimeOptions)
 }
 
 type commandOptions struct {
@@ -201,32 +238,6 @@ func (builder *CommandBuilder) resolveLogger() *zap.Logger {
 	return logger
 }
 
-func (builder *CommandBuilder) resolveExecutor(logger *zap.Logger) (CommandExecutor, error) {
-	if builder.Executor != nil {
-		return builder.Executor, nil
-	}
-
-	commandRunner := execshell.NewOSCommandRunner()
-	humanReadableLogging := false
-	if builder.HumanReadableLoggingProvider != nil {
-		humanReadableLogging = builder.HumanReadableLoggingProvider()
-	}
-	shellExecutor, creationError := execshell.NewShellExecutor(logger, commandRunner, humanReadableLogging)
-	if creationError != nil {
-		return nil, creationError
-	}
-
-	return shellExecutor, nil
-}
-
-func (builder *CommandBuilder) resolveRepositoryDiscoverer() RepositoryDiscoverer {
-	if builder.RepositoryDiscoverer != nil {
-		return builder.RepositoryDiscoverer
-	}
-
-	return discovery.NewFilesystemRepositoryDiscoverer()
-}
-
 func (builder *CommandBuilder) resolvePrompter(command *cobra.Command) shared.ConfirmationPrompter {
 	if builder.PrompterFactory != nil {
 		if prompter := builder.PrompterFactory(command); prompter != nil {
@@ -248,4 +259,11 @@ func (builder *CommandBuilder) resolveConfiguration() CommandConfiguration {
 
 	provided := builder.ConfigurationProvider()
 	return provided.Sanitize()
+}
+
+func (builder *CommandBuilder) resolveTaskRunner(dependencies workflow.Dependencies) TaskRunnerExecutor {
+	if builder.TaskRunnerFactory != nil {
+		return builder.TaskRunnerFactory(dependencies)
+	}
+	return taskRunnerAdapter{runner: workflow.NewTaskRunner(dependencies)}
 }

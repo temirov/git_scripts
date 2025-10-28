@@ -9,10 +9,13 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/temirov/gix/internal/commitmsg"
+	"github.com/temirov/gix/internal/githubcli"
+	"github.com/temirov/gix/internal/gitrepo"
 	"github.com/temirov/gix/internal/repos/dependencies"
 	"github.com/temirov/gix/internal/repos/shared"
 	flagutils "github.com/temirov/gix/internal/utils/flags"
 	rootutils "github.com/temirov/gix/internal/utils/roots"
+	"github.com/temirov/gix/internal/workflow"
 	"github.com/temirov/gix/pkg/llm"
 )
 
@@ -33,6 +36,12 @@ const (
 	apiKeyEnvFlagUsage             = "Environment variable providing the LLM API key"
 	timeoutFlagName                = "timeout-seconds"
 	timeoutFlagUsage               = "Override the LLM request timeout in seconds"
+
+	taskTypeCommitMessage       = "commit.message.generate"
+	taskOptionCommitDiffSource  = "diff_source"
+	taskOptionCommitMaxTokens   = "max_tokens"
+	taskOptionCommitTemperature = "temperature"
+	taskOptionCommitClient      = "client"
 )
 
 // ClientFactory builds chat clients from configuration.
@@ -42,9 +51,14 @@ type ClientFactory func(config llm.Config) (commitmsg.ChatClient, error)
 type MessageCommandBuilder struct {
 	LoggerProvider               LoggerProvider
 	GitExecutor                  shared.GitExecutor
+	GitManager                   shared.GitRepositoryManager
+	GitHubResolver               shared.GitHubMetadataResolver
+	Discoverer                   shared.RepositoryDiscoverer
+	FileSystem                   shared.FileSystem
 	ConfigurationProvider        func() MessageConfiguration
 	HumanReadableLoggingProvider func() bool
 	ClientFactory                ClientFactory
+	TaskRunnerFactory            func(workflow.Dependencies) TaskRunnerExecutor
 }
 
 // Build constructs the commit message command.
@@ -142,10 +156,35 @@ func (builder *MessageCommandBuilder) run(command *cobra.Command, arguments []st
 	if builder.HumanReadableLoggingProvider != nil {
 		humanReadable = builder.HumanReadableLoggingProvider()
 	}
+
 	gitExecutor, executorError := dependencies.ResolveGitExecutor(builder.GitExecutor, logger, humanReadable)
 	if executorError != nil {
 		return executorError
 	}
+
+	gitManager, managerError := dependencies.ResolveGitRepositoryManager(builder.GitManager, gitExecutor)
+	if managerError != nil {
+		return managerError
+	}
+
+	var repositoryManager *gitrepo.RepositoryManager
+	if concrete, ok := gitManager.(*gitrepo.RepositoryManager); ok {
+		repositoryManager = concrete
+	} else {
+		constructedManager, constructedManagerError := gitrepo.NewRepositoryManager(gitExecutor)
+		if constructedManagerError != nil {
+			return constructedManagerError
+		}
+		repositoryManager = constructedManager
+	}
+
+	githubClient, githubClientError := githubcli.NewClient(gitExecutor)
+	if githubClientError != nil {
+		return githubClientError
+	}
+
+	repositoryDiscoverer := dependencies.ResolveRepositoryDiscoverer(builder.Discoverer)
+	fileSystem := dependencies.ResolveFileSystem(builder.FileSystem)
 
 	clientFactory := builder.ClientFactory
 	if clientFactory == nil {
@@ -166,37 +205,48 @@ func (builder *MessageCommandBuilder) run(command *cobra.Command, arguments []st
 		return clientError
 	}
 
-	generator := commitmsg.Generator{
-		GitExecutor: gitExecutor,
-		Client:      client,
-		Logger:      logger,
+	taskDependencies := workflow.Dependencies{
+		Logger:               logger,
+		RepositoryDiscoverer: repositoryDiscoverer,
+		GitExecutor:          gitExecutor,
+		RepositoryManager:    repositoryManager,
+		GitHubClient:         githubClient,
+		FileSystem:           fileSystem,
+		Prompter:             nil,
+		Output:               command.OutOrStdout(),
+		Errors:               command.ErrOrStderr(),
 	}
 
-	request, buildError := generator.BuildRequest(command.Context(), commitmsg.Options{
-		RepositoryPath: repositoryPath,
-		Source:         diffSource,
-		MaxTokens:      maxTokens,
-		Temperature:    temperaturePointer,
-	})
-	if buildError != nil {
-		return buildError
+	taskRunner := resolveTaskRunner(builder.TaskRunnerFactory, taskDependencies)
+
+	actionOptions := map[string]any{
+		taskOptionCommitDiffSource: string(diffSource),
+		taskOptionCommitMaxTokens:  maxTokens,
+		taskOptionCommitClient:     client,
+	}
+	if temperaturePointer != nil {
+		actionOptions[taskOptionCommitTemperature] = *temperaturePointer
 	}
 
-	if dryRun {
-		output := command.OutOrStdout()
-		fmt.Fprintln(output, request.Messages[0].Content)
-		fmt.Fprintln(output)
-		fmt.Fprintln(output, request.Messages[1].Content)
-		return nil
+	taskDefinition := workflow.TaskDefinition{
+		Name:        "Generate commit message",
+		EnsureClean: false,
+		Actions: []workflow.TaskActionDefinition{
+			{Type: taskTypeCommitMessage, Options: actionOptions},
+		},
 	}
 
-	response, chatError := client.Chat(command.Context(), request)
-	if chatError != nil {
-		return chatError
+	runtimeOptions := workflow.RuntimeOptions{
+		DryRun:    dryRun,
+		AssumeYes: false,
 	}
 
-	fmt.Fprintln(command.OutOrStdout(), strings.TrimSpace(response))
-	return nil
+	return taskRunner.Run(
+		command.Context(),
+		[]string{repositoryPath},
+		[]workflow.TaskDefinition{taskDefinition},
+		runtimeOptions,
+	)
 }
 
 func (builder *MessageCommandBuilder) resolveConfiguration() MessageConfiguration {

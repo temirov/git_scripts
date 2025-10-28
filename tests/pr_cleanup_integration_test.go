@@ -109,7 +109,7 @@ func TestPullRequestCleanupIntegration(testInstance *testing.T) {
 		LoggerProvider: func() *zap.Logger {
 			return zap.NewNop()
 		},
-		Executor: shellExecutor,
+		GitExecutor: shellExecutor,
 		PrompterFactory: func(*cobra.Command) shared.ConfirmationPrompter {
 			return automaticConfirmationPrompter{}
 		},

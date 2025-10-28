@@ -9,10 +9,13 @@ import (
 	"github.com/spf13/cobra"
 
 	changeloggen "github.com/temirov/gix/internal/changelog"
+	"github.com/temirov/gix/internal/githubcli"
+	"github.com/temirov/gix/internal/gitrepo"
 	"github.com/temirov/gix/internal/repos/dependencies"
 	"github.com/temirov/gix/internal/repos/shared"
 	flagutils "github.com/temirov/gix/internal/utils/flags"
 	rootutils "github.com/temirov/gix/internal/utils/roots"
+	"github.com/temirov/gix/internal/workflow"
 	"github.com/temirov/gix/pkg/llm"
 )
 
@@ -40,6 +43,15 @@ const (
 	apiKeyEnvFlagUsage             = "Environment variable providing the LLM API key"
 	timeoutFlagName                = "timeout-seconds"
 	timeoutFlagUsage               = "Override the LLM request timeout in seconds"
+
+	taskTypeChangelogMessage       = "changelog.message.generate"
+	taskOptionChangelogVersion     = "version"
+	taskOptionChangelogReleaseDate = "release_date"
+	taskOptionChangelogSinceRef    = "since_reference"
+	taskOptionChangelogSinceDate   = "since_date"
+	taskOptionChangelogMaxTokens   = "max_tokens"
+	taskOptionChangelogTemperature = "temperature"
+	taskOptionChangelogClient      = "client"
 )
 
 // ClientFactory builds chat clients from configuration.
@@ -49,9 +61,14 @@ type ClientFactory func(config llm.Config) (changeloggen.ChatClient, error)
 type MessageCommandBuilder struct {
 	LoggerProvider               LoggerProvider
 	GitExecutor                  shared.GitExecutor
+	GitManager                   shared.GitRepositoryManager
+	GitHubResolver               shared.GitHubMetadataResolver
+	Discoverer                   shared.RepositoryDiscoverer
+	FileSystem                   shared.FileSystem
 	ConfigurationProvider        func() MessageConfiguration
 	HumanReadableLoggingProvider func() bool
 	ClientFactory                ClientFactory
+	TaskRunnerFactory            func(workflow.Dependencies) TaskRunnerExecutor
 }
 
 // Build constructs the changelog message command.
@@ -190,10 +207,35 @@ func (builder *MessageCommandBuilder) run(command *cobra.Command, arguments []st
 	if builder.HumanReadableLoggingProvider != nil {
 		humanReadable = builder.HumanReadableLoggingProvider()
 	}
+
 	gitExecutor, executorError := dependencies.ResolveGitExecutor(builder.GitExecutor, logger, humanReadable)
 	if executorError != nil {
 		return executorError
 	}
+
+	gitManager, managerError := dependencies.ResolveGitRepositoryManager(builder.GitManager, gitExecutor)
+	if managerError != nil {
+		return managerError
+	}
+
+	var repositoryManager *gitrepo.RepositoryManager
+	if concrete, ok := gitManager.(*gitrepo.RepositoryManager); ok {
+		repositoryManager = concrete
+	} else {
+		constructedManager, constructedManagerError := gitrepo.NewRepositoryManager(gitExecutor)
+		if constructedManagerError != nil {
+			return constructedManagerError
+		}
+		repositoryManager = constructedManager
+	}
+
+	githubClient, githubClientError := githubcli.NewClient(gitExecutor)
+	if githubClientError != nil {
+		return githubClientError
+	}
+
+	repositoryDiscoverer := dependencies.ResolveRepositoryDiscoverer(builder.Discoverer)
+	fileSystem := dependencies.ResolveFileSystem(builder.FileSystem)
 
 	clientFactory := builder.ClientFactory
 	if clientFactory == nil {
@@ -214,42 +256,53 @@ func (builder *MessageCommandBuilder) run(command *cobra.Command, arguments []st
 		return clientError
 	}
 
-	generator := changeloggen.Generator{
-		GitExecutor: gitExecutor,
-		Client:      client,
-		Logger:      logger,
+	taskDependencies := workflow.Dependencies{
+		Logger:               logger,
+		RepositoryDiscoverer: repositoryDiscoverer,
+		GitExecutor:          gitExecutor,
+		RepositoryManager:    repositoryManager,
+		GitHubClient:         githubClient,
+		FileSystem:           fileSystem,
+		Prompter:             nil,
+		Output:               command.OutOrStdout(),
+		Errors:               command.ErrOrStderr(),
 	}
 
-	options := changeloggen.Options{
-		RepositoryPath: repositoryPath,
-		Version:        version,
-		ReleaseDate:    releaseDate,
-		SinceReference: sinceReference,
-		SinceDate:      sinceDate,
-		MaxTokens:      maxTokens,
-		Temperature:    temperaturePointer,
+	taskRunner := resolveTaskRunner(builder.TaskRunnerFactory, taskDependencies)
+
+	actionOptions := map[string]any{
+		taskOptionChangelogVersion:     version,
+		taskOptionChangelogReleaseDate: releaseDate,
+		taskOptionChangelogSinceRef:    sinceReference,
+		taskOptionChangelogMaxTokens:   maxTokens,
+		taskOptionChangelogClient:      client,
+	}
+	if sinceDate != nil {
+		actionOptions[taskOptionChangelogSinceDate] = sinceDate
+	}
+	if temperaturePointer != nil {
+		actionOptions[taskOptionChangelogTemperature] = *temperaturePointer
 	}
 
-	request, buildError := generator.BuildRequest(command.Context(), options)
-	if buildError != nil {
-		return buildError
+	taskDefinition := workflow.TaskDefinition{
+		Name:        "Generate changelog section",
+		EnsureClean: false,
+		Actions: []workflow.TaskActionDefinition{
+			{Type: taskTypeChangelogMessage, Options: actionOptions},
+		},
 	}
 
-	if dryRun {
-		output := command.OutOrStdout()
-		fmt.Fprintln(output, request.Messages[0].Content)
-		fmt.Fprintln(output)
-		fmt.Fprintln(output, request.Messages[1].Content)
-		return nil
+	runtimeOptions := workflow.RuntimeOptions{
+		DryRun:    dryRun,
+		AssumeYes: false,
 	}
 
-	response, chatError := client.Chat(command.Context(), request)
-	if chatError != nil {
-		return chatError
-	}
-
-	fmt.Fprintln(command.OutOrStdout(), strings.TrimSpace(response))
-	return nil
+	return taskRunner.Run(
+		command.Context(),
+		[]string{repositoryPath},
+		[]workflow.TaskDefinition{taskDefinition},
+		runtimeOptions,
+	)
 }
 
 func (builder *MessageCommandBuilder) resolveConfiguration() MessageConfiguration {

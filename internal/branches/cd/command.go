@@ -8,10 +8,13 @@ import (
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 
+	"github.com/temirov/gix/internal/githubcli"
+	"github.com/temirov/gix/internal/gitrepo"
 	"github.com/temirov/gix/internal/repos/dependencies"
 	"github.com/temirov/gix/internal/repos/shared"
 	flagutils "github.com/temirov/gix/internal/utils/flags"
 	rootutils "github.com/temirov/gix/internal/utils/roots"
+	"github.com/temirov/gix/internal/workflow"
 )
 
 const (
@@ -34,6 +37,11 @@ type CommandBuilder struct {
 	GitExecutor                  shared.GitExecutor
 	HumanReadableLoggingProvider func() bool
 	ConfigurationProvider        func() CommandConfiguration
+	Discoverer                   shared.RepositoryDiscoverer
+	GitManager                   shared.GitRepositoryManager
+	GitHubResolver               shared.GitHubMetadataResolver
+	FileSystem                   shared.FileSystem
+	TaskRunnerFactory            func(workflow.Dependencies) TaskRunnerExecutor
 }
 
 // Build constructs the branch-cd command.
@@ -91,36 +99,69 @@ func (builder *CommandBuilder) run(command *cobra.Command, arguments []string) e
 		return executorError
 	}
 
-	service, serviceError := NewService(ServiceDependencies{GitExecutor: gitExecutor})
-	if serviceError != nil {
-		return serviceError
+	gitManager, managerError := dependencies.ResolveGitRepositoryManager(builder.GitManager, gitExecutor)
+	if managerError != nil {
+		return managerError
 	}
 
-	createIfMissing := configuration.CreateIfMissing
-	if len(remoteName) == 0 {
-		remoteName = defaultRemoteNameConstant
-	}
-
-	for _, repository := range repositoryRoots {
-		result, changeError := service.Change(command.Context(), Options{
-			RepositoryPath:  repository,
-			BranchName:      branchName,
-			RemoteName:      remoteName,
-			CreateIfMissing: createIfMissing,
-			DryRun:          dryRun,
-		})
-		if changeError != nil {
-			return changeError
+	var repositoryManager *gitrepo.RepositoryManager
+	if concrete, ok := gitManager.(*gitrepo.RepositoryManager); ok {
+		repositoryManager = concrete
+	} else {
+		constructedManager, constructedManagerError := gitrepo.NewRepositoryManager(gitExecutor)
+		if constructedManagerError != nil {
+			return constructedManagerError
 		}
-
-		message := fmt.Sprintf(changeSuccessMessageTemplateConstant, result.RepositoryPath, result.BranchName)
-		if result.BranchCreated && !dryRun {
-			message += changeCreatedSuffixConstant
-		}
-		fmt.Fprintln(command.OutOrStdout(), message)
+		repositoryManager = constructedManager
 	}
 
-	return nil
+	githubClient, githubClientError := githubcli.NewClient(gitExecutor)
+	if githubClientError != nil {
+		return githubClientError
+	}
+
+	repositoryDiscoverer := dependencies.ResolveRepositoryDiscoverer(builder.Discoverer)
+	fileSystem := dependencies.ResolveFileSystem(builder.FileSystem)
+
+	taskDependencies := workflow.Dependencies{
+		Logger:               logger,
+		RepositoryDiscoverer: repositoryDiscoverer,
+		GitExecutor:          gitExecutor,
+		RepositoryManager:    repositoryManager,
+		GitHubClient:         githubClient,
+		FileSystem:           fileSystem,
+		Prompter:             nil,
+		Output:               command.OutOrStdout(),
+		Errors:               command.ErrOrStderr(),
+	}
+
+	taskRunner := resolveTaskRunner(builder.TaskRunnerFactory, taskDependencies)
+
+	actionOptions := map[string]any{
+		taskOptionBranchName:   branchName,
+		taskOptionBranchRemote: remoteName,
+		taskOptionBranchCreate: configuration.CreateIfMissing,
+	}
+
+	taskDefinition := workflow.TaskDefinition{
+		Name:        fmt.Sprintf("Switch branch to %s", branchName),
+		EnsureClean: false,
+		Actions: []workflow.TaskActionDefinition{
+			{Type: taskTypeBranchChange, Options: actionOptions},
+		},
+	}
+
+	runtimeOptions := workflow.RuntimeOptions{
+		DryRun:    dryRun,
+		AssumeYes: false,
+	}
+
+	return taskRunner.Run(
+		command.Context(),
+		repositoryRoots,
+		[]workflow.TaskDefinition{taskDefinition},
+		runtimeOptions,
+	)
 }
 
 func (builder *CommandBuilder) resolveConfiguration() CommandConfiguration {

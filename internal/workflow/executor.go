@@ -12,6 +12,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/temirov/gix/internal/audit"
+	"github.com/temirov/gix/internal/execshell"
 	"github.com/temirov/gix/internal/githubcli"
 	"github.com/temirov/gix/internal/gitrepo"
 	"github.com/temirov/gix/internal/repos/shared"
@@ -86,8 +87,30 @@ func (executor *Executor) Execute(executionContext context.Context, roots []stri
 	}
 
 	repositoryStates := make([]*RepositoryState, 0, len(inspections))
+	existingRepositories := make(map[string]struct{})
 	for inspectionIndex := range inspections {
 		state := NewRepositoryState(inspections[inspectionIndex])
+		state.PathDepth = repositoryPathDepth(state.Path)
+		repositoryStates = append(repositoryStates, state)
+		existingRepositories[state.Path] = struct{}{}
+	}
+
+	for _, sanitizedRoot := range sanitizedRoots {
+		if _, alreadyPresent := existingRepositories[sanitizedRoot]; alreadyPresent {
+			continue
+		}
+		if executor.dependencies.GitExecutor != nil {
+			commandDetails := execshell.CommandDetails{
+				Arguments:        []string{"rev-parse", "--is-inside-work-tree"},
+				WorkingDirectory: sanitizedRoot,
+			}
+			result, gitError := executor.dependencies.GitExecutor.ExecuteGit(executionContext, commandDetails)
+			if gitError != nil || strings.TrimSpace(result.StandardOutput) != "true" {
+				continue
+			}
+		}
+		inspection := audit.RepositoryInspection{Path: sanitizedRoot, FolderName: filepath.Base(sanitizedRoot), IsGitRepository: true}
+		state := NewRepositoryState(inspection)
 		state.PathDepth = repositoryPathDepth(state.Path)
 		repositoryStates = append(repositoryStates, state)
 	}

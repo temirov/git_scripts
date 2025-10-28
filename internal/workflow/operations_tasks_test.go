@@ -3,9 +3,11 @@ package workflow
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io/fs"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -158,6 +160,57 @@ func TestTaskExecutorExecuteActionsReleaseRequiresTag(testInstance *testing.T) {
 	executionError := executor.executeActions(context.Background())
 	require.Error(testInstance, executionError)
 	require.Contains(testInstance, executionError.Error(), "release action requires 'tag'")
+}
+
+func TestTaskExecutorExecuteActionsBranchCleanup(testInstance *testing.T) {
+	originalHandler, handlerExists := taskActionHandlers["repo.branches.cleanup"]
+	RegisterTaskAction("repo.branches.cleanup", testBranchCleanupHandler)
+	defer func() {
+		if handlerExists {
+			taskActionHandlers["repo.branches.cleanup"] = originalHandler
+		} else {
+			delete(taskActionHandlers, "repo.branches.cleanup")
+		}
+	}()
+
+	executor := &branchCleanupExecutor{}
+	repository := NewRepositoryState(audit.RepositoryInspection{Path: "/repositories/sample"})
+	environment := &Environment{GitExecutor: executor}
+	actionParameters := map[string]any{
+		"remote": "origin",
+		"limit":  "25",
+	}
+	plan := taskPlan{actions: []taskAction{{actionType: "repo.branches.cleanup", parameters: actionParameters}}}
+	taskExecutor := newTaskExecutor(environment, repository, plan)
+
+	executionError := taskExecutor.executeActions(context.Background())
+	require.NoError(testInstance, executionError)
+	require.NotEmpty(testInstance, executor.gitCommands)
+	require.NotEmpty(testInstance, executor.githubCommands)
+	require.Equal(testInstance, "ls-remote", firstArgument(executor.gitCommands[0]))
+	require.Equal(testInstance, "pr", firstArgument(executor.githubCommands[0]))
+}
+
+func TestTaskExecutorExecuteActionsBranchCleanupRequiresRemote(testInstance *testing.T) {
+	originalHandler, handlerExists := taskActionHandlers["repo.branches.cleanup"]
+	RegisterTaskAction("repo.branches.cleanup", testBranchCleanupHandler)
+	defer func() {
+		if handlerExists {
+			taskActionHandlers["repo.branches.cleanup"] = originalHandler
+		} else {
+			delete(taskActionHandlers, "repo.branches.cleanup")
+		}
+	}()
+
+	executor := &branchCleanupExecutor{}
+	repository := NewRepositoryState(audit.RepositoryInspection{Path: "/repositories/sample"})
+	environment := &Environment{GitExecutor: executor}
+	plan := taskPlan{actions: []taskAction{{actionType: "repo.branches.cleanup", parameters: map[string]any{}}}}
+	taskExecutor := newTaskExecutor(environment, repository, plan)
+
+	executionError := taskExecutor.executeActions(context.Background())
+	require.Error(testInstance, executionError)
+	require.Contains(testInstance, executionError.Error(), "branch cleanup action requires 'remote'")
 }
 
 func TestTaskPlannerSkipWhenFileUnchanged(testInstance *testing.T) {
@@ -462,4 +515,44 @@ func firstArgument(arguments []string) string {
 		return ""
 	}
 	return arguments[0]
+}
+
+type branchCleanupExecutor struct {
+	gitCommands    [][]string
+	githubCommands [][]string
+}
+
+func (executor *branchCleanupExecutor) ExecuteGit(_ context.Context, details execshell.CommandDetails) (execshell.ExecutionResult, error) {
+	executor.gitCommands = append(executor.gitCommands, append([]string{}, details.Arguments...))
+	if len(details.Arguments) > 0 && details.Arguments[0] == "ls-remote" {
+		return execshell.ExecutionResult{StandardOutput: "", ExitCode: 0}, nil
+	}
+	return execshell.ExecutionResult{ExitCode: 0}, nil
+}
+
+func (executor *branchCleanupExecutor) ExecuteGitHubCLI(_ context.Context, details execshell.CommandDetails) (execshell.ExecutionResult, error) {
+	executor.githubCommands = append(executor.githubCommands, append([]string{}, details.Arguments...))
+	if len(details.Arguments) > 0 && details.Arguments[0] == "pr" {
+		return execshell.ExecutionResult{StandardOutput: "[]", ExitCode: 0}, nil
+	}
+	return execshell.ExecutionResult{ExitCode: 0}, nil
+}
+
+func testBranchCleanupHandler(ctx context.Context, environment *Environment, repository *RepositoryState, parameters map[string]any) error {
+	if environment == nil || repository == nil {
+		return nil
+	}
+
+	remoteValue, remoteExists := parameters["remote"]
+	remote := strings.TrimSpace(fmt.Sprint(remoteValue))
+	if !remoteExists || len(remote) == 0 || remote == "<nil>" {
+		return errors.New("branch cleanup action requires 'remote'")
+	}
+
+	if environment.GitExecutor != nil {
+		_, _ = environment.GitExecutor.ExecuteGit(ctx, execshell.CommandDetails{Arguments: []string{"ls-remote", "--heads", remote}})
+		_, _ = environment.GitExecutor.ExecuteGitHubCLI(ctx, execshell.CommandDetails{Arguments: []string{"pr", "list"}})
+	}
+
+	return nil
 }

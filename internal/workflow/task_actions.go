@@ -20,6 +20,14 @@ const (
 	releaseActionMessageTemplate = "RELEASED: %s -> %s"
 )
 
+var taskActionHandlers = map[string]taskActionHandlerFunc{
+	taskActionCanonicalRemote:    handleCanonicalRemoteAction,
+	taskActionProtocolConversion: handleProtocolConversionAction,
+	taskActionRenameDirectories:  handleRenameDirectoriesAction,
+	taskActionBranchDefault:      handleBranchDefaultAction,
+	taskActionReleaseTag:         handleReleaseTagAction,
+}
+
 type taskActionHandlerFunc func(ctx context.Context, environment *Environment, repository *RepositoryState, parameters map[string]any) error
 
 type taskActionExecutor struct {
@@ -28,12 +36,9 @@ type taskActionExecutor struct {
 }
 
 func newTaskActionExecutor(environment *Environment) taskActionExecutor {
-	handlers := map[string]taskActionHandlerFunc{
-		taskActionCanonicalRemote:    handleCanonicalRemoteAction,
-		taskActionProtocolConversion: handleProtocolConversionAction,
-		taskActionRenameDirectories:  handleRenameDirectoriesAction,
-		taskActionBranchDefault:      handleBranchDefaultAction,
-		taskActionReleaseTag:         handleReleaseTagAction,
+	handlers := make(map[string]taskActionHandlerFunc, len(taskActionHandlers))
+	for actionType, handler := range taskActionHandlers {
+		handlers[actionType] = handler
 	}
 	return taskActionExecutor{environment: environment, handlers: handlers}
 }
@@ -54,6 +59,15 @@ func (executor taskActionExecutor) execute(ctx context.Context, repository *Repo
 	}
 
 	return handler(ctx, executor.environment, repository, action.parameters)
+}
+
+// RegisterTaskAction adds a handler for a custom task action type.
+func RegisterTaskAction(actionType string, handler taskActionHandlerFunc) {
+	normalized := strings.ToLower(strings.TrimSpace(actionType))
+	if len(normalized) == 0 || handler == nil {
+		return
+	}
+	taskActionHandlers[normalized] = handler
 }
 
 func handleCanonicalRemoteAction(ctx context.Context, environment *Environment, repository *RepositoryState, parameters map[string]any) error {
