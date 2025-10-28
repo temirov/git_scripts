@@ -13,10 +13,10 @@ import (
 	"go.uber.org/zap"
 
 	repos "github.com/temirov/gix/cmd/cli/repos"
-	"github.com/temirov/gix/internal/githubcli"
 	"github.com/temirov/gix/internal/repos/shared"
 	"github.com/temirov/gix/internal/utils"
 	flagutils "github.com/temirov/gix/internal/utils/flags"
+	"github.com/temirov/gix/internal/workflow"
 )
 
 const (
@@ -26,8 +26,6 @@ const (
 	protocolDryRunFlagConstant     = "--" + flagutils.DryRunFlagName
 	protocolRootFlagConstant       = "--" + flagutils.DefaultRootFlagName
 	protocolConfiguredRootConstant = "/tmp/protocol-config-root"
-	protocolSSHRemoteURL           = "ssh://git@github.com/origin/example.git"
-	protocolHTTPSRemoteURL         = "https://github.com/origin/example.git"
 	protocolMissingRootsMessage    = "no repository roots provided; specify --roots or configure defaults"
 	protocolRelativeRootConstant   = "relative/protocol-root"
 	protocolHomeRootSuffixConstant = "protocol-home-root"
@@ -35,16 +33,18 @@ const (
 
 func TestProtocolCommandConfigurationPrecedence(testInstance *testing.T) {
 	testCases := []struct {
-		name                    string
-		configuration           repos.ProtocolConfiguration
-		arguments               []string
-		initialRemoteURL        string
-		expectedRoots           []string
-		expectedRootsBuilder    func(testing.TB) []string
-		expectRemoteUpdates     int
-		expectPromptInvocations int
-		expectError             bool
-		expectedErrorMessage    string
+		name                 string
+		configuration        repos.ProtocolConfiguration
+		arguments            []string
+		expectedRoots        []string
+		expectedRootsBuilder func(testing.TB) []string
+		expectTaskInvocation bool
+		expectedDryRun       bool
+		expectedAssumeYes    bool
+		expectedFrom         string
+		expectedTo           string
+		expectError          bool
+		expectedErrorMessage string
 	}{
 		{
 			name: "error_when_roots_missing",
@@ -53,7 +53,6 @@ func TestProtocolCommandConfigurationPrecedence(testInstance *testing.T) {
 				ToProtocol:   string(shared.RemoteProtocolSSH),
 			},
 			arguments:            []string{},
-			initialRemoteURL:     protocolHTTPSRemoteURL,
 			expectError:          true,
 			expectedErrorMessage: protocolMissingRootsMessage,
 		},
@@ -66,11 +65,12 @@ func TestProtocolCommandConfigurationPrecedence(testInstance *testing.T) {
 				FromProtocol:    string(shared.RemoteProtocolHTTPS),
 				ToProtocol:      string(shared.RemoteProtocolSSH),
 			},
-			arguments:               []string{},
-			initialRemoteURL:        protocolHTTPSRemoteURL,
-			expectedRoots:           []string{protocolConfiguredRootConstant},
-			expectRemoteUpdates:     0,
-			expectPromptInvocations: 0,
+			expectedRoots:        []string{protocolConfiguredRootConstant},
+			expectTaskInvocation: true,
+			expectedDryRun:       true,
+			expectedAssumeYes:    false,
+			expectedFrom:         string(shared.RemoteProtocolHTTPS),
+			expectedTo:           string(shared.RemoteProtocolSSH),
 		},
 		{
 			name: "flags_override_configuration",
@@ -82,18 +82,18 @@ func TestProtocolCommandConfigurationPrecedence(testInstance *testing.T) {
 				ToProtocol:      string(shared.RemoteProtocolHTTPS),
 			},
 			arguments: []string{
-				protocolFromFlagConstant,
-				string(shared.RemoteProtocolHTTPS),
-				protocolToFlagConstant,
-				string(shared.RemoteProtocolSSH),
+				protocolFromFlagConstant, string(shared.RemoteProtocolHTTPS),
+				protocolToFlagConstant, string(shared.RemoteProtocolSSH),
 				protocolYesFlagConstant,
 				protocolDryRunFlagConstant,
 				protocolRootFlagConstant, remotesCLIRepositoryRootConstant,
 			},
-			initialRemoteURL:        protocolHTTPSRemoteURL,
-			expectedRoots:           []string{remotesCLIRepositoryRootConstant},
-			expectRemoteUpdates:     0,
-			expectPromptInvocations: 0,
+			expectedRoots:        []string{remotesCLIRepositoryRootConstant},
+			expectTaskInvocation: true,
+			expectedDryRun:       true,
+			expectedAssumeYes:    true,
+			expectedFrom:         string(shared.RemoteProtocolHTTPS),
+			expectedTo:           string(shared.RemoteProtocolSSH),
 		},
 		{
 			name: "configuration_triggers_remote_update",
@@ -104,11 +104,12 @@ func TestProtocolCommandConfigurationPrecedence(testInstance *testing.T) {
 				FromProtocol:    string(shared.RemoteProtocolHTTPS),
 				ToProtocol:      string(shared.RemoteProtocolSSH),
 			},
-			arguments:               []string{},
-			initialRemoteURL:        protocolHTTPSRemoteURL,
-			expectedRoots:           []string{protocolConfiguredRootConstant},
-			expectRemoteUpdates:     1,
-			expectPromptInvocations: 0,
+			expectedRoots:        []string{protocolConfiguredRootConstant},
+			expectTaskInvocation: true,
+			expectedDryRun:       false,
+			expectedAssumeYes:    true,
+			expectedFrom:         string(shared.RemoteProtocolHTTPS),
+			expectedTo:           string(shared.RemoteProtocolSSH),
 		},
 		{
 			name: "configuration_expands_home_relative_root",
@@ -120,9 +121,12 @@ func TestProtocolCommandConfigurationPrecedence(testInstance *testing.T) {
 				ToProtocol:      string(shared.RemoteProtocolSSH),
 			},
 			arguments:            []string{},
-			initialRemoteURL:     protocolHTTPSRemoteURL,
 			expectedRootsBuilder: protocolHomeRootBuilder,
-			expectRemoteUpdates:  0,
+			expectTaskInvocation: true,
+			expectedDryRun:       true,
+			expectedAssumeYes:    true,
+			expectedFrom:         string(shared.RemoteProtocolHTTPS),
+			expectedTo:           string(shared.RemoteProtocolSSH),
 		},
 		{
 			name: "arguments_preserve_relative_roots",
@@ -131,18 +135,18 @@ func TestProtocolCommandConfigurationPrecedence(testInstance *testing.T) {
 				ToProtocol:   string(shared.RemoteProtocolSSH),
 			},
 			arguments: []string{
-				protocolFromFlagConstant,
-				string(shared.RemoteProtocolHTTPS),
-				protocolToFlagConstant,
-				string(shared.RemoteProtocolSSH),
+				protocolFromFlagConstant, string(shared.RemoteProtocolHTTPS),
+				protocolToFlagConstant, string(shared.RemoteProtocolSSH),
 				protocolYesFlagConstant,
 				protocolDryRunFlagConstant,
 				protocolRootFlagConstant, protocolRelativeRootConstant,
 			},
-			initialRemoteURL:        protocolHTTPSRemoteURL,
-			expectedRoots:           []string{protocolRelativeRootConstant},
-			expectRemoteUpdates:     0,
-			expectPromptInvocations: 0,
+			expectedRoots:        []string{protocolRelativeRootConstant},
+			expectTaskInvocation: true,
+			expectedDryRun:       true,
+			expectedAssumeYes:    true,
+			expectedFrom:         string(shared.RemoteProtocolHTTPS),
+			expectedTo:           string(shared.RemoteProtocolSSH),
 		},
 		{
 			name: "arguments_expand_home_relative_root",
@@ -151,41 +155,42 @@ func TestProtocolCommandConfigurationPrecedence(testInstance *testing.T) {
 				ToProtocol:   string(shared.RemoteProtocolSSH),
 			},
 			arguments: []string{
-				protocolFromFlagConstant,
-				string(shared.RemoteProtocolHTTPS),
-				protocolToFlagConstant,
-				string(shared.RemoteProtocolSSH),
+				protocolFromFlagConstant, string(shared.RemoteProtocolHTTPS),
+				protocolToFlagConstant, string(shared.RemoteProtocolSSH),
 				protocolYesFlagConstant,
 				protocolDryRunFlagConstant,
 				protocolRootFlagConstant, "~/" + protocolHomeRootSuffixConstant,
 			},
-			initialRemoteURL:        protocolHTTPSRemoteURL,
-			expectedRootsBuilder:    protocolHomeRootBuilder,
-			expectRemoteUpdates:     0,
-			expectPromptInvocations: 0,
+			expectedRootsBuilder: protocolHomeRootBuilder,
+			expectTaskInvocation: true,
+			expectedDryRun:       true,
+			expectedAssumeYes:    true,
+			expectedFrom:         string(shared.RemoteProtocolHTTPS),
+			expectedTo:           string(shared.RemoteProtocolSSH),
 		},
 	}
 
-	for testCaseIndex := range testCases {
-		testCase := testCases[testCaseIndex]
+	for _, testCase := range testCases {
 		testInstance.Run(testCase.name, func(subtest *testing.T) {
 			discoverer := &fakeRepositoryDiscoverer{repositories: []string{remotesDiscoveredRepository}}
 			executor := &fakeGitExecutor{}
-			manager := &fakeGitRepositoryManager{remoteURL: testCase.initialRemoteURL, currentBranch: remotesMetadataDefaultBranch, panicOnCurrentBranchLookup: true}
-			resolver := &fakeGitHubResolver{metadata: githubcli.RepositoryMetadata{NameWithOwner: remotesCanonicalRepository, DefaultBranch: remotesMetadataDefaultBranch}}
+			manager := &fakeGitRepositoryManager{remoteURL: "", currentBranch: remotesMetadataDefaultBranch, panicOnCurrentBranchLookup: true}
 			prompter := &recordingPrompter{result: shared.ConfirmationResult{Confirmed: true}}
+			runner := &recordingTaskRunner{}
 
 			builder := repos.ProtocolCommandBuilder{
 				LoggerProvider: func() *zap.Logger { return zap.NewNop() },
 				Discoverer:     discoverer,
 				GitExecutor:    executor,
 				GitManager:     manager,
-				GitHubResolver: resolver,
 				PrompterFactory: func(*cobra.Command) shared.ConfirmationPrompter {
 					return prompter
 				},
 				ConfigurationProvider: func() repos.ProtocolConfiguration {
 					return testCase.configuration
+				},
+				TaskRunnerFactory: func(workflow.Dependencies) repos.TaskRunnerExecutor {
+					return runner
 				},
 			}
 
@@ -204,11 +209,8 @@ func TestProtocolCommandConfigurationPrecedence(testInstance *testing.T) {
 			if testCase.expectError {
 				require.Error(subtest, executionError)
 				require.Equal(subtest, testCase.expectedErrorMessage, executionError.Error())
-				combinedOutput := stdoutBuffer.String() + stderrBuffer.String()
-				require.Contains(subtest, combinedOutput, command.UseLine())
-				require.Empty(subtest, discoverer.receivedRoots)
 				require.Zero(subtest, prompter.calls)
-				require.Zero(subtest, len(manager.setCalls))
+				require.Empty(subtest, runner.definitions)
 				return
 			}
 
@@ -218,12 +220,19 @@ func TestProtocolCommandConfigurationPrecedence(testInstance *testing.T) {
 			if testCase.expectedRootsBuilder != nil {
 				expectedRoots = testCase.expectedRootsBuilder(subtest)
 			}
-			require.Equal(subtest, expectedRoots, discoverer.receivedRoots)
-			require.Equal(subtest, testCase.expectPromptInvocations, prompter.calls)
-			require.Equal(subtest, testCase.expectRemoteUpdates, len(manager.setCalls))
-			if testCase.expectRemoteUpdates > 0 {
-				require.NotEmpty(subtest, manager.setCalls)
-				require.Equal(subtest, string(shared.RemoteProtocolSSH), detectProtocol(manager.setCalls[len(manager.setCalls)-1].remoteURL))
+
+			if testCase.expectTaskInvocation {
+				require.Equal(subtest, expectedRoots, runner.roots)
+				require.Len(subtest, runner.definitions, 1)
+				require.Len(subtest, runner.definitions[0].Actions, 1)
+				action := runner.definitions[0].Actions[0]
+				require.Equal(subtest, "repo.remote.convert-protocol", action.Type)
+				require.Equal(subtest, testCase.expectedFrom, action.Options["from"])
+				require.Equal(subtest, testCase.expectedTo, action.Options["to"])
+				require.Equal(subtest, testCase.expectedDryRun, runner.runtimeOptions.DryRun)
+				require.Equal(subtest, testCase.expectedAssumeYes, runner.runtimeOptions.AssumeYes)
+			} else {
+				require.Empty(subtest, runner.definitions)
 			}
 		})
 	}
@@ -254,19 +263,6 @@ func bindGlobalProtocolFlags(command *cobra.Command) {
 		updatedContext := contextAccessor.WithExecutionFlags(cmd.Context(), executionFlags)
 		cmd.SetContext(updatedContext)
 		return nil
-	}
-}
-
-func detectProtocol(remoteURL string) string {
-	switch {
-	case len(remoteURL) == 0:
-		return ""
-	case strings.HasPrefix(remoteURL, shared.SSHProtocolURLPrefixConstant):
-		return string(shared.RemoteProtocolSSH)
-	case strings.HasPrefix(remoteURL, shared.HTTPSProtocolURLPrefixConstant):
-		return string(shared.RemoteProtocolHTTPS)
-	default:
-		return ""
 	}
 }
 

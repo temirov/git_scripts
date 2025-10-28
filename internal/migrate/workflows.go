@@ -20,6 +20,7 @@ const (
 	rewriteLogMessageConstant                = "Rewriting workflow file"
 	skipRewriteLogMessageConstant            = "No rewrites required"
 	rewriteCompletionLogMessageConstant      = "Workflow rewrite completed"
+	migratedWorkflowFilesFieldConstant       = "migrated_workflows"
 	mainBranchWordBoundaryTemplateConstant   = `\b%s\b`
 	inlineBranchesPatternTemplateConstant    = `(?m)(\s*branches\s*:\s*\[\s*)(["']?)(%s)(["']?)(\s*\])`
 	listBranchesPatternTemplateConstant      = `(?m)^(\s*-\s*)(["']?)(%s)(["']?)\s*$`

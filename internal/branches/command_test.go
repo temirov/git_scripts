@@ -2,327 +2,217 @@ package branches_test
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"strconv"
-	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zaptest/observer"
 
 	branches "github.com/temirov/gix/internal/branches"
 	"github.com/temirov/gix/internal/execshell"
 	"github.com/temirov/gix/internal/repos/shared"
 	flagutils "github.com/temirov/gix/internal/utils/flags"
 	rootutils "github.com/temirov/gix/internal/utils/roots"
+	"github.com/temirov/gix/internal/workflow"
 )
 
 const (
-	commandRemoteFlagConstant            = "--" + flagutils.RemoteFlagName
-	commandLimitFlagConstant             = "--limit"
-	commandRootFlagConstant              = "--" + flagutils.DefaultRootFlagName
-	commandDryRunFlagConstant            = "--" + flagutils.DryRunFlagName
-	testDefaultRemoteNameConstant        = "origin"
-	testRemoteDescriptionConstant        = "Name of the remote containing pull request branches"
-	commandLimitValueConstant            = "5"
-	multiRootFirstArgumentConstant       = "root-one"
-	multiRootSecondArgumentConstant      = "root-two"
-	defaultRootArgumentConstant          = "."
-	repositoryOnePathConstant            = "/tmp/repository-one"
-	repositoryTwoPathConstant            = "/tmp/repository-two"
-	cleanupBranchNameConstant            = "feature/shared"
-	repositoryLogFieldNameConstant       = "repository"
-	configurationRemoteNameConstant      = "configured-remote"
-	configurationRootConstant            = "/tmp/config-root"
-	flagOverrideRemoteConstant           = "override-remote"
-	flagOverrideLimitValueConstant       = 7
-	invalidRemoteErrorMessageConstant    = "remote name must not be empty or whitespace"
-	invalidLimitErrorMessageConstant     = "limit must be greater than zero"
-	defaultPullRequestLimitValueConstant = 100
-	invalidLimitArgumentValueConstant    = "0"
-	whitespaceRemoteArgumentConstant     = "   "
+	commandRemoteFlagConstant         = "--" + flagutils.RemoteFlagName
+	commandLimitFlagConstant          = "--limit"
+	commandRootFlagConstant           = "--" + flagutils.DefaultRootFlagName
+	commandDryRunFlagConstant         = "--" + flagutils.DryRunFlagName
+	commandAssumeYesFlagConstant      = "--" + flagutils.AssumeYesFlagName
+	configurationRemoteNameConstant   = "configured-remote"
+	configurationRootConstant         = "/tmp/config-root"
+	invalidRemoteErrorMessageConstant = "remote name must not be empty or whitespace"
+	invalidLimitErrorMessageConstant  = "limit must be greater than zero"
 )
 
-type stubConfirmationPrompter struct {
-	responses       []shared.ConfirmationResult
-	errors          []error
-	prompts         []string
-	defaultResponse shared.ConfirmationResult
-	defaultError    error
-	index           int
+type recordingTaskRunner struct {
+	roots          []string
+	definitions    []workflow.TaskDefinition
+	runtimeOptions workflow.RuntimeOptions
+	dependencies   workflow.Dependencies
 }
 
-func (prompter *stubConfirmationPrompter) Confirm(prompt string) (shared.ConfirmationResult, error) {
-	prompter.prompts = append(prompter.prompts, prompt)
-	result := prompter.defaultResponse
-	if prompter.index < len(prompter.responses) {
-		result = prompter.responses[prompter.index]
+func (runner *recordingTaskRunner) Run(_ context.Context, roots []string, definitions []workflow.TaskDefinition, options workflow.RuntimeOptions) error {
+	runner.roots = append([]string{}, roots...)
+	runner.definitions = append([]workflow.TaskDefinition{}, definitions...)
+	runner.runtimeOptions = options
+	if runner.dependencies.RepositoryDiscoverer != nil {
+		_, _ = runner.dependencies.RepositoryDiscoverer.DiscoverRepositories(roots)
 	}
-	err := prompter.defaultError
-	if prompter.index < len(prompter.errors) {
-		err = prompter.errors[prompter.index]
-	}
-	prompter.index++
-	return result, err
+	return nil
 }
 
 type fakeRepositoryDiscoverer struct {
-	repositories   []string
-	discoveryError error
-	receivedRoots  []string
+	repositories  []string
+	receivedRoots []string
 }
 
 func (discoverer *fakeRepositoryDiscoverer) DiscoverRepositories(roots []string) ([]string, error) {
 	discoverer.receivedRoots = append([]string{}, roots...)
-	if discoverer.discoveryError != nil {
-		return nil, discoverer.discoveryError
-	}
 	return append([]string{}, discoverer.repositories...), nil
 }
 
-func TestCommandRunScenarios(testInstance *testing.T) {
-	remoteBranches := []string{cleanupBranchNameConstant}
-	remoteOutput := buildRemoteOutput(remoteBranches)
+type stubGitExecutor struct{}
 
-	pullRequestJSON, jsonError := buildPullRequestJSON(remoteBranches)
-	require.NoError(testInstance, jsonError)
-
-	gitListArguments := []string{gitListRemoteSubcommandConstant, gitHeadsFlagConstant, testRemoteNameConstant}
-	githubListArguments := []string{
-		githubPullRequestSubcommandConstant,
-		githubListSubcommandConstant,
-		githubStateFlagConstant,
-		githubClosedStateConstant,
-		githubJSONFlagConstant,
-		pullRequestJSONFieldNameConstant,
-		githubLimitFlagConstant,
-		commandLimitValueConstant,
-	}
-
-	testCases := []struct {
-		name                        string
-		arguments                   []string
-		discoveredRepositories      []string
-		expectedRoots               []string
-		setup                       func(*testing.T, *fakeCommandExecutor)
-		expectedRepositories        []string
-		expectedWarningRepositories []string
-		verify                      func(*testing.T, *fakeCommandExecutor, []observer.LoggedEntry)
-		prompter                    *stubConfirmationPrompter
-		expectedPrompts             []string
-	}{
-		{
-			name: "processes_multiple_repositories",
-			arguments: []string{
-				commandRemoteFlagConstant,
-				testRemoteNameConstant,
-				commandLimitFlagConstant,
-				commandLimitValueConstant,
-				commandRootFlagConstant,
-				multiRootFirstArgumentConstant,
-				commandRootFlagConstant,
-				multiRootSecondArgumentConstant,
-			},
-			discoveredRepositories: []string{repositoryOnePathConstant, repositoryTwoPathConstant},
-			expectedRoots:          []string{multiRootFirstArgumentConstant, multiRootSecondArgumentConstant},
-			setup: func(t *testing.T, executor *fakeCommandExecutor) {
-				registerResponse(executor, gitCommandLabelConstant, gitListArguments, execshell.ExecutionResult{StandardOutput: remoteOutput, ExitCode: 0}, nil)
-				registerResponse(executor, githubCommandLabelConstant, githubListArguments, execshell.ExecutionResult{StandardOutput: pullRequestJSON, ExitCode: 0}, nil)
-				registerResponse(executor, gitCommandLabelConstant, []string{gitPushSubcommandConstant, testRemoteNameConstant, gitDeleteFlagConstant, cleanupBranchNameConstant}, execshell.ExecutionResult{ExitCode: 0}, nil)
-				registerResponse(executor, gitCommandLabelConstant, []string{gitBranchSubcommandConstant, gitForceDeleteFlagConstant, cleanupBranchNameConstant}, execshell.ExecutionResult{ExitCode: 0}, nil)
-			},
-			expectedRepositories:        []string{repositoryOnePathConstant, repositoryTwoPathConstant},
-			expectedWarningRepositories: nil,
-			verify:                      nil,
-		},
-		{
-			name: "dry_run_avoids_deletions",
-			arguments: []string{
-				commandDryRunFlagConstant,
-				commandRemoteFlagConstant,
-				testRemoteNameConstant,
-				commandLimitFlagConstant,
-				commandLimitValueConstant,
-				commandRootFlagConstant,
-				defaultRootArgumentConstant,
-			},
-			discoveredRepositories: []string{repositoryOnePathConstant},
-			expectedRoots:          []string{defaultRootArgumentConstant},
-			setup: func(t *testing.T, executor *fakeCommandExecutor) {
-				registerResponse(executor, gitCommandLabelConstant, gitListArguments, execshell.ExecutionResult{StandardOutput: remoteOutput, ExitCode: 0}, nil)
-				registerResponse(executor, githubCommandLabelConstant, githubListArguments, execshell.ExecutionResult{StandardOutput: pullRequestJSON, ExitCode: 0}, nil)
-			},
-			expectedRepositories:        []string{repositoryOnePathConstant},
-			expectedWarningRepositories: nil,
-			verify: func(t *testing.T, executor *fakeCommandExecutor, _ []observer.LoggedEntry) {
-				for _, executedCommand := range executor.executedCommands {
-					require.NotEqual(t, gitPushSubcommandConstant, executedCommand.arguments[0])
-					require.NotEqual(t, gitBranchSubcommandConstant, executedCommand.arguments[0])
-				}
-			},
-		},
-		{
-			name: "user_declines_branch_deletion",
-			arguments: []string{
-				commandRemoteFlagConstant,
-				testRemoteNameConstant,
-				commandLimitFlagConstant,
-				commandLimitValueConstant,
-				commandRootFlagConstant,
-				defaultRootArgumentConstant,
-			},
-			discoveredRepositories: []string{repositoryOnePathConstant},
-			expectedRoots:          []string{defaultRootArgumentConstant},
-			setup: func(t *testing.T, executor *fakeCommandExecutor) {
-				registerResponse(executor, gitCommandLabelConstant, gitListArguments, execshell.ExecutionResult{StandardOutput: remoteOutput, ExitCode: 0}, nil)
-				registerResponse(executor, githubCommandLabelConstant, githubListArguments, execshell.ExecutionResult{StandardOutput: pullRequestJSON, ExitCode: 0}, nil)
-			},
-			expectedRepositories:        []string{repositoryOnePathConstant},
-			expectedWarningRepositories: nil,
-			prompter:                    &stubConfirmationPrompter{defaultResponse: shared.ConfirmationResult{Confirmed: false}},
-			expectedPrompts:             []string{fmt.Sprintf("Delete pull request branch '%s' from remote '%s' and the local repository? [y/N] ", cleanupBranchNameConstant, testRemoteNameConstant)},
-			verify: func(t *testing.T, executor *fakeCommandExecutor, logs []observer.LoggedEntry) {
-				for _, executedCommand := range executor.executedCommands {
-					require.NotEqual(t, gitPushSubcommandConstant, executedCommand.arguments[0])
-					require.NotEqual(t, gitBranchSubcommandConstant, executedCommand.arguments[0])
-				}
-				deletionLogged := false
-				for _, entry := range logs {
-					if entry.Message == "Skipping branch deletion (user declined)" {
-						deletionLogged = true
-					}
-				}
-				require.True(t, deletionLogged)
-			},
-		},
-		{
-			name: "continues_when_repository_cleanup_fails",
-			arguments: []string{
-				commandRemoteFlagConstant,
-				testRemoteNameConstant,
-				commandLimitFlagConstant,
-				commandLimitValueConstant,
-				commandRootFlagConstant,
-				multiRootFirstArgumentConstant,
-			},
-			discoveredRepositories: []string{repositoryOnePathConstant, repositoryTwoPathConstant},
-			expectedRoots:          []string{multiRootFirstArgumentConstant},
-			setup: func(t *testing.T, executor *fakeCommandExecutor) {
-				failureError := errors.New(remoteListFailureMessageConstant)
-				registerRepositoryResponse(executor, repositoryOnePathConstant, gitCommandLabelConstant, gitListArguments, execshell.ExecutionResult{}, failureError)
-
-				registerRepositoryResponse(executor, repositoryTwoPathConstant, gitCommandLabelConstant, gitListArguments, execshell.ExecutionResult{StandardOutput: remoteOutput, ExitCode: 0}, nil)
-				registerRepositoryResponse(executor, repositoryTwoPathConstant, githubCommandLabelConstant, githubListArguments, execshell.ExecutionResult{StandardOutput: pullRequestJSON, ExitCode: 0}, nil)
-				registerRepositoryResponse(executor, repositoryTwoPathConstant, gitCommandLabelConstant, []string{gitPushSubcommandConstant, testRemoteNameConstant, gitDeleteFlagConstant, cleanupBranchNameConstant}, execshell.ExecutionResult{ExitCode: 0}, nil)
-				registerRepositoryResponse(executor, repositoryTwoPathConstant, gitCommandLabelConstant, []string{gitBranchSubcommandConstant, gitForceDeleteFlagConstant, cleanupBranchNameConstant}, execshell.ExecutionResult{ExitCode: 0}, nil)
-			},
-			expectedRepositories:        []string{repositoryOnePathConstant, repositoryTwoPathConstant},
-			expectedWarningRepositories: []string{repositoryOnePathConstant},
-			verify: func(t *testing.T, executor *fakeCommandExecutor, logs []observer.LoggedEntry) {
-				warnCount := 0
-				for _, entry := range logs {
-					if entry.Level == zap.WarnLevel {
-						warnCount++
-						repositoryValue, repositoryFound := entry.ContextMap()[repositoryLogFieldNameConstant]
-						require.True(t, repositoryFound)
-						require.Equal(t, repositoryOnePathConstant, repositoryValue)
-					}
-				}
-				require.Equal(t, 1, warnCount)
-
-				successfulCleanup := false
-				for _, executedCommand := range executor.executedCommands {
-					if executedCommand.workingDirectory == repositoryTwoPathConstant && executedCommand.arguments[0] == gitPushSubcommandConstant {
-						successfulCleanup = true
-					}
-				}
-				require.True(t, successfulCleanup)
-			},
-		},
-	}
-
-	for testCaseIndex := range testCases {
-		testCase := testCases[testCaseIndex]
-		testInstance.Run(fmt.Sprintf(subtestNameTemplateConstant, testCaseIndex, testCase.name), func(subTest *testing.T) {
-			fakeExecutorInstance := &fakeCommandExecutor{}
-			if testCase.setup != nil {
-				testCase.setup(subTest, fakeExecutorInstance)
-			}
-
-			fakeDiscoverer := &fakeRepositoryDiscoverer{repositories: append([]string{}, testCase.discoveredRepositories...)}
-
-			logCore, observedLogs := observer.New(zap.DebugLevel)
-			logger := zap.New(logCore)
-
-			confirmationPrompter := testCase.prompter
-			if confirmationPrompter == nil {
-				confirmationPrompter = &stubConfirmationPrompter{defaultResponse: shared.ConfirmationResult{Confirmed: true}}
-			}
-
-			builder := branches.CommandBuilder{
-				LoggerProvider:       func() *zap.Logger { return logger },
-				Executor:             fakeExecutorInstance,
-				RepositoryDiscoverer: fakeDiscoverer,
-				PrompterFactory:      func(*cobra.Command) shared.ConfirmationPrompter { return confirmationPrompter },
-			}
-
-			command, buildError := builder.Build()
-			require.NoError(subTest, buildError)
-			bindGlobalBranchFlags(command)
-
-			command.SetContext(context.Background())
-			command.SetArgs(testCase.arguments)
-
-			executionError := command.Execute()
-			require.NoError(subTest, executionError)
-
-			require.Equal(subTest, testCase.expectedRoots, fakeDiscoverer.receivedRoots)
-
-			uniqueWorkingDirectories := collectWorkingDirectories(fakeExecutorInstance.executedCommands)
-			require.ElementsMatch(subTest, testCase.expectedRepositories, uniqueWorkingDirectories)
-
-			if testCase.expectedWarningRepositories != nil {
-				verifyWarnings(subTest, observedLogs.All(), testCase.expectedWarningRepositories)
-			} else {
-				verifyWarnings(subTest, observedLogs.All(), []string{})
-			}
-
-			if testCase.expectedPrompts != nil {
-				require.Equal(subTest, testCase.expectedPrompts, confirmationPrompter.prompts)
-			}
-
-			if testCase.verify != nil {
-				testCase.verify(subTest, fakeExecutorInstance, observedLogs.All())
-			}
-		})
-	}
+func (stubGitExecutor) ExecuteGit(context.Context, execshell.CommandDetails) (execshell.ExecutionResult, error) {
+	return execshell.ExecutionResult{}, nil
 }
 
-func TestCommandRunDisplaysHelpWhenRootsMissing(testInstance *testing.T) {
-	fakeExecutorInstance := &fakeCommandExecutor{}
-	fakeDiscoverer := &fakeRepositoryDiscoverer{}
+func (stubGitExecutor) ExecuteGitHubCLI(context.Context, execshell.CommandDetails) (execshell.ExecutionResult, error) {
+	return execshell.ExecutionResult{}, nil
+}
+
+type stubGitRepositoryManager struct{}
+
+func (stubGitRepositoryManager) CheckCleanWorktree(context.Context, string) (bool, error) {
+	return true, nil
+}
+func (stubGitRepositoryManager) GetCurrentBranch(context.Context, string) (string, error) {
+	return "main", nil
+}
+func (stubGitRepositoryManager) GetRemoteURL(context.Context, string, string) (string, error) {
+	return "", nil
+}
+func (stubGitRepositoryManager) SetRemoteURL(context.Context, string, string, string) error {
+	return nil
+}
+
+type stubPrompter struct{}
+
+func (stubPrompter) Confirm(string) (shared.ConfirmationResult, error) {
+	return shared.ConfirmationResult{Confirmed: true}, nil
+}
+
+func TestCommandConfigurationPrecedence(t *testing.T) {
+	root := "/tmp/branches-root"
+	discoverer := &fakeRepositoryDiscoverer{repositories: []string{root}}
+	executor := &stubGitExecutor{}
+	manager := stubGitRepositoryManager{}
+	runner := &recordingTaskRunner{}
+
+	configuration := branches.CommandConfiguration{
+		RemoteName:       configurationRemoteNameConstant,
+		PullRequestLimit: 42,
+		RepositoryRoots:  []string{configurationRootConstant},
+		DryRun:           false,
+		AssumeYes:        false,
+	}
 
 	builder := branches.CommandBuilder{
-		Executor:             fakeExecutorInstance,
-		RepositoryDiscoverer: fakeDiscoverer,
+		LoggerProvider:        func() *zap.Logger { return zap.NewNop() },
+		Discoverer:            discoverer,
+		GitExecutor:           executor,
+		GitManager:            manager,
+		PrompterFactory:       func(*cobra.Command) shared.ConfirmationPrompter { return stubPrompter{} },
+		ConfigurationProvider: func() branches.CommandConfiguration { return configuration },
+		TaskRunnerFactory: func(deps workflow.Dependencies) branches.TaskRunnerExecutor {
+			runner.dependencies = deps
+			return runner
+		},
 	}
 
 	command, buildError := builder.Build()
-	require.NoError(testInstance, buildError)
+	require.NoError(t, buildError)
 	bindGlobalBranchFlags(command)
-
-	outputBuffer := &strings.Builder{}
-	command.SetOut(outputBuffer)
-	command.SetErr(outputBuffer)
-	command.SetArgs([]string{commandDryRunFlagConstant})
+	command.SetContext(context.Background())
+	command.SetArgs([]string{})
 
 	executionError := command.Execute()
-	require.Error(testInstance, executionError)
-	require.Equal(testInstance, rootutils.MissingRootsMessage(), executionError.Error())
-	require.Contains(testInstance, outputBuffer.String(), command.UseLine())
+	require.NoError(t, executionError)
+
+	require.Equal(t, configuration.RepositoryRoots, runner.roots)
+	require.Len(t, runner.definitions, 1)
+	action := runner.definitions[0].Actions[0]
+	require.Equal(t, "repo.branches.cleanup", action.Type)
+	require.Equal(t, configurationRemoteNameConstant, action.Options["remote"])
+	require.Equal(t, strconv.Itoa(configuration.PullRequestLimit), action.Options["limit"])
+	require.False(t, runner.runtimeOptions.DryRun)
+	require.False(t, runner.runtimeOptions.AssumeYes)
+}
+
+func TestCommandFlagsOverrideConfiguration(t *testing.T) {
+	discoverer := &fakeRepositoryDiscoverer{repositories: []string{"/tmp/branches"}}
+	executor := &stubGitExecutor{}
+	manager := stubGitRepositoryManager{}
+	runner := &recordingTaskRunner{}
+
+	builder := branches.CommandBuilder{
+		LoggerProvider:  func() *zap.Logger { return zap.NewNop() },
+		Discoverer:      discoverer,
+		GitExecutor:     executor,
+		GitManager:      manager,
+		PrompterFactory: func(*cobra.Command) shared.ConfirmationPrompter { return stubPrompter{} },
+		ConfigurationProvider: func() branches.CommandConfiguration {
+			return branches.CommandConfiguration{
+				RemoteName:       configurationRemoteNameConstant,
+				PullRequestLimit: 12,
+				RepositoryRoots:  []string{configurationRootConstant},
+			}
+		},
+		TaskRunnerFactory: func(deps workflow.Dependencies) branches.TaskRunnerExecutor {
+			runner.dependencies = deps
+			return runner
+		},
+	}
+
+	command, buildError := builder.Build()
+	require.NoError(t, buildError)
+	bindGlobalBranchFlags(command)
+	command.SetContext(context.Background())
+	command.SetArgs([]string{commandRemoteFlagConstant, "override-remote", commandLimitFlagConstant, "7", commandDryRunFlagConstant, commandAssumeYesFlagConstant, commandRootFlagConstant, "/tmp/other"})
+
+	executionError := command.Execute()
+	require.NoError(t, executionError)
+
+	require.Equal(t, []string{"/tmp/other"}, runner.roots)
+	action := runner.definitions[0].Actions[0]
+	require.Equal(t, "override-remote", action.Options["remote"])
+	require.Equal(t, "7", action.Options["limit"])
+	require.True(t, runner.runtimeOptions.DryRun)
+	require.True(t, runner.runtimeOptions.AssumeYes)
+}
+
+func TestCommandErrorsWhenRemoteInvalid(t *testing.T) {
+	builder := branches.CommandBuilder{}
+	command, buildError := builder.Build()
+	require.NoError(t, buildError)
+	bindGlobalBranchFlags(command)
+	command.SetContext(context.Background())
+	command.SetArgs([]string{commandRootFlagConstant, "/tmp/root", commandRemoteFlagConstant, "   "})
+
+	executionError := command.Execute()
+	require.Error(t, executionError)
+	require.Equal(t, invalidRemoteErrorMessageConstant, executionError.Error())
+}
+
+func TestCommandErrorsWhenLimitInvalid(t *testing.T) {
+	builder := branches.CommandBuilder{}
+	command, buildError := builder.Build()
+	require.NoError(t, buildError)
+	bindGlobalBranchFlags(command)
+	command.SetContext(context.Background())
+	command.SetArgs([]string{commandRootFlagConstant, "/tmp/root", commandLimitFlagConstant, "0"})
+
+	executionError := command.Execute()
+	require.Error(t, executionError)
+	require.Equal(t, invalidLimitErrorMessageConstant, executionError.Error())
+}
+
+func TestCommandErrorsWhenRootsMissing(t *testing.T) {
+	builder := branches.CommandBuilder{}
+	command, buildError := builder.Build()
+	require.NoError(t, buildError)
+	bindGlobalBranchFlags(command)
+	command.SetContext(context.Background())
+	command.SetArgs([]string{})
+
+	executionError := command.Execute()
+	require.Error(t, executionError)
+	require.Equal(t, rootutils.MissingRootsMessage(), executionError.Error())
 }
 
 func bindGlobalBranchFlags(command *cobra.Command) {
@@ -331,235 +221,5 @@ func bindGlobalBranchFlags(command *cobra.Command) {
 		DryRun:    flagutils.ExecutionFlagDefinition{Name: flagutils.DryRunFlagName, Usage: flagutils.DryRunFlagUsage, Enabled: true},
 		AssumeYes: flagutils.ExecutionFlagDefinition{Name: flagutils.AssumeYesFlagName, Usage: flagutils.AssumeYesFlagUsage, Shorthand: flagutils.AssumeYesFlagShorthand, Enabled: true},
 	})
-	flagutils.EnsureRemoteFlag(command, testDefaultRemoteNameConstant, testRemoteDescriptionConstant)
-}
-
-func TestCommandConfigurationPrecedence(testInstance *testing.T) {
-	remoteBranches := []string{cleanupBranchNameConstant}
-	remoteOutput := buildRemoteOutput(remoteBranches)
-
-	pullRequestJSON, jsonError := buildPullRequestJSON(remoteBranches)
-	require.NoError(testInstance, jsonError)
-
-	testCases := []struct {
-		name                 string
-		configuration        branches.CommandConfiguration
-		useConfiguration     bool
-		arguments            []string
-		expectedRoots        []string
-		expectedRemote       string
-		expectedLimit        int
-		expectDryRun         bool
-		expectError          bool
-		expectedErrorMessage string
-	}{
-		{
-			name: "configuration_values_apply",
-			configuration: branches.CommandConfiguration{
-				RemoteName:       configurationRemoteNameConstant,
-				PullRequestLimit: 12,
-				DryRun:           false,
-				RepositoryRoots:  []string{configurationRootConstant},
-			},
-			useConfiguration: true,
-			arguments:        []string{},
-			expectedRoots:    []string{configurationRootConstant},
-			expectedRemote:   configurationRemoteNameConstant,
-			expectedLimit:    12,
-		},
-		{
-			name: "flags_override_configuration",
-			configuration: branches.CommandConfiguration{
-				RemoteName:       configurationRemoteNameConstant,
-				PullRequestLimit: 25,
-				DryRun:           false,
-				RepositoryRoots:  []string{configurationRootConstant},
-			},
-			useConfiguration: true,
-			arguments: []string{
-				commandRemoteFlagConstant,
-				flagOverrideRemoteConstant,
-				commandLimitFlagConstant,
-				strconv.Itoa(flagOverrideLimitValueConstant),
-				commandDryRunFlagConstant,
-				commandRootFlagConstant,
-				repositoryTwoPathConstant,
-			},
-			expectedRoots:  []string{repositoryTwoPathConstant},
-			expectedRemote: flagOverrideRemoteConstant,
-			expectedLimit:  flagOverrideLimitValueConstant,
-			expectDryRun:   true,
-		},
-		{
-			name:             "cli_defaults_apply_without_configuration",
-			useConfiguration: false,
-			arguments: []string{
-				commandRootFlagConstant,
-				repositoryOnePathConstant,
-			},
-			expectedRoots:  []string{repositoryOnePathConstant},
-			expectedRemote: testRemoteNameConstant,
-			expectedLimit:  defaultPullRequestLimitValueConstant,
-		},
-		{
-			name: "configuration_missing_remote_returns_error",
-			configuration: branches.CommandConfiguration{
-				RemoteName:       whitespaceRemoteArgumentConstant,
-				PullRequestLimit: 12,
-				RepositoryRoots:  []string{configurationRootConstant},
-			},
-			useConfiguration:     true,
-			arguments:            []string{},
-			expectError:          true,
-			expectedErrorMessage: invalidRemoteErrorMessageConstant,
-		},
-		{
-			name: "configuration_invalid_limit_returns_error",
-			configuration: branches.CommandConfiguration{
-				RemoteName:       configurationRemoteNameConstant,
-				PullRequestLimit: 0,
-				RepositoryRoots:  []string{configurationRootConstant},
-			},
-			useConfiguration:     true,
-			arguments:            []string{},
-			expectError:          true,
-			expectedErrorMessage: invalidLimitErrorMessageConstant,
-		},
-		{
-			name:             "flag_invalid_remote_returns_error",
-			useConfiguration: false,
-			arguments: []string{
-				commandRemoteFlagConstant,
-				whitespaceRemoteArgumentConstant,
-				commandLimitFlagConstant,
-				commandLimitValueConstant,
-				commandRootFlagConstant,
-				multiRootFirstArgumentConstant,
-			},
-			expectError:          true,
-			expectedErrorMessage: invalidRemoteErrorMessageConstant,
-		},
-		{
-			name:             "flag_invalid_limit_returns_error",
-			useConfiguration: false,
-			arguments: []string{
-				commandRemoteFlagConstant,
-				testRemoteNameConstant,
-				commandLimitFlagConstant,
-				invalidLimitArgumentValueConstant,
-				commandRootFlagConstant,
-				multiRootFirstArgumentConstant,
-			},
-			expectError:          true,
-			expectedErrorMessage: invalidLimitErrorMessageConstant,
-		},
-	}
-
-	for testCaseIndex := range testCases {
-		testCase := testCases[testCaseIndex]
-		testInstance.Run(fmt.Sprintf(subtestNameTemplateConstant, testCaseIndex, testCase.name), func(subtest *testing.T) {
-			fakeExecutorInstance := &fakeCommandExecutor{}
-
-			if !testCase.expectError {
-				gitListArguments := []string{gitListRemoteSubcommandConstant, gitHeadsFlagConstant, testCase.expectedRemote}
-				registerResponse(fakeExecutorInstance, gitCommandLabelConstant, gitListArguments, execshell.ExecutionResult{StandardOutput: remoteOutput, ExitCode: 0}, nil)
-
-				githubListArguments := []string{
-					githubPullRequestSubcommandConstant,
-					githubListSubcommandConstant,
-					githubStateFlagConstant,
-					githubClosedStateConstant,
-					githubJSONFlagConstant,
-					pullRequestJSONFieldNameConstant,
-					githubLimitFlagConstant,
-					strconv.Itoa(testCase.expectedLimit),
-				}
-				registerResponse(fakeExecutorInstance, githubCommandLabelConstant, githubListArguments, execshell.ExecutionResult{StandardOutput: pullRequestJSON, ExitCode: 0}, nil)
-
-				if !testCase.expectDryRun {
-					registerResponse(fakeExecutorInstance, gitCommandLabelConstant, []string{gitPushSubcommandConstant, testCase.expectedRemote, gitDeleteFlagConstant, cleanupBranchNameConstant}, execshell.ExecutionResult{ExitCode: 0}, nil)
-					registerResponse(fakeExecutorInstance, gitCommandLabelConstant, []string{gitBranchSubcommandConstant, gitForceDeleteFlagConstant, cleanupBranchNameConstant}, execshell.ExecutionResult{ExitCode: 0}, nil)
-				}
-			}
-
-			fakeDiscoverer := &fakeRepositoryDiscoverer{repositories: append([]string{}, testCase.expectedRoots...)}
-
-			builder := branches.CommandBuilder{
-				LoggerProvider:       func() *zap.Logger { return zap.NewNop() },
-				Executor:             fakeExecutorInstance,
-				RepositoryDiscoverer: fakeDiscoverer,
-				PrompterFactory: func(*cobra.Command) shared.ConfirmationPrompter {
-					return &stubConfirmationPrompter{defaultResponse: shared.ConfirmationResult{Confirmed: true}}
-				},
-			}
-
-			if testCase.useConfiguration {
-				builder.ConfigurationProvider = func() branches.CommandConfiguration {
-					return testCase.configuration
-				}
-			}
-
-			command, buildError := builder.Build()
-			require.NoError(subtest, buildError)
-			bindGlobalBranchFlags(command)
-
-			outputBuffer := &strings.Builder{}
-			command.SetOut(outputBuffer)
-			command.SetErr(outputBuffer)
-			command.SetContext(context.Background())
-			command.SetArgs(testCase.arguments)
-
-			executionError := command.Execute()
-			if testCase.expectError {
-				require.Error(subtest, executionError)
-				require.Equal(subtest, testCase.expectedErrorMessage, executionError.Error())
-				require.Contains(subtest, outputBuffer.String(), command.UseLine())
-				require.Empty(subtest, fakeDiscoverer.receivedRoots)
-				return
-			}
-
-			require.NoError(subtest, executionError)
-			require.Equal(subtest, testCase.expectedRoots, fakeDiscoverer.receivedRoots)
-
-			if testCase.expectDryRun {
-				for _, executed := range fakeExecutorInstance.executedCommands {
-					require.NotEqual(subtest, gitPushSubcommandConstant, executed.arguments[0])
-				}
-			}
-		})
-	}
-}
-
-func collectWorkingDirectories(executedCommands []executedCommandRecord) []string {
-	seen := make(map[string]struct{})
-	var directories []string
-	for _, commandRecord := range executedCommands {
-		if _, alreadySeen := seen[commandRecord.workingDirectory]; alreadySeen {
-			continue
-		}
-		seen[commandRecord.workingDirectory] = struct{}{}
-		directories = append(directories, commandRecord.workingDirectory)
-	}
-	return directories
-}
-
-func verifyWarnings(testInstance *testing.T, logEntries []observer.LoggedEntry, expectedRepositories []string) {
-	expectedSet := make(map[string]int)
-	for _, repositoryPath := range expectedRepositories {
-		expectedSet[repositoryPath]++
-	}
-
-	actualSet := make(map[string]int)
-	for _, entry := range logEntries {
-		if entry.Level != zap.WarnLevel {
-			continue
-		}
-		repositoryValue, found := entry.ContextMap()[repositoryLogFieldNameConstant]
-		require.True(testInstance, found)
-		repositoryPath, ok := repositoryValue.(string)
-		require.True(testInstance, ok)
-		actualSet[repositoryPath]++
-	}
-
-	require.Equal(testInstance, expectedSet, actualSet)
+	flagutils.EnsureRemoteFlag(command, configurationRemoteNameConstant, "remote")
 }

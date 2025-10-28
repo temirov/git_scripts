@@ -12,6 +12,7 @@ import (
 	"github.com/temirov/gix/internal/execshell"
 	"github.com/temirov/gix/internal/utils"
 	flagutils "github.com/temirov/gix/internal/utils/flags"
+	"github.com/temirov/gix/internal/workflow"
 	"github.com/temirov/gix/pkg/llm"
 )
 
@@ -29,6 +30,7 @@ func TestMessageCommandGeneratesChangelog(t *testing.T) {
 		},
 	}
 	client := &fakeChatClient{response: "## [v1.0.0]\n\n### Features ✨\n- Highlight\n"}
+	runner := &recordingTaskRunner{}
 
 	builder := MessageCommandBuilder{
 		GitExecutor: executor,
@@ -46,6 +48,11 @@ func TestMessageCommandGeneratesChangelog(t *testing.T) {
 			client.config = config
 			return client, nil
 		},
+		Discoverer: mockDiscoverer{roots: []string{tempDir}},
+		TaskRunnerFactory: func(deps workflow.Dependencies) TaskRunnerExecutor {
+			runner.dependencies = deps
+			return runner
+		},
 	}
 
 	command, err := builder.Build()
@@ -58,12 +65,18 @@ func TestMessageCommandGeneratesChangelog(t *testing.T) {
 
 	err = command.Execute()
 	require.NoError(t, err)
-	require.Contains(t, output.String(), "## [v1.0.0]")
+	require.Equal(t, []string{tempDir}, runner.roots)
+	require.False(t, runner.runtimeOptions.DryRun)
+	require.Len(t, runner.definitions, 1)
+	action := runner.definitions[0].Actions[0]
+	require.Equal(t, taskTypeChangelogMessage, action.Type)
+	require.Equal(t, "v1.0.0", action.Options[taskOptionChangelogVersion])
+	require.Equal(t, "", action.Options[taskOptionChangelogReleaseDate])
+	require.Equal(t, "", action.Options[taskOptionChangelogSinceRef])
+	require.NotNil(t, action.Options[taskOptionChangelogClient])
 	require.Equal(t, "mock-model", client.config.Model)
 	require.Equal(t, "test-api-key", client.config.APIKey)
-	require.Len(t, executor.calls, 4)
-	require.NotNil(t, client.request)
-	require.Contains(t, client.request.Messages[1].Content, "Release version: v1.0.0")
+	require.Nil(t, client.request)
 }
 
 func TestMessageCommandDryRunWritesPrompt(t *testing.T) {
@@ -80,6 +93,7 @@ func TestMessageCommandDryRunWritesPrompt(t *testing.T) {
 		},
 	}
 	client := &fakeChatClient{}
+	runner := &recordingTaskRunner{}
 
 	builder := MessageCommandBuilder{
 		GitExecutor: executor,
@@ -92,6 +106,11 @@ func TestMessageCommandDryRunWritesPrompt(t *testing.T) {
 		},
 		ClientFactory: func(config llm.Config) (changeloggen.ChatClient, error) {
 			return client, nil
+		},
+		Discoverer: mockDiscoverer{roots: []string{tempDir}},
+		TaskRunnerFactory: func(deps workflow.Dependencies) TaskRunnerExecutor {
+			runner.dependencies = deps
+			return runner
 		},
 	}
 
@@ -107,9 +126,11 @@ func TestMessageCommandDryRunWritesPrompt(t *testing.T) {
 
 	err = command.Execute()
 	require.NoError(t, err)
-	result := output.String()
-	require.Contains(t, result, "You are an expert release engineer creating Markdown changelog sections.")
-	require.Contains(t, result, "Release version:")
+	require.Equal(t, []string{tempDir}, runner.roots)
+	require.True(t, runner.runtimeOptions.DryRun)
+	require.Len(t, runner.definitions, 1)
+	action := runner.definitions[0].Actions[0]
+	require.Equal(t, taskTypeChangelogMessage, action.Type)
 	require.Nil(t, client.request)
 }
 
@@ -179,4 +200,26 @@ func (client *fakeChatClient) Chat(ctx context.Context, request llm.ChatRequest)
 		return "", client.err
 	}
 	return client.response, nil
+}
+
+type recordingTaskRunner struct {
+	dependencies   workflow.Dependencies
+	roots          []string
+	definitions    []workflow.TaskDefinition
+	runtimeOptions workflow.RuntimeOptions
+}
+
+func (runner *recordingTaskRunner) Run(ctx context.Context, roots []string, definitions []workflow.TaskDefinition, options workflow.RuntimeOptions) error {
+	runner.roots = append([]string{}, roots...)
+	runner.definitions = append([]workflow.TaskDefinition{}, definitions...)
+	runner.runtimeOptions = options
+	return nil
+}
+
+type mockDiscoverer struct {
+	roots []string
+}
+
+func (discoverer mockDiscoverer) DiscoverRepositories([]string) ([]string, error) {
+	return append([]string{}, discoverer.roots...), nil
 }

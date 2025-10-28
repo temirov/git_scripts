@@ -1,8 +1,8 @@
 package refresh_test
 
 import (
-	"bytes"
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -12,6 +12,7 @@ import (
 	"github.com/temirov/gix/internal/branches/refresh"
 	"github.com/temirov/gix/internal/execshell"
 	flagutils "github.com/temirov/gix/internal/utils/flags"
+	"github.com/temirov/gix/internal/workflow"
 )
 
 type recordingGitExecutor struct {
@@ -72,6 +73,28 @@ func (erroringRepositoryManager) SetRemoteURL(context.Context, string, string, s
 	return nil
 }
 
+type recordingTaskRunner struct {
+	dependencies workflow.Dependencies
+	roots        []string
+	definitions  []workflow.TaskDefinition
+	options      workflow.RuntimeOptions
+}
+
+func (runner *recordingTaskRunner) Run(_ context.Context, roots []string, definitions []workflow.TaskDefinition, options workflow.RuntimeOptions) error {
+	runner.roots = append([]string{}, roots...)
+	runner.definitions = append([]workflow.TaskDefinition{}, definitions...)
+	runner.options = options
+	return nil
+}
+
+type failingTaskRunner struct {
+	err error
+}
+
+func (runner failingTaskRunner) Run(context.Context, []string, []workflow.TaskDefinition, workflow.RuntimeOptions) error {
+	return runner.err
+}
+
 func TestBuildReturnsCommand(t *testing.T) {
 	builder := refresh.CommandBuilder{}
 	command, buildError := builder.Build()
@@ -87,6 +110,9 @@ func TestCommandRequiresBranchName(t *testing.T) {
 		},
 		GitExecutor:          &recordingGitExecutor{},
 		GitRepositoryManager: constantCleanRepositoryManager{},
+		TaskRunnerFactory: func(workflow.Dependencies) refresh.TaskRunnerExecutor {
+			return &recordingTaskRunner{}
+		},
 	}
 	command, buildError := builder.Build()
 	require.NoError(t, buildError)
@@ -97,6 +123,7 @@ func TestCommandRequiresBranchName(t *testing.T) {
 func TestCommandRunsSuccessfully(t *testing.T) {
 	temporaryRepository := t.TempDir()
 	executor := &recordingGitExecutor{}
+	runner := &recordingTaskRunner{}
 	builder := refresh.CommandBuilder{
 		LoggerProvider: func() *zap.Logger { return zap.NewNop() },
 		ConfigurationProvider: func() refresh.CommandConfiguration {
@@ -104,6 +131,10 @@ func TestCommandRunsSuccessfully(t *testing.T) {
 		},
 		GitExecutor:          executor,
 		GitRepositoryManager: constantCleanRepositoryManager{},
+		TaskRunnerFactory: func(deps workflow.Dependencies) refresh.TaskRunnerExecutor {
+			runner.dependencies = deps
+			return runner
+		},
 	}
 	command, buildError := builder.Build()
 	require.NoError(t, buildError)
@@ -111,17 +142,23 @@ func TestCommandRunsSuccessfully(t *testing.T) {
 
 	require.NoError(t, command.Flags().Set("branch", "main"))
 
-	outputBuffer := &bytes.Buffer{}
-	command.SetOut(outputBuffer)
-
 	require.NoError(t, command.RunE(command, []string{}))
-	require.Contains(t, outputBuffer.String(), temporaryRepository)
-	require.Contains(t, outputBuffer.String(), "main")
-	require.Len(t, executor.recordedCommands, 3)
+	require.Equal(t, []string{temporaryRepository}, runner.roots)
+	require.False(t, runner.options.DryRun)
+	require.False(t, runner.options.AssumeYes)
+	require.Len(t, runner.definitions, 1)
+	require.Len(t, runner.definitions[0].Actions, 1)
+	action := runner.definitions[0].Actions[0]
+	require.Equal(t, "branch.refresh", action.Type)
+	require.Equal(t, "main", action.Options["branch"])
+	require.False(t, action.Options["stash"].(bool))
+	require.False(t, action.Options["commit"].(bool))
+	require.True(t, action.Options["require_clean"].(bool))
 }
 
 func TestCommandReportsDirtyWorktree(t *testing.T) {
 	temporaryRepository := t.TempDir()
+	failure := errors.New("refresh failed")
 	builder := refresh.CommandBuilder{
 		LoggerProvider: func() *zap.Logger { return zap.NewNop() },
 		ConfigurationProvider: func() refresh.CommandConfiguration {
@@ -129,12 +166,15 @@ func TestCommandReportsDirtyWorktree(t *testing.T) {
 		},
 		GitExecutor:          &recordingGitExecutor{},
 		GitRepositoryManager: erroringRepositoryManager{},
+		TaskRunnerFactory: func(workflow.Dependencies) refresh.TaskRunnerExecutor {
+			return failingTaskRunner{err: failure}
+		},
 	}
 	command, buildError := builder.Build()
 	require.NoError(t, buildError)
 	flagutils.BindRootFlags(command, flagutils.RootFlagValues{}, flagutils.RootFlagDefinition{Enabled: true})
 
-	require.Error(t, command.RunE(command, []string{}))
+	require.ErrorIs(t, command.RunE(command, []string{}), failure)
 }
 
 func TestCommandRejectsConflictingFlags(t *testing.T) {
@@ -146,6 +186,9 @@ func TestCommandRejectsConflictingFlags(t *testing.T) {
 		},
 		GitExecutor:          &recordingGitExecutor{},
 		GitRepositoryManager: constantCleanRepositoryManager{},
+		TaskRunnerFactory: func(workflow.Dependencies) refresh.TaskRunnerExecutor {
+			return &recordingTaskRunner{}
+		},
 	}
 	command, buildError := builder.Build()
 	require.NoError(t, buildError)

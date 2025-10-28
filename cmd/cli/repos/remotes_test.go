@@ -3,6 +3,7 @@ package repos_test
 import (
 	"bytes"
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,10 +14,10 @@ import (
 	"go.uber.org/zap"
 
 	repos "github.com/temirov/gix/cmd/cli/repos"
-	"github.com/temirov/gix/internal/githubcli"
 	"github.com/temirov/gix/internal/repos/shared"
 	"github.com/temirov/gix/internal/utils"
 	flagutils "github.com/temirov/gix/internal/utils/flags"
+	"github.com/temirov/gix/internal/workflow"
 )
 
 const (
@@ -37,6 +38,19 @@ const (
 	remotesOwnerMismatchConstant     = "different"
 )
 
+type recordingTaskRunner struct {
+	roots          []string
+	definitions    []workflow.TaskDefinition
+	runtimeOptions workflow.RuntimeOptions
+}
+
+func (runner *recordingTaskRunner) Run(_ context.Context, roots []string, definitions []workflow.TaskDefinition, options workflow.RuntimeOptions) error {
+	runner.roots = append([]string{}, roots...)
+	runner.definitions = append([]workflow.TaskDefinition{}, definitions...)
+	runner.runtimeOptions = options
+	return nil
+}
+
 func TestRemotesCommandConfigurationPrecedence(testInstance *testing.T) {
 	testCases := []struct {
 		name                    string
@@ -44,10 +58,13 @@ func TestRemotesCommandConfigurationPrecedence(testInstance *testing.T) {
 		arguments               []string
 		expectedRoots           []string
 		expectedRootsBuilder    func(testing.TB) []string
-		expectRemoteUpdates     int
 		expectPromptInvocations int
 		expectError             bool
 		expectedErrorMessage    string
+		expectedDryRun          bool
+		expectedAssumeYes       bool
+		expectedOwnerConstraint string
+		expectTaskInvocation    bool
 	}{
 		{
 			name: "configuration_enables_dry_run",
@@ -58,8 +75,10 @@ func TestRemotesCommandConfigurationPrecedence(testInstance *testing.T) {
 			},
 			arguments:               []string{},
 			expectedRoots:           []string{remotesConfiguredRootConstant},
-			expectRemoteUpdates:     0,
 			expectPromptInvocations: 0,
+			expectedDryRun:          true,
+			expectedAssumeYes:       false,
+			expectTaskInvocation:    true,
 		},
 		{
 			name: "flags_override_configuration",
@@ -74,8 +93,10 @@ func TestRemotesCommandConfigurationPrecedence(testInstance *testing.T) {
 				remotesRootFlagConstant, remotesCLIRepositoryRootConstant,
 			},
 			expectedRoots:           []string{remotesCLIRepositoryRootConstant},
-			expectRemoteUpdates:     0,
 			expectPromptInvocations: 0,
+			expectedDryRun:          true,
+			expectedAssumeYes:       true,
+			expectTaskInvocation:    true,
 		},
 		{
 			name:                 "error_when_roots_missing",
@@ -83,6 +104,9 @@ func TestRemotesCommandConfigurationPrecedence(testInstance *testing.T) {
 			arguments:            []string{},
 			expectError:          true,
 			expectedErrorMessage: remotesMissingRootsMessage,
+			expectedDryRun:       false,
+			expectedAssumeYes:    false,
+			expectTaskInvocation: false,
 		},
 		{
 			name: "configuration_expands_home_relative_root",
@@ -98,8 +122,10 @@ func TestRemotesCommandConfigurationPrecedence(testInstance *testing.T) {
 				expandedRoot := filepath.Join(homeDirectory, remotesHomeRootSuffixConstant)
 				return []string{expandedRoot}
 			},
-			expectRemoteUpdates:     0,
 			expectPromptInvocations: 0,
+			expectedDryRun:          true,
+			expectedAssumeYes:       true,
+			expectTaskInvocation:    true,
 		},
 		{
 			name: "arguments_preserve_relative_roots",
@@ -114,8 +140,10 @@ func TestRemotesCommandConfigurationPrecedence(testInstance *testing.T) {
 				remotesRootFlagConstant, remotesRelativeRootConstant,
 			},
 			expectedRoots:           []string{remotesRelativeRootConstant},
-			expectRemoteUpdates:     0,
 			expectPromptInvocations: 0,
+			expectedDryRun:          true,
+			expectedAssumeYes:       true,
+			expectTaskInvocation:    true,
 		},
 		{
 			name:          "arguments_expand_home_relative_root",
@@ -131,8 +159,10 @@ func TestRemotesCommandConfigurationPrecedence(testInstance *testing.T) {
 				expandedRoot := filepath.Join(homeDirectory, remotesHomeRootSuffixConstant)
 				return []string{expandedRoot}
 			},
-			expectRemoteUpdates:     0,
 			expectPromptInvocations: 0,
+			expectedDryRun:          true,
+			expectedAssumeYes:       true,
+			expectTaskInvocation:    true,
 		},
 	}
 
@@ -141,21 +171,21 @@ func TestRemotesCommandConfigurationPrecedence(testInstance *testing.T) {
 		testInstance.Run(testCase.name, func(subtest *testing.T) {
 			discoverer := &fakeRepositoryDiscoverer{repositories: []string{remotesDiscoveredRepository}}
 			executor := &fakeGitExecutor{}
-			manager := &fakeGitRepositoryManager{remoteURL: remotesOriginURLConstant, currentBranch: remotesMetadataDefaultBranch, panicOnCurrentBranchLookup: true}
-			resolver := &fakeGitHubResolver{metadata: githubcli.RepositoryMetadata{NameWithOwner: remotesCanonicalRepository, DefaultBranch: remotesMetadataDefaultBranch}}
 			prompter := &recordingPrompter{result: shared.ConfirmationResult{Confirmed: true}}
+			runner := &recordingTaskRunner{}
 
 			builder := repos.RemotesCommandBuilder{
 				LoggerProvider: func() *zap.Logger { return zap.NewNop() },
 				Discoverer:     discoverer,
 				GitExecutor:    executor,
-				GitManager:     manager,
-				GitHubResolver: resolver,
 				PrompterFactory: func(*cobra.Command) shared.ConfirmationPrompter {
 					return prompter
 				},
 				ConfigurationProvider: func() repos.RemotesConfiguration {
 					return testCase.configuration
+				},
+				TaskRunnerFactory: func(workflow.Dependencies) repos.TaskRunnerExecutor {
+					return runner
 				},
 			}
 
@@ -176,9 +206,8 @@ func TestRemotesCommandConfigurationPrecedence(testInstance *testing.T) {
 				require.Equal(subtest, testCase.expectedErrorMessage, executionError.Error())
 				combinedOutput := stdoutBuffer.String() + stderrBuffer.String()
 				require.Contains(subtest, combinedOutput, command.UseLine())
-				require.Empty(subtest, discoverer.receivedRoots)
 				require.Zero(subtest, prompter.calls)
-				require.Zero(subtest, len(manager.setCalls))
+				require.Empty(subtest, runner.definitions)
 				return
 			}
 
@@ -188,44 +217,43 @@ func TestRemotesCommandConfigurationPrecedence(testInstance *testing.T) {
 			if testCase.expectedRootsBuilder != nil {
 				expectedRoots = testCase.expectedRootsBuilder(subtest)
 			}
-			require.Equal(subtest, expectedRoots, discoverer.receivedRoots)
+			require.Equal(subtest, expectedRoots, runner.roots)
 			require.Equal(subtest, testCase.expectPromptInvocations, prompter.calls)
-			require.Equal(subtest, testCase.expectRemoteUpdates, len(manager.setCalls))
+
+			if testCase.expectTaskInvocation {
+				require.Len(subtest, runner.definitions, 1)
+				require.Len(subtest, runner.definitions[0].Actions, 1)
+				action := runner.definitions[0].Actions[0]
+				require.Equal(subtest, "repo.remote.update", action.Type)
+				if len(strings.TrimSpace(testCase.expectedOwnerConstraint)) > 0 {
+					require.Equal(subtest, testCase.expectedOwnerConstraint, action.Options["owner"])
+				} else {
+					require.NotContains(subtest, action.Options, "owner")
+				}
+				require.Equal(subtest, testCase.expectedDryRun, runner.runtimeOptions.DryRun)
+				require.Equal(subtest, testCase.expectedAssumeYes, runner.runtimeOptions.AssumeYes)
+			} else {
+				require.Empty(subtest, runner.definitions)
+			}
 		})
 	}
 }
 
 func TestRemotesCommandOwnerOptions(testInstance *testing.T) {
-	expectedSuccessMessage := func(repositoryPath string, canonical string) string {
-		return "UPDATE-REMOTE-DONE: " + repositoryPath + " origin now https://github.com/" + canonical + ".git\n"
-	}
-
 	testCases := []struct {
-		name                    string
-		configuration           repos.RemotesConfiguration
-		arguments               []string
-		metadataOwnerRepository string
-		expectedCanonical       string
+		name          string
+		configuration repos.RemotesConfiguration
+		arguments     []string
+		expectedOwner string
 	}{
 		{
-			name: "configuration_owner_matches_canonical",
+			name: "configuration_owner_applies",
 			configuration: repos.RemotesConfiguration{
 				Owner:           remotesOwnerConstraintConstant,
 				AssumeYes:       true,
 				RepositoryRoots: []string{remotesConfiguredRootConstant},
 			},
-			arguments:         []string{},
-			expectedCanonical: remotesCanonicalRepository,
-		},
-		{
-			name: "configuration_owner_mismatch_allows_update",
-			configuration: repos.RemotesConfiguration{
-				Owner:           remotesOwnerMismatchConstant,
-				AssumeYes:       true,
-				RepositoryRoots: []string{remotesConfiguredRootConstant},
-			},
-			arguments:         []string{},
-			expectedCanonical: remotesCanonicalRepository,
+			expectedOwner: remotesOwnerConstraintConstant,
 		},
 		{
 			name: "flag_overrides_configuration",
@@ -234,72 +262,52 @@ func TestRemotesCommandOwnerOptions(testInstance *testing.T) {
 				AssumeYes:       true,
 				RepositoryRoots: []string{remotesConfiguredRootConstant},
 			},
-			arguments: []string{
-				remotesOwnerFlagConstant, remotesOwnerConstraintConstant,
-			},
-			expectedCanonical: remotesCanonicalRepository,
+			arguments:     []string{remotesOwnerFlagConstant, remotesOwnerConstraintConstant},
+			expectedOwner: remotesOwnerConstraintConstant,
 		},
 		{
-			name: "invalid_canonical_owner_still_updates",
+			name: "owner_not_specified",
 			configuration: repos.RemotesConfiguration{
-				Owner:           remotesOwnerConstraintConstant,
-				AssumeYes:       true,
 				RepositoryRoots: []string{remotesConfiguredRootConstant},
 			},
-			arguments:               []string{},
-			metadataOwnerRepository: "invalid",
-			expectedCanonical:       "invalid",
+			expectedOwner: "",
 		},
 	}
 
-	for testCaseIndex := range testCases {
-		testCase := testCases[testCaseIndex]
+	for _, testCase := range testCases {
 		testInstance.Run(testCase.name, func(subtest *testing.T) {
-			discoverer := &fakeRepositoryDiscoverer{repositories: []string{remotesDiscoveredRepository}}
 			executor := &fakeGitExecutor{}
-			manager := &fakeGitRepositoryManager{remoteURL: remotesOriginURLConstant, currentBranch: remotesMetadataDefaultBranch, panicOnCurrentBranchLookup: true}
-			repositoryMetadata := remotesCanonicalRepository
-			if len(strings.TrimSpace(testCase.metadataOwnerRepository)) > 0 {
-				repositoryMetadata = testCase.metadataOwnerRepository
-			}
-			resolver := &fakeGitHubResolver{metadata: githubcli.RepositoryMetadata{NameWithOwner: repositoryMetadata, DefaultBranch: remotesMetadataDefaultBranch}}
-			prompter := &recordingPrompter{result: shared.ConfirmationResult{Confirmed: true}}
+			runner := &recordingTaskRunner{}
 
 			builder := repos.RemotesCommandBuilder{
 				LoggerProvider: func() *zap.Logger { return zap.NewNop() },
-				Discoverer:     discoverer,
 				GitExecutor:    executor,
-				GitManager:     manager,
-				GitHubResolver: resolver,
-				PrompterFactory: func(*cobra.Command) shared.ConfirmationPrompter {
-					return prompter
-				},
 				ConfigurationProvider: func() repos.RemotesConfiguration {
 					return testCase.configuration
+				},
+				TaskRunnerFactory: func(workflow.Dependencies) repos.TaskRunnerExecutor {
+					return runner
 				},
 			}
 
 			command, buildError := builder.Build()
 			require.NoError(subtest, buildError)
 			bindGlobalRemotesFlags(command)
-
 			command.SetContext(context.Background())
-			stdoutBuffer := &bytes.Buffer{}
-			stderrBuffer := &bytes.Buffer{}
-			command.SetOut(stdoutBuffer)
-			command.SetErr(stderrBuffer)
+			command.SetOut(io.Discard)
+			command.SetErr(io.Discard)
 			command.SetArgs(testCase.arguments)
 
-			executionError := command.Execute()
-			require.NoError(subtest, executionError)
+			require.NoError(subtest, command.Execute())
 
-			combinedOutput := stdoutBuffer.String() + stderrBuffer.String()
-			expectedMessage := expectedSuccessMessage(remotesDiscoveredRepository, testCase.expectedCanonical)
-			require.Equal(subtest, expectedMessage, combinedOutput)
-			require.Equal(subtest, []string{remotesConfiguredRootConstant}, discoverer.receivedRoots)
-			require.Equal(subtest, 1, len(manager.setCalls))
-			expectedURL := "https://github.com/" + testCase.expectedCanonical + ".git"
-			require.Equal(subtest, expectedURL, manager.remoteURL)
+			require.Len(subtest, runner.definitions, 1)
+			require.Len(subtest, runner.definitions[0].Actions, 1)
+			action := runner.definitions[0].Actions[0]
+			if len(strings.TrimSpace(testCase.expectedOwner)) > 0 {
+				require.Equal(subtest, testCase.expectedOwner, action.Options["owner"])
+			} else {
+				require.NotContains(subtest, action.Options, "owner")
+			}
 		})
 	}
 }

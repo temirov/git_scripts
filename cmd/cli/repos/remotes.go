@@ -5,11 +5,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/temirov/gix/internal/audit"
+	"github.com/temirov/gix/internal/githubcli"
+	"github.com/temirov/gix/internal/gitrepo"
 	"github.com/temirov/gix/internal/repos/dependencies"
-	"github.com/temirov/gix/internal/repos/remotes"
 	"github.com/temirov/gix/internal/repos/shared"
 	flagutils "github.com/temirov/gix/internal/utils/flags"
+	"github.com/temirov/gix/internal/workflow"
 )
 
 const (
@@ -30,6 +31,7 @@ type RemotesCommandBuilder struct {
 	PrompterFactory              PrompterFactory
 	HumanReadableLoggingProvider func() bool
 	ConfigurationProvider        func() RemotesConfiguration
+	TaskRunnerFactory            func(workflow.Dependencies) TaskRunnerExecutor
 }
 
 // Build constructs the repo-remote-update command.
@@ -87,48 +89,57 @@ func (builder *RemotesCommandBuilder) run(command *cobra.Command, arguments []st
 		return managerError
 	}
 
-	githubResolver, resolverError := dependencies.ResolveGitHubResolver(builder.GitHubResolver, gitExecutor)
-	if resolverError != nil {
-		return resolverError
-	}
-
 	repositoryDiscoverer := dependencies.ResolveRepositoryDiscoverer(builder.Discoverer)
 	prompter := resolvePrompter(builder.PrompterFactory, command)
-
-	service := audit.NewService(repositoryDiscoverer, gitManager, gitExecutor, githubResolver, command.OutOrStdout(), command.ErrOrStderr())
-
-	inspections, inspectionError := service.DiscoverInspections(command.Context(), roots, false, false, audit.InspectionDepthMinimal)
-	if inspectionError != nil {
-		return inspectionError
-	}
-
 	trackingPrompter := newCascadingConfirmationPrompter(prompter, assumeYes)
-	remotesDependencies := remotes.Dependencies{
-		GitManager: gitManager,
-		Prompter:   trackingPrompter,
-		Output:     command.OutOrStdout(),
+
+	resolvedManager, repositoryManager := gitManager, (*gitrepo.RepositoryManager)(nil)
+	if concreteManager, ok := resolvedManager.(*gitrepo.RepositoryManager); ok {
+		repositoryManager = concreteManager
+	} else {
+		constructedManager, constructedManagerError := gitrepo.NewRepositoryManager(gitExecutor)
+		if constructedManagerError != nil {
+			return constructedManagerError
+		}
+		repositoryManager = constructedManager
 	}
 
-	for _, inspection := range inspections {
-		if len(strings.TrimSpace(inspection.CanonicalOwnerRepo)) == 0 && len(strings.TrimSpace(inspection.OriginOwnerRepo)) == 0 {
-			continue
-		}
-
-		remotesOptions := remotes.Options{
-			RepositoryPath:           inspection.Path,
-			CurrentOriginURL:         inspection.OriginURL,
-			OriginOwnerRepository:    inspection.OriginOwnerRepo,
-			CanonicalOwnerRepository: inspection.CanonicalOwnerRepo,
-			RemoteProtocol:           shared.RemoteProtocol(inspection.RemoteProtocol),
-			DryRun:                   dryRun,
-			AssumeYes:                trackingPrompter.AssumeYes(),
-			OwnerConstraint:          ownerConstraint,
-		}
-
-		remotes.Execute(command.Context(), remotesDependencies, remotesOptions)
+	githubClient, githubClientError := githubcli.NewClient(gitExecutor)
+	if githubClientError != nil {
+		return githubClientError
 	}
 
-	return nil
+	taskDependencies := workflow.Dependencies{
+		Logger:               logger,
+		RepositoryDiscoverer: repositoryDiscoverer,
+		GitExecutor:          gitExecutor,
+		RepositoryManager:    repositoryManager,
+		GitHubClient:         githubClient,
+		FileSystem:           dependencies.ResolveFileSystem(nil),
+		Prompter:             trackingPrompter,
+		Output:               command.OutOrStdout(),
+		Errors:               command.ErrOrStderr(),
+	}
+
+	taskRunner := ResolveTaskRunner(builder.TaskRunnerFactory, taskDependencies)
+
+	actionOptions := map[string]any{}
+	if len(strings.TrimSpace(ownerConstraint)) > 0 {
+		actionOptions["owner"] = ownerConstraint
+	}
+
+	taskDefinition := workflow.TaskDefinition{
+		Name:        "Update canonical remote",
+		EnsureClean: false,
+		Actions: []workflow.TaskActionDefinition{
+			{Type: "repo.remote.update", Options: actionOptions},
+		},
+		Commit: workflow.TaskCommitDefinition{},
+	}
+
+	runtimeOptions := workflow.RuntimeOptions{DryRun: dryRun, AssumeYes: trackingPrompter.AssumeYes()}
+
+	return taskRunner.Run(command.Context(), roots, []workflow.TaskDefinition{taskDefinition}, runtimeOptions)
 }
 
 func (builder *RemotesCommandBuilder) resolveConfiguration() RemotesConfiguration {

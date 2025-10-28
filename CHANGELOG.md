@@ -11,6 +11,7 @@
 - Refreshed README and workflow examples to use `branch default` instead of `branch migrate`.
 - Enhanced safety gates and automation for default branch promotion.
 - Streamlined configuration and command hierarchy for branch management commands.
+- Routed the workflow CLI through the shared task runner so declarative steps execute via workflow tasks while retaining legacy audit report file output and stdout banners.
 
 ### Bug Fixes 🐛
 - _No changes._
@@ -18,6 +19,7 @@
 ### Testing 🧪
 - Updated internal and integration tests to cover the new `branch default` command behavior.
 - Refactored tests to remove references to `branch migrate`.
+- Added task executor coverage guarding against action-only apply logs and rewrote workflow command unit tests to assert emitted task definitions.
 
 ### Docs 📚
 - Updated README and CLI design docs to document `branch default` command usage.

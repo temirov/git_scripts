@@ -12,6 +12,7 @@ import (
 	"github.com/temirov/gix/internal/execshell"
 	"github.com/temirov/gix/internal/utils"
 	flagutils "github.com/temirov/gix/internal/utils/flags"
+	"github.com/temirov/gix/internal/workflow"
 	"github.com/temirov/gix/pkg/llm"
 )
 
@@ -29,6 +30,8 @@ func TestMessageCommandGeneratesCommitMessage(t *testing.T) {
 	}
 	client := &fakeChatClient{response: "feat: update file"}
 
+	runner := &recordingTaskRunner{}
+
 	builder := MessageCommandBuilder{
 		GitExecutor: executor,
 		ConfigurationProvider: func() MessageConfiguration {
@@ -43,6 +46,11 @@ func TestMessageCommandGeneratesCommitMessage(t *testing.T) {
 			client.config = config
 			return client, nil
 		},
+		Discoverer: mockDiscoverer{roots: []string{tempDir}},
+		TaskRunnerFactory: func(deps workflow.Dependencies) TaskRunnerExecutor {
+			runner.dependencies = deps
+			return runner
+		},
 	}
 
 	command, err := builder.Build()
@@ -55,12 +63,19 @@ func TestMessageCommandGeneratesCommitMessage(t *testing.T) {
 
 	err = command.Execute()
 	require.NoError(t, err)
-	require.Contains(t, output.String(), "feat: update file")
+	require.NotNil(t, runner)
+	require.Equal(t, []string{tempDir}, runner.roots)
+	require.False(t, runner.runtimeOptions.DryRun)
+	require.Len(t, runner.definitions, 1)
+	require.Len(t, runner.definitions[0].Actions, 1)
+	action := runner.definitions[0].Actions[0]
+	require.Equal(t, taskTypeCommitMessage, action.Type)
+	require.Equal(t, "staged", action.Options[taskOptionCommitDiffSource])
+	require.Equal(t, 0, action.Options[taskOptionCommitMaxTokens])
+	require.NotNil(t, action.Options[taskOptionCommitClient])
 	require.Equal(t, "mock-model", client.config.Model)
 	require.Equal(t, "test-api-key", client.config.APIKey)
-	require.Len(t, executor.calls, 3)
-	require.NotNil(t, client.request)
-	require.Contains(t, client.request.Messages[1].Content, "Diff source: STAGED")
+	require.Nil(t, client.request)
 }
 
 func TestMessageCommandDryRunWritesPrompt(t *testing.T) {
@@ -76,6 +91,7 @@ func TestMessageCommandDryRunWritesPrompt(t *testing.T) {
 		},
 	}
 	client := &fakeChatClient{}
+	runner := &recordingTaskRunner{}
 
 	builder := MessageCommandBuilder{
 		GitExecutor: executor,
@@ -89,6 +105,11 @@ func TestMessageCommandDryRunWritesPrompt(t *testing.T) {
 		},
 		ClientFactory: func(config llm.Config) (commitmsg.ChatClient, error) {
 			return client, nil
+		},
+		Discoverer: mockDiscoverer{roots: []string{tempDir}},
+		TaskRunnerFactory: func(deps workflow.Dependencies) TaskRunnerExecutor {
+			runner.dependencies = deps
+			return runner
 		},
 	}
 
@@ -104,9 +125,12 @@ func TestMessageCommandDryRunWritesPrompt(t *testing.T) {
 
 	err = command.Execute()
 	require.NoError(t, err)
-	result := output.String()
-	require.Contains(t, result, "You are an expert release engineer")
-	require.Contains(t, result, "Diff source: STAGED")
+	require.Equal(t, []string{tempDir}, runner.roots)
+	require.True(t, runner.runtimeOptions.DryRun)
+	require.Len(t, runner.definitions, 1)
+	action := runner.definitions[0].Actions[0]
+	require.Equal(t, taskTypeCommitMessage, action.Type)
+	require.Equal(t, "staged", action.Options[taskOptionCommitDiffSource])
 	require.Nil(t, client.request)
 }
 
@@ -176,4 +200,26 @@ func (client *fakeChatClient) Chat(ctx context.Context, request llm.ChatRequest)
 		return "", client.err
 	}
 	return client.response, nil
+}
+
+type recordingTaskRunner struct {
+	dependencies   workflow.Dependencies
+	roots          []string
+	definitions    []workflow.TaskDefinition
+	runtimeOptions workflow.RuntimeOptions
+}
+
+func (runner *recordingTaskRunner) Run(ctx context.Context, roots []string, definitions []workflow.TaskDefinition, options workflow.RuntimeOptions) error {
+	runner.roots = append([]string{}, roots...)
+	runner.definitions = append([]workflow.TaskDefinition{}, definitions...)
+	runner.runtimeOptions = options
+	return nil
+}
+
+type mockDiscoverer struct {
+	roots []string
+}
+
+func (discoverer mockDiscoverer) DiscoverRepositories([]string) ([]string, error) {
+	return append([]string{}, discoverer.roots...), nil
 }

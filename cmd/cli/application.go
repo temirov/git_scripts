@@ -21,10 +21,12 @@ import (
 	releasecmd "github.com/temirov/gix/cmd/cli/repos/release"
 	workflowcmd "github.com/temirov/gix/cmd/cli/workflow"
 	"github.com/temirov/gix/internal/audit"
+	auditcli "github.com/temirov/gix/internal/audit/cli"
 	"github.com/temirov/gix/internal/branches"
 	branchcdcmd "github.com/temirov/gix/internal/branches/cd"
 	branchrefresh "github.com/temirov/gix/internal/branches/refresh"
 	"github.com/temirov/gix/internal/migrate"
+	migratecli "github.com/temirov/gix/internal/migrate/cli"
 	"github.com/temirov/gix/internal/packages"
 	reposdeps "github.com/temirov/gix/internal/repos/dependencies"
 	"github.com/temirov/gix/internal/repos/prompt"
@@ -507,7 +509,7 @@ func NewApplication() *Application {
 
 	cobraCommand.PersistentFlags().BoolVar(&application.versionFlag, versionFlagNameConstant, false, versionFlagUsageConstant)
 
-	auditBuilder := audit.CommandBuilder{
+	auditBuilder := auditcli.CommandBuilder{
 		LoggerProvider: func() *zap.Logger {
 			return application.logger
 		},
@@ -550,7 +552,7 @@ func NewApplication() *Application {
 		ConfigurationProvider:        application.branchChangeConfiguration,
 	}
 
-	branchDefaultBuilder := migrate.CommandBuilder{
+	branchDefaultBuilder := migratecli.CommandBuilder{
 		LoggerProvider: func() *zap.Logger {
 			return application.logger
 		},

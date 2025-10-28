@@ -8,9 +8,12 @@ import (
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 
+	"github.com/temirov/gix/internal/githubcli"
+	"github.com/temirov/gix/internal/gitrepo"
 	"github.com/temirov/gix/internal/repos/dependencies"
 	"github.com/temirov/gix/internal/repos/shared"
 	rootutils "github.com/temirov/gix/internal/utils/roots"
+	"github.com/temirov/gix/internal/workflow"
 )
 
 const (
@@ -26,6 +29,7 @@ const (
 	branchFlagNameConstant                  = "branch"
 	branchFlagDescriptionConstant           = "Branch name to refresh"
 	refreshSuccessMessageTemplateConstant   = "REFRESHED: %s (%s)\n"
+	taskActionBranchRefreshType             = "branch.refresh"
 )
 
 // LoggerProvider yields a zap logger for command execution.
@@ -38,6 +42,9 @@ type CommandBuilder struct {
 	GitRepositoryManager         shared.GitRepositoryManager
 	HumanReadableLoggingProvider func() bool
 	ConfigurationProvider        func() CommandConfiguration
+	Discoverer                   shared.RepositoryDiscoverer
+	FileSystem                   shared.FileSystem
+	TaskRunnerFactory            func(workflow.Dependencies) TaskRunnerExecutor
 }
 
 // Build constructs the branch-refresh command.
@@ -107,26 +114,57 @@ func (builder *CommandBuilder) run(command *cobra.Command, arguments []string) e
 		return managerError
 	}
 
-	service, serviceCreationError := NewService(Dependencies{GitExecutor: gitExecutor, RepositoryManager: repositoryManager})
-	if serviceCreationError != nil {
-		return serviceCreationError
-	}
-
-	for _, repositoryPath := range repositoryRoots {
-		_, refreshError := service.Refresh(command.Context(), Options{
-			RepositoryPath: repositoryPath,
-			BranchName:     branchName,
-			RequireClean:   true,
-			StashChanges:   stashRequested,
-			CommitChanges:  commitRequested,
-		})
-		if refreshError != nil {
-			return refreshError
+	var concreteManager *gitrepo.RepositoryManager
+	if typedManager, ok := repositoryManager.(*gitrepo.RepositoryManager); ok {
+		concreteManager = typedManager
+	} else {
+		constructedManager, constructedManagerError := gitrepo.NewRepositoryManager(gitExecutor)
+		if constructedManagerError != nil {
+			return constructedManagerError
 		}
-		fmt.Fprintf(command.OutOrStdout(), refreshSuccessMessageTemplateConstant, repositoryPath, branchName)
+		concreteManager = constructedManager
 	}
 
-	return nil
+	repositoryDiscoverer := dependencies.ResolveRepositoryDiscoverer(builder.Discoverer)
+	fileSystem := dependencies.ResolveFileSystem(builder.FileSystem)
+
+	gitHubClient, clientError := githubcli.NewClient(gitExecutor)
+	if clientError != nil {
+		return clientError
+	}
+
+	taskDependencies := workflow.Dependencies{
+		Logger:               logger,
+		RepositoryDiscoverer: repositoryDiscoverer,
+		GitExecutor:          gitExecutor,
+		RepositoryManager:    concreteManager,
+		GitHubClient:         gitHubClient,
+		FileSystem:           fileSystem,
+		Prompter:             nil,
+		Output:               command.OutOrStdout(),
+		Errors:               command.ErrOrStderr(),
+	}
+
+	taskRunner := resolveTaskRunner(builder.TaskRunnerFactory, taskDependencies)
+
+	actionOptions := map[string]any{
+		"branch":        branchName,
+		"stash":         stashRequested,
+		"commit":        commitRequested,
+		"require_clean": true,
+	}
+
+	taskDefinition := workflow.TaskDefinition{
+		Name:        fmt.Sprintf("Refresh branch %s", branchName),
+		EnsureClean: false,
+		Actions: []workflow.TaskActionDefinition{
+			{Type: taskActionBranchRefreshType, Options: actionOptions},
+		},
+	}
+
+	runtimeOptions := workflow.RuntimeOptions{DryRun: false, AssumeYes: false}
+
+	return taskRunner.Run(command.Context(), repositoryRoots, []workflow.TaskDefinition{taskDefinition}, runtimeOptions)
 }
 
 func (builder *CommandBuilder) resolveConfiguration() CommandConfiguration {

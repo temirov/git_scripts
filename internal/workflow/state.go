@@ -15,8 +15,11 @@ const (
 
 // RepositoryState tracks the mutable details for a discovered repository.
 type RepositoryState struct {
-	Path       string
-	Inspection audit.RepositoryInspection
+	Path                  string
+	Inspection            audit.RepositoryInspection
+	PathDepth             int
+	InitialCleanWorktree  bool
+	HasNestedRepositories bool
 }
 
 // NewRepositoryState constructs repository state from an inspection snapshot.

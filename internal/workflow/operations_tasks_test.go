@@ -1,9 +1,13 @@
 package workflow
 
 import (
+	"bytes"
 	"context"
+	"errors"
+	"fmt"
 	"io/fs"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -63,6 +67,184 @@ func TestTaskPlannerBuildPlanRendersTemplates(testInstance *testing.T) {
 	require.Equal(testInstance, []byte("Repository: octocat/sample"), fileChange.content)
 	require.Equal(testInstance, defaultTaskFilePermissions, fileChange.permissions)
 	require.Nil(testInstance, plan.pullRequest)
+}
+
+func TestTaskPlannerBuildPlanSupportsActions(testInstance *testing.T) {
+	fileSystem := newFakeFileSystem(nil)
+	environment := &Environment{FileSystem: fileSystem}
+
+	inspection := audit.RepositoryInspection{
+		Path:                "/repositories/sample",
+		FinalOwnerRepo:      "octocat/sample",
+		RemoteDefaultBranch: "main",
+	}
+	repository := NewRepositoryState(inspection)
+
+	taskDefinition := TaskDefinition{
+		Name: "Remote Update",
+		Actions: []TaskActionDefinition{{
+			Type: "repo.remote.update",
+			Options: map[string]any{
+				"owner":  "{{ .Repository.Owner }}",
+				"dryRun": true,
+			},
+		}},
+		Commit: TaskCommitDefinition{},
+	}
+
+	templateData := buildTaskTemplateData(repository, taskDefinition)
+	planner := newTaskPlanner(taskDefinition, templateData)
+
+	plan, planError := planner.BuildPlan(environment, repository)
+	require.NoError(testInstance, planError)
+
+	require.False(testInstance, plan.skipped)
+	require.Empty(testInstance, plan.fileChanges)
+	require.Nil(testInstance, plan.pullRequest)
+	require.Len(testInstance, plan.actions, 1)
+	action := plan.actions[0]
+	require.Equal(testInstance, "repo.remote.update", action.actionType)
+	require.Equal(testInstance, "octocat", action.parameters["owner"])
+	require.Equal(testInstance, true, action.parameters["dryrun"])
+}
+
+func TestTaskExecutorExecuteActionsUnknownType(testInstance *testing.T) {
+	repository := NewRepositoryState(audit.RepositoryInspection{Path: "/repositories/sample"})
+	environment := &Environment{DryRun: true}
+	plan := taskPlan{actions: []taskAction{{actionType: "unknown.action", parameters: map[string]any{}}}}
+	executor := newTaskExecutor(environment, repository, plan)
+
+	executionError := executor.executeActions(context.Background())
+	require.Error(testInstance, executionError)
+}
+
+func TestTaskExecutorExecuteActionsCanonicalRemote(testInstance *testing.T) {
+	repository := NewRepositoryState(audit.RepositoryInspection{
+		Path:                "/repositories/sample",
+		OriginOwnerRepo:     "octocat/sample",
+		CanonicalOwnerRepo:  "github/sample",
+		RemoteDefaultBranch: "main",
+	})
+	environment := &Environment{DryRun: true}
+	plan := taskPlan{actions: []taskAction{{actionType: taskActionCanonicalRemote, parameters: map[string]any{}}}}
+	executor := newTaskExecutor(environment, repository, plan)
+
+	executionError := executor.executeActions(context.Background())
+	require.NoError(testInstance, executionError)
+}
+
+func TestTaskExecutorExecuteActionsRelease(testInstance *testing.T) {
+	gitExecutor := &recordingGitExecutor{}
+	outputBuffer := &bytes.Buffer{}
+	repository := NewRepositoryState(audit.RepositoryInspection{Path: "/repositories/sample"})
+	environment := &Environment{GitExecutor: gitExecutor, Output: outputBuffer}
+	actionParameters := map[string]any{
+		"tag":     "v1.2.3",
+		"message": "Release v1.2.3",
+		"remote":  "origin",
+	}
+	plan := taskPlan{actions: []taskAction{{actionType: taskActionReleaseTag, parameters: actionParameters}}}
+	executor := newTaskExecutor(environment, repository, plan)
+
+	executionError := executor.executeActions(context.Background())
+	require.NoError(testInstance, executionError)
+	require.Len(testInstance, gitExecutor.commands, 2)
+	expectedMessage := fmt.Sprintf(releaseActionMessageTemplate+"\n", repository.Path, "v1.2.3")
+	require.Equal(testInstance, expectedMessage, outputBuffer.String())
+}
+
+func TestTaskExecutorExecuteActionsReleaseRequiresTag(testInstance *testing.T) {
+	repository := NewRepositoryState(audit.RepositoryInspection{Path: "/repositories/sample"})
+	environment := &Environment{}
+	plan := taskPlan{actions: []taskAction{{actionType: taskActionReleaseTag, parameters: map[string]any{}}}}
+	executor := newTaskExecutor(environment, repository, plan)
+
+	executionError := executor.executeActions(context.Background())
+	require.Error(testInstance, executionError)
+	require.Contains(testInstance, executionError.Error(), "release action requires 'tag'")
+}
+
+func TestTaskExecutorExecuteActionsBranchCleanup(testInstance *testing.T) {
+	originalHandler, handlerExists := taskActionHandlers["repo.branches.cleanup"]
+	RegisterTaskAction("repo.branches.cleanup", testBranchCleanupHandler)
+	defer func() {
+		if handlerExists {
+			taskActionHandlers["repo.branches.cleanup"] = originalHandler
+		} else {
+			delete(taskActionHandlers, "repo.branches.cleanup")
+		}
+	}()
+
+	executor := &branchCleanupExecutor{}
+	repository := NewRepositoryState(audit.RepositoryInspection{Path: "/repositories/sample"})
+	environment := &Environment{GitExecutor: executor}
+	actionParameters := map[string]any{
+		"remote": "origin",
+		"limit":  "25",
+	}
+	plan := taskPlan{actions: []taskAction{{actionType: "repo.branches.cleanup", parameters: actionParameters}}}
+	taskExecutor := newTaskExecutor(environment, repository, plan)
+
+	executionError := taskExecutor.executeActions(context.Background())
+	require.NoError(testInstance, executionError)
+	require.NotEmpty(testInstance, executor.gitCommands)
+	require.NotEmpty(testInstance, executor.githubCommands)
+	require.Equal(testInstance, "ls-remote", firstArgument(executor.gitCommands[0]))
+	require.Equal(testInstance, "pr", firstArgument(executor.githubCommands[0]))
+}
+
+func TestTaskExecutorExecuteActionsOnlyDoesNotEmitApplyLog(testInstance *testing.T) {
+	const actionType = "test.action.only"
+
+	originalHandler, handlerExists := taskActionHandlers[actionType]
+	RegisterTaskAction(actionType, func(context.Context, *Environment, *RepositoryState, map[string]any) error {
+		return nil
+	})
+	defer func() {
+		if handlerExists {
+			taskActionHandlers[actionType] = originalHandler
+		} else {
+			delete(taskActionHandlers, actionType)
+		}
+	}()
+
+	output := &bytes.Buffer{}
+	repository := NewRepositoryState(audit.RepositoryInspection{Path: "/repositories/sample"})
+	environment := &Environment{Output: output}
+	plan := taskPlan{
+		task: TaskDefinition{Name: "Actions Only"},
+		actions: []taskAction{
+			{actionType: actionType, parameters: map[string]any{}},
+		},
+		repository: repository,
+	}
+	executor := newTaskExecutor(environment, repository, plan)
+
+	executionError := executor.Execute(context.Background())
+	require.NoError(testInstance, executionError)
+	require.NotContains(testInstance, output.String(), taskLogPrefixApply)
+}
+
+func TestTaskExecutorExecuteActionsBranchCleanupRequiresRemote(testInstance *testing.T) {
+	originalHandler, handlerExists := taskActionHandlers["repo.branches.cleanup"]
+	RegisterTaskAction("repo.branches.cleanup", testBranchCleanupHandler)
+	defer func() {
+		if handlerExists {
+			taskActionHandlers["repo.branches.cleanup"] = originalHandler
+		} else {
+			delete(taskActionHandlers, "repo.branches.cleanup")
+		}
+	}()
+
+	executor := &branchCleanupExecutor{}
+	repository := NewRepositoryState(audit.RepositoryInspection{Path: "/repositories/sample"})
+	environment := &Environment{GitExecutor: executor}
+	plan := taskPlan{actions: []taskAction{{actionType: "repo.branches.cleanup", parameters: map[string]any{}}}}
+	taskExecutor := newTaskExecutor(environment, repository, plan)
+
+	executionError := taskExecutor.executeActions(context.Background())
+	require.Error(testInstance, executionError)
+	require.Contains(testInstance, executionError.Error(), "branch cleanup action requires 'remote'")
 }
 
 func TestTaskPlannerSkipWhenFileUnchanged(testInstance *testing.T) {
@@ -367,4 +549,44 @@ func firstArgument(arguments []string) string {
 		return ""
 	}
 	return arguments[0]
+}
+
+type branchCleanupExecutor struct {
+	gitCommands    [][]string
+	githubCommands [][]string
+}
+
+func (executor *branchCleanupExecutor) ExecuteGit(_ context.Context, details execshell.CommandDetails) (execshell.ExecutionResult, error) {
+	executor.gitCommands = append(executor.gitCommands, append([]string{}, details.Arguments...))
+	if len(details.Arguments) > 0 && details.Arguments[0] == "ls-remote" {
+		return execshell.ExecutionResult{StandardOutput: "", ExitCode: 0}, nil
+	}
+	return execshell.ExecutionResult{ExitCode: 0}, nil
+}
+
+func (executor *branchCleanupExecutor) ExecuteGitHubCLI(_ context.Context, details execshell.CommandDetails) (execshell.ExecutionResult, error) {
+	executor.githubCommands = append(executor.githubCommands, append([]string{}, details.Arguments...))
+	if len(details.Arguments) > 0 && details.Arguments[0] == "pr" {
+		return execshell.ExecutionResult{StandardOutput: "[]", ExitCode: 0}, nil
+	}
+	return execshell.ExecutionResult{ExitCode: 0}, nil
+}
+
+func testBranchCleanupHandler(ctx context.Context, environment *Environment, repository *RepositoryState, parameters map[string]any) error {
+	if environment == nil || repository == nil {
+		return nil
+	}
+
+	remoteValue, remoteExists := parameters["remote"]
+	remote := strings.TrimSpace(fmt.Sprint(remoteValue))
+	if !remoteExists || len(remote) == 0 || remote == "<nil>" {
+		return errors.New("branch cleanup action requires 'remote'")
+	}
+
+	if environment.GitExecutor != nil {
+		_, _ = environment.GitExecutor.ExecuteGit(ctx, execshell.CommandDetails{Arguments: []string{"ls-remote", "--heads", remote}})
+		_, _ = environment.GitExecutor.ExecuteGitHubCLI(ctx, execshell.CommandDetails{Arguments: []string{"pr", "list"}})
+	}
+
+	return nil
 }

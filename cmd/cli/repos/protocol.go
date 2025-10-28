@@ -7,11 +7,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/temirov/gix/internal/audit"
+	"github.com/temirov/gix/internal/githubcli"
+	"github.com/temirov/gix/internal/gitrepo"
 	"github.com/temirov/gix/internal/repos/dependencies"
-	conversion "github.com/temirov/gix/internal/repos/protocol"
 	"github.com/temirov/gix/internal/repos/shared"
 	flagutils "github.com/temirov/gix/internal/utils/flags"
+	"github.com/temirov/gix/internal/workflow"
 )
 
 const (
@@ -37,6 +38,7 @@ type ProtocolCommandBuilder struct {
 	PrompterFactory              PrompterFactory
 	HumanReadableLoggingProvider func() bool
 	ConfigurationProvider        func() ProtocolConfiguration
+	TaskRunnerFactory            func(workflow.Dependencies) TaskRunnerExecutor
 }
 
 // Build constructs the repo-protocol-convert command.
@@ -120,48 +122,57 @@ func (builder *ProtocolCommandBuilder) run(command *cobra.Command, arguments []s
 		return managerError
 	}
 
-	githubResolver, resolverError := dependencies.ResolveGitHubResolver(builder.GitHubResolver, gitExecutor)
-	if resolverError != nil {
-		return resolverError
-	}
-
 	repositoryDiscoverer := dependencies.ResolveRepositoryDiscoverer(builder.Discoverer)
 	prompter := resolvePrompter(builder.PrompterFactory, command)
-
-	service := audit.NewService(repositoryDiscoverer, gitManager, gitExecutor, githubResolver, command.OutOrStdout(), command.ErrOrStderr())
-
-	inspections, inspectionError := service.DiscoverInspections(command.Context(), roots, false, false, audit.InspectionDepthMinimal)
-	if inspectionError != nil {
-		return inspectionError
-	}
-
 	trackingPrompter := newCascadingConfirmationPrompter(prompter, assumeYes)
-	protocolDependencies := conversion.Dependencies{
-		GitManager: gitManager,
-		Prompter:   trackingPrompter,
-		Output:     command.OutOrStdout(),
-		Errors:     command.ErrOrStderr(),
+
+	var repositoryManager *gitrepo.RepositoryManager
+	if concreteManager, ok := gitManager.(*gitrepo.RepositoryManager); ok {
+		repositoryManager = concreteManager
+	} else {
+		constructedManager, constructedManagerError := gitrepo.NewRepositoryManager(gitExecutor)
+		if constructedManagerError != nil {
+			return constructedManagerError
+		}
+		repositoryManager = constructedManager
 	}
 
-	for _, inspection := range inspections {
-		if shared.RemoteProtocol(inspection.RemoteProtocol) != fromProtocol {
-			continue
-		}
-
-		conversionOptions := conversion.Options{
-			RepositoryPath:           inspection.Path,
-			OriginOwnerRepository:    inspection.OriginOwnerRepo,
-			CanonicalOwnerRepository: inspection.CanonicalOwnerRepo,
-			CurrentProtocol:          fromProtocol,
-			TargetProtocol:           toProtocol,
-			DryRun:                   dryRun,
-			AssumeYes:                trackingPrompter.AssumeYes(),
-		}
-
-		conversion.Execute(command.Context(), protocolDependencies, conversionOptions)
+	githubClient, githubClientError := githubcli.NewClient(gitExecutor)
+	if githubClientError != nil {
+		return githubClientError
 	}
 
-	return nil
+	taskDependencies := workflow.Dependencies{
+		Logger:               logger,
+		RepositoryDiscoverer: repositoryDiscoverer,
+		GitExecutor:          gitExecutor,
+		RepositoryManager:    repositoryManager,
+		GitHubClient:         githubClient,
+		FileSystem:           dependencies.ResolveFileSystem(nil),
+		Prompter:             trackingPrompter,
+		Output:               command.OutOrStdout(),
+		Errors:               command.ErrOrStderr(),
+	}
+
+	taskRunner := ResolveTaskRunner(builder.TaskRunnerFactory, taskDependencies)
+
+	taskDefinition := workflow.TaskDefinition{
+		Name: "Convert remote protocol",
+		Actions: []workflow.TaskActionDefinition{
+			{
+				Type: "repo.remote.convert-protocol",
+				Options: map[string]any{
+					"from": string(fromProtocol),
+					"to":   string(toProtocol),
+				},
+			},
+		},
+		Commit: workflow.TaskCommitDefinition{},
+	}
+
+	runtimeOptions := workflow.RuntimeOptions{DryRun: dryRun, AssumeYes: trackingPrompter.AssumeYes()}
+
+	return taskRunner.Run(command.Context(), roots, []workflow.TaskDefinition{taskDefinition}, runtimeOptions)
 }
 
 func (builder *ProtocolCommandBuilder) resolveConfiguration() ProtocolConfiguration {

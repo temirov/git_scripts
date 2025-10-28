@@ -1,7 +1,6 @@
 package release
 
 import (
-	"bytes"
 	"context"
 	"strings"
 	"testing"
@@ -10,9 +9,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
+	repocli "github.com/temirov/gix/cmd/cli/repos"
 	"github.com/temirov/gix/internal/execshell"
 	"github.com/temirov/gix/internal/utils"
 	flagutils "github.com/temirov/gix/internal/utils/flags"
+	"github.com/temirov/gix/internal/workflow"
 )
 
 type stubGitExecutor struct {
@@ -26,6 +27,19 @@ func (executor *stubGitExecutor) ExecuteGit(_ context.Context, details execshell
 
 func (executor *stubGitExecutor) ExecuteGitHubCLI(context.Context, execshell.CommandDetails) (execshell.ExecutionResult, error) {
 	return execshell.ExecutionResult{}, nil
+}
+
+type recordingTaskRunner struct {
+	roots          []string
+	definitions    []workflow.TaskDefinition
+	runtimeOptions workflow.RuntimeOptions
+}
+
+func (runner *recordingTaskRunner) Run(_ context.Context, roots []string, definitions []workflow.TaskDefinition, options workflow.RuntimeOptions) error {
+	runner.roots = append([]string{}, roots...)
+	runner.definitions = append([]workflow.TaskDefinition{}, definitions...)
+	runner.runtimeOptions = options
+	return nil
 }
 
 func TestCommandBuilds(t *testing.T) {
@@ -55,12 +69,16 @@ func TestCommandRequiresTagArgument(t *testing.T) {
 func TestCommandRunsAcrossRoots(t *testing.T) {
 	executor := &stubGitExecutor{}
 	root := t.TempDir()
+	runner := &recordingTaskRunner{}
 	builder := CommandBuilder{
 		LoggerProvider: func() *zap.Logger { return zap.NewNop() },
 		ConfigurationProvider: func() CommandConfiguration {
-			return CommandConfiguration{RepositoryRoots: []string{root}, RemoteName: "origin"}
+			return CommandConfiguration{RepositoryRoots: []string{root}, RemoteName: "origin", Message: "Ship it"}
 		},
 		GitExecutor: executor,
+		TaskRunnerFactory: func(workflow.Dependencies) repocli.TaskRunnerExecutor {
+			return runner
+		},
 	}
 	command, err := builder.Build()
 	require.NoError(t, err)
@@ -69,10 +87,16 @@ func TestCommandRunsAcrossRoots(t *testing.T) {
 	contextAccessor := utils.NewCommandContextAccessor()
 	command.SetContext(contextAccessor.WithExecutionFlags(context.Background(), utils.ExecutionFlags{}))
 
-	output := &bytes.Buffer{}
-	command.SetOut(output)
-
 	require.NoError(t, command.RunE(command, []string{"v1.2.3"}))
-	require.NotEmpty(t, output.String())
-	require.NotEmpty(t, executor.recorded)
+	require.Equal(t, []string{root}, runner.roots)
+	require.Len(t, runner.definitions, 1)
+	actionDefinitions := runner.definitions[0].Actions
+	require.Len(t, actionDefinitions, 1)
+	action := actionDefinitions[0]
+	require.Equal(t, "repo.release.tag", action.Type)
+	require.Equal(t, "v1.2.3", action.Options["tag"])
+	require.Equal(t, "Ship it", action.Options["message"])
+	require.Equal(t, "origin", action.Options["remote"])
+	require.False(t, runner.runtimeOptions.DryRun)
+	require.False(t, runner.runtimeOptions.AssumeYes)
 }
