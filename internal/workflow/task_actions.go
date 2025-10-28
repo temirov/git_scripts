@@ -23,6 +23,7 @@ const (
 	taskActionReleaseTag         = "repo.release.tag"
 	taskActionAuditReport        = "audit.report"
 	taskActionHistoryPurge       = "repo.history.purge"
+	taskActionFileReplace        = "repo.files.replace"
 
 	releaseActionMessageTemplate = "RELEASED: %s -> %s"
 )
@@ -35,6 +36,7 @@ var taskActionHandlers = map[string]taskActionHandlerFunc{
 	taskActionReleaseTag:         handleReleaseTagAction,
 	taskActionAuditReport:        handleAuditReportAction,
 	taskActionHistoryPurge:       handleHistoryPurgeAction,
+	taskActionFileReplace:        handleFileReplaceAction,
 }
 
 type taskActionHandlerFunc func(ctx context.Context, environment *Environment, repository *RepositoryState, parameters map[string]any) error

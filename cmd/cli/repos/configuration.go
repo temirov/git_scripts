@@ -1,6 +1,7 @@
 package repos
 
 import (
+	"path/filepath"
 	"strings"
 
 	rootutils "github.com/temirov/gix/internal/utils/roots"
@@ -12,6 +13,7 @@ type ToolsConfiguration struct {
 	Protocol ProtocolConfiguration `mapstructure:"protocol"`
 	Rename   RenameConfiguration   `mapstructure:"rename"`
 	Remove   RemoveConfiguration   `mapstructure:"remove"`
+	Replace  ReplaceConfiguration  `mapstructure:"replace"`
 }
 
 // RemotesConfiguration describes configuration values for repo-remote-update.
@@ -51,6 +53,20 @@ type RemoveConfiguration struct {
 	PushMissing     bool     `mapstructure:"push_missing"`
 }
 
+// ReplaceConfiguration describes configuration values for repo files replacement.
+type ReplaceConfiguration struct {
+	DryRun          bool     `mapstructure:"dry_run"`
+	AssumeYes       bool     `mapstructure:"assume_yes"`
+	RepositoryRoots []string `mapstructure:"roots"`
+	Patterns        []string `mapstructure:"patterns"`
+	Find            string   `mapstructure:"find"`
+	Replace         string   `mapstructure:"replace"`
+	Command         string   `mapstructure:"command"`
+	RequireClean    bool     `mapstructure:"require_clean"`
+	Branch          string   `mapstructure:"branch"`
+	RequirePaths    []string `mapstructure:"paths"`
+}
+
 // DefaultToolsConfiguration returns baseline configuration values for repository commands.
 func DefaultToolsConfiguration() ToolsConfiguration {
 	return ToolsConfiguration{
@@ -82,6 +98,18 @@ func DefaultToolsConfiguration() ToolsConfiguration {
 			Push:            true,
 			Restore:         true,
 			PushMissing:     false,
+		},
+		Replace: ReplaceConfiguration{
+			DryRun:          false,
+			AssumeYes:       false,
+			RepositoryRoots: nil,
+			Patterns:        nil,
+			Find:            "",
+			Replace:         "",
+			Command:         "",
+			RequireClean:    false,
+			Branch:          "",
+			RequirePaths:    nil,
 		},
 	}
 }
@@ -121,4 +149,65 @@ func (configuration RemoveConfiguration) sanitize() RemoveConfiguration {
 // Sanitize normalizes remove configuration values.
 func (configuration RemoveConfiguration) Sanitize() RemoveConfiguration {
 	return configuration.sanitize()
+}
+
+// sanitize normalizes replace configuration values.
+func (configuration ReplaceConfiguration) sanitize() ReplaceConfiguration {
+	sanitized := configuration
+	sanitized.RepositoryRoots = rootutils.SanitizeConfigured(configuration.RepositoryRoots)
+	sanitized.Patterns = sanitizeReplacementPatterns(configuration.Patterns)
+	sanitized.Find = strings.TrimSpace(configuration.Find)
+	sanitized.Replace = configuration.Replace
+	sanitized.Command = strings.TrimSpace(configuration.Command)
+	sanitized.Branch = strings.TrimSpace(configuration.Branch)
+	sanitized.RequirePaths = sanitizeReplacementPaths(configuration.RequirePaths)
+	return sanitized
+}
+
+// Sanitize normalizes replace configuration values.
+func (configuration ReplaceConfiguration) Sanitize() ReplaceConfiguration {
+	return configuration.sanitize()
+}
+
+func sanitizeReplacementPatterns(patterns []string) []string {
+	sanitized := make([]string, 0, len(patterns))
+	seen := map[string]struct{}{}
+	for _, pattern := range patterns {
+		trimmed := strings.TrimSpace(pattern)
+		if len(trimmed) == 0 {
+			continue
+		}
+		normalized := strings.TrimPrefix(trimmed, "./")
+		if len(normalized) == 0 {
+			continue
+		}
+		if _, exists := seen[normalized]; exists {
+			continue
+		}
+		seen[normalized] = struct{}{}
+		sanitized = append(sanitized, normalized)
+	}
+	return sanitized
+}
+
+func sanitizeReplacementPaths(paths []string) []string {
+	sanitized := make([]string, 0, len(paths))
+	seen := map[string]struct{}{}
+	for _, pathValue := range paths {
+		trimmed := strings.TrimSpace(pathValue)
+		if len(trimmed) == 0 {
+			continue
+		}
+		normalized := strings.TrimPrefix(trimmed, "./")
+		if len(normalized) == 0 {
+			continue
+		}
+		cleaned := filepath.Clean(normalized)
+		if _, exists := seen[cleaned]; exists {
+			continue
+		}
+		seen[cleaned] = struct{}{}
+		sanitized = append(sanitized, cleaned)
+	}
+	return sanitized
 }

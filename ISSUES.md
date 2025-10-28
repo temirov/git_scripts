@@ -260,7 +260,8 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
         echo "Purged from history: ${purge_paths[*]}"
         ```
         Resolution: Added a task-runner-backed `repo rm` command and history purge action that wraps git-filter-repo, supports dry-run planning, restores remotes/upstreams, and updates docs/tests.
-    - [ ] [GX-21] Implement a task to perform replacements in files. The input is a glob to be used to identify the files (*.go, *.sum etc), a string to find, a string to replace, a command to run after the successfull replacement, a safeguard before the execution(the conditioons can be clean tree, master branch, a presence of some file or folder). Look at tols ns-rewrite for an example of a specialized case where we replace a package name.
+    - [x] [GX-21] Implement a task to perform replacements in files. The input is a glob to be used to identify the files (*.go, *.sum etc), a string to find, a string to replace, a command to run after the successfull replacement, a safeguard before the execution(the conditioons can be clean tree, master branch, a presence of some file or folder). Look at tols ns-rewrite for an example of a specialized case where we replace a package name.
+        Resolution: Added a `repo.files.replace` task action and CLI command that perform glob-based find/replace operations with configurable safeguards, optional post-replacement commands, and comprehensive unit coverage.
 
 
 ## Improvements
