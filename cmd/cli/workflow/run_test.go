@@ -17,6 +17,7 @@ import (
 	"github.com/temirov/gix/internal/utils"
 	flagutils "github.com/temirov/gix/internal/utils/flags"
 	rootutils "github.com/temirov/gix/internal/utils/roots"
+	workflowpkg "github.com/temirov/gix/internal/workflow"
 )
 
 const (
@@ -35,8 +36,6 @@ workflow:
 `
 	workflowConfiguredRootConstant = "/tmp/workflow-config-root"
 	workflowCliRootConstant        = "/tmp/workflow-cli-root"
-	workflowPlanMessageSnippet     = "WORKFLOW-PLAN: audit report"
-	workflowCSVHeaderSnippet       = "folder_name,final_github_repo"
 	workflowRootsFlagConstant      = "--" + flagutils.DefaultRootFlagName
 	workflowDryRunFlagConstant     = "--dry-run"
 	workflowUsageSnippet           = "Usage:"
@@ -118,6 +117,7 @@ func TestWorkflowCommandConfigurationPrecedence(testInstance *testing.T) {
 
 			discoverer := &fakeWorkflowDiscoverer{}
 			executor := &fakeWorkflowGitExecutor{}
+			runner := &recordingTaskRunner{}
 
 			builder := workflowcmd.CommandBuilder{
 				LoggerProvider: func() *zap.Logger { return zap.NewNop() },
@@ -125,6 +125,9 @@ func TestWorkflowCommandConfigurationPrecedence(testInstance *testing.T) {
 				GitExecutor:    executor,
 				ConfigurationProvider: func() workflowcmd.CommandConfiguration {
 					return testCase.configuration
+				},
+				TaskRunnerFactory: func(workflowpkg.Dependencies) workflowcmd.TaskRunnerExecutor {
+					return runner
 				},
 			}
 
@@ -149,6 +152,7 @@ func TestWorkflowCommandConfigurationPrecedence(testInstance *testing.T) {
 				require.Error(subtest, executionError)
 				require.EqualError(subtest, executionError, testCase.expectedErrorMessage)
 				require.Nil(subtest, discoverer.receivedRoots)
+				require.Equal(subtest, 0, runner.invocations)
 
 				outputText := outputBuffer.String()
 				require.Contains(subtest, outputText, workflowUsageSnippet)
@@ -157,14 +161,11 @@ func TestWorkflowCommandConfigurationPrecedence(testInstance *testing.T) {
 
 			require.NoError(subtest, executionError)
 
-			require.Equal(subtest, testCase.expectedRoots, discoverer.receivedRoots)
-
-			outputText := outputBuffer.String()
-			if testCase.expectPlanMessage {
-				require.Contains(subtest, outputText, workflowPlanMessageSnippet)
-			} else {
-				require.Contains(subtest, outputText, workflowCSVHeaderSnippet)
-			}
+			require.Equal(subtest, 1, runner.invocations)
+			require.Equal(subtest, testCase.expectedRoots, runner.roots)
+			require.Equal(subtest, testCase.expectPlanMessage, runner.runtimeOptions.DryRun)
+			require.NotEmpty(subtest, runner.definitions)
+			require.Equal(subtest, "audit.report", runner.definitions[0].Actions[0].Type)
 		})
 	}
 }
@@ -211,7 +212,8 @@ func TestWorkflowCommandApplyTasksDryRun(testInstance *testing.T) {
 	discoverer := &fakeWorkflowDiscoverer{
 		repositories: []string{repositoryPath},
 	}
-	gitExecutor := &applyTasksWorkflowGitExecutor{}
+	gitExecutor := &fakeWorkflowGitExecutor{}
+	runner := &recordingTaskRunner{}
 
 	builder := workflowcmd.CommandBuilder{
 		LoggerProvider: func() *zap.Logger { return zap.NewNop() },
@@ -223,16 +225,17 @@ func TestWorkflowCommandApplyTasksDryRun(testInstance *testing.T) {
 				DryRun: true,
 			}
 		},
+		TaskRunnerFactory: func(workflowpkg.Dependencies) workflowcmd.TaskRunnerExecutor {
+			return runner
+		},
 	}
 
 	command, buildError := builder.Build()
 	require.NoError(testInstance, buildError)
 	bindGlobalWorkflowFlags(command)
 
-	var outputBuffer bytes.Buffer
-	var errorBuffer bytes.Buffer
-	command.SetOut(&outputBuffer)
-	command.SetErr(&errorBuffer)
+	command.SetOut(&bytes.Buffer{})
+	command.SetErr(&bytes.Buffer{})
 	command.SetContext(context.Background())
 
 	command.SetArgs([]string{configPath})
@@ -240,12 +243,14 @@ func TestWorkflowCommandApplyTasksDryRun(testInstance *testing.T) {
 	executionError := command.Execute()
 	require.NoError(testInstance, executionError)
 
-	require.Equal(testInstance, []string{repositoryPath}, discoverer.receivedRoots)
-	require.NotEmpty(testInstance, gitExecutor.githubCommands)
-
-	outputText := outputBuffer.String()
-	require.Contains(testInstance, outputText, "TASK-PLAN: Add Notes "+repositoryPath+" branch=automation-Add-Notes base=main")
-	require.Contains(testInstance, outputText, "TASK-PLAN: Add Notes file=NOTES.md action=write")
+	require.Equal(testInstance, 1, runner.invocations)
+	require.Equal(testInstance, []string{repositoryPath}, runner.roots)
+	require.True(testInstance, runner.runtimeOptions.DryRun)
+	require.Len(testInstance, runner.definitions, 1)
+	task := runner.definitions[0]
+	require.Equal(testInstance, "Add Notes", task.Name)
+	require.Len(testInstance, task.Files, 1)
+	require.Equal(testInstance, "NOTES.md", task.Files[0].PathTemplate)
 }
 
 type fakeWorkflowDiscoverer struct {
@@ -271,35 +276,17 @@ func (executor *fakeWorkflowGitExecutor) ExecuteGitHubCLI(context.Context, execs
 	return execshell.ExecutionResult{StandardOutput: ""}, nil
 }
 
-type applyTasksWorkflowGitExecutor struct {
-	gitCommands    []execshell.CommandDetails
-	githubCommands []execshell.CommandDetails
+type recordingTaskRunner struct {
+	roots          []string
+	definitions    []workflowpkg.TaskDefinition
+	runtimeOptions workflowpkg.RuntimeOptions
+	invocations    int
 }
 
-func (executor *applyTasksWorkflowGitExecutor) ExecuteGit(_ context.Context, details execshell.CommandDetails) (execshell.ExecutionResult, error) {
-	executor.gitCommands = append(executor.gitCommands, details)
-	args := details.Arguments
-	if len(args) >= 2 && args[0] == "rev-parse" {
-		switch args[1] {
-		case "--is-inside-work-tree":
-			return execshell.ExecutionResult{StandardOutput: "true\n"}, nil
-		case "--abbrev-ref":
-			return execshell.ExecutionResult{StandardOutput: "master\n"}, nil
-		}
-	}
-
-	if len(args) >= 3 && args[0] == "remote" && args[1] == "get-url" && args[2] == "origin" {
-		return execshell.ExecutionResult{StandardOutput: "https://github.com/octocat/sample.git\n"}, nil
-	}
-
-	return execshell.ExecutionResult{}, nil
-}
-
-func (executor *applyTasksWorkflowGitExecutor) ExecuteGitHubCLI(_ context.Context, details execshell.CommandDetails) (execshell.ExecutionResult, error) {
-	executor.githubCommands = append(executor.githubCommands, details)
-	if len(details.Arguments) >= 2 && details.Arguments[0] == "repo" && details.Arguments[1] == "view" {
-		response := `{"nameWithOwner":"octocat/sample","description":"","defaultBranchRef":{"name":"main"},"isInOrganization":false}`
-		return execshell.ExecutionResult{StandardOutput: response}, nil
-	}
-	return execshell.ExecutionResult{}, nil
+func (runner *recordingTaskRunner) Run(_ context.Context, roots []string, definitions []workflowpkg.TaskDefinition, options workflowpkg.RuntimeOptions) error {
+	runner.invocations++
+	runner.roots = append([]string{}, roots...)
+	runner.definitions = append([]workflowpkg.TaskDefinition{}, definitions...)
+	runner.runtimeOptions = options
+	return nil
 }

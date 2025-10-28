@@ -99,6 +99,8 @@ func TestTaskPlannerBuildPlanSupportsActions(testInstance *testing.T) {
 	require.NoError(testInstance, planError)
 
 	require.False(testInstance, plan.skipped)
+	require.Empty(testInstance, plan.fileChanges)
+	require.Nil(testInstance, plan.pullRequest)
 	require.Len(testInstance, plan.actions, 1)
 	action := plan.actions[0]
 	require.Equal(testInstance, "repo.remote.update", action.actionType)
@@ -189,6 +191,38 @@ func TestTaskExecutorExecuteActionsBranchCleanup(testInstance *testing.T) {
 	require.NotEmpty(testInstance, executor.githubCommands)
 	require.Equal(testInstance, "ls-remote", firstArgument(executor.gitCommands[0]))
 	require.Equal(testInstance, "pr", firstArgument(executor.githubCommands[0]))
+}
+
+func TestTaskExecutorExecuteActionsOnlyDoesNotEmitApplyLog(testInstance *testing.T) {
+	const actionType = "test.action.only"
+
+	originalHandler, handlerExists := taskActionHandlers[actionType]
+	RegisterTaskAction(actionType, func(context.Context, *Environment, *RepositoryState, map[string]any) error {
+		return nil
+	})
+	defer func() {
+		if handlerExists {
+			taskActionHandlers[actionType] = originalHandler
+		} else {
+			delete(taskActionHandlers, actionType)
+		}
+	}()
+
+	output := &bytes.Buffer{}
+	repository := NewRepositoryState(audit.RepositoryInspection{Path: "/repositories/sample"})
+	environment := &Environment{Output: output}
+	plan := taskPlan{
+		task: TaskDefinition{Name: "Actions Only"},
+		actions: []taskAction{
+			{actionType: actionType, parameters: map[string]any{}},
+		},
+		repository: repository,
+	}
+	executor := newTaskExecutor(environment, repository, plan)
+
+	executionError := executor.Execute(context.Background())
+	require.NoError(testInstance, executionError)
+	require.NotContains(testInstance, output.String(), taskLogPrefixApply)
 }
 
 func TestTaskExecutorExecuteActionsBranchCleanupRequiresRemote(testInstance *testing.T) {

@@ -68,6 +68,16 @@ type TaskOperation struct {
 	tasks []TaskDefinition
 }
 
+// Definitions returns a copy of the task definitions associated with the operation.
+func (operation *TaskOperation) Definitions() []TaskDefinition {
+	if operation == nil || len(operation.tasks) == 0 {
+		return nil
+	}
+	definitions := make([]TaskDefinition, len(operation.tasks))
+	copy(definitions, operation.tasks)
+	return definitions
+}
+
 // TaskDefinition describes a single repository task.
 type TaskDefinition struct {
 	Name        string

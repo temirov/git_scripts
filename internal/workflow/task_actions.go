@@ -2,10 +2,14 @@ package workflow
 
 import (
 	"context"
+	"encoding/csv"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
+	"github.com/temirov/gix/internal/audit"
 	"github.com/temirov/gix/internal/releases"
 	"github.com/temirov/gix/internal/repos/shared"
 )
@@ -16,6 +20,7 @@ const (
 	taskActionRenameDirectories  = "repo.folder.rename"
 	taskActionBranchDefault      = "branch.default"
 	taskActionReleaseTag         = "repo.release.tag"
+	taskActionAuditReport        = "audit.report"
 
 	releaseActionMessageTemplate = "RELEASED: %s -> %s"
 )
@@ -26,6 +31,7 @@ var taskActionHandlers = map[string]taskActionHandlerFunc{
 	taskActionRenameDirectories:  handleRenameDirectoriesAction,
 	taskActionBranchDefault:      handleBranchDefaultAction,
 	taskActionReleaseTag:         handleReleaseTagAction,
+	taskActionAuditReport:        handleAuditReportAction,
 }
 
 type taskActionHandlerFunc func(ctx context.Context, environment *Environment, repository *RepositoryState, parameters map[string]any) error
@@ -239,4 +245,148 @@ func handleReleaseTagAction(ctx context.Context, environment *Environment, repos
 	}
 
 	return nil
+}
+
+func handleAuditReportAction(ctx context.Context, environment *Environment, repository *RepositoryState, parameters map[string]any) error {
+	if environment == nil || environment.AuditService == nil {
+		return nil
+	}
+
+	if environment.auditReportExecuted {
+		return nil
+	}
+
+	reader := newOptionReader(parameters)
+	includeAll, _, includeAllError := reader.boolValue("include_all")
+	if includeAllError != nil {
+		return includeAllError
+	}
+	debugOutput, _, debugError := reader.boolValue("debug")
+	if debugError != nil {
+		return debugError
+	}
+
+	depthValue, _, depthError := reader.stringValue("depth")
+	if depthError != nil {
+		return depthError
+	}
+	depth := audit.InspectionDepthFull
+	if strings.EqualFold(strings.TrimSpace(depthValue), string(audit.InspectionDepthMinimal)) {
+		depth = audit.InspectionDepthMinimal
+	}
+
+	roots := []string{}
+	if environment.State != nil && len(environment.State.Roots) > 0 {
+		roots = append(roots, environment.State.Roots...)
+	} else if repository != nil && len(strings.TrimSpace(repository.Path)) > 0 {
+		roots = []string{repository.Path}
+	}
+
+	if len(roots) == 0 {
+		environment.auditReportExecuted = true
+		return nil
+	}
+
+	outputValue, outputExists, outputError := reader.stringValue("output")
+	if outputError != nil {
+		return outputError
+	}
+	sanitizedOutput := strings.TrimSpace(outputValue)
+	writeToFile := outputExists && len(sanitizedOutput) > 0
+
+	if len(roots) == 0 {
+		environment.auditReportExecuted = true
+		return nil
+	}
+
+	if environment.DryRun {
+		target := auditReportDestinationStdoutConstant
+		if writeToFile {
+			target = sanitizedOutput
+		}
+		if environment.Output != nil {
+			fmt.Fprintf(environment.Output, auditPlanMessageTemplateConstant, target)
+		}
+		environment.auditReportExecuted = true
+		return nil
+	}
+
+	if writeToFile {
+		inspections, discoveryError := environment.AuditService.DiscoverInspections(ctx, roots, includeAll, debugOutput, depth)
+		if discoveryError != nil {
+			environment.auditReportExecuted = true
+			return discoveryError
+		}
+
+		if writeError := writeAuditReportFile(sanitizedOutput, inspections); writeError != nil {
+			environment.auditReportExecuted = true
+			return writeError
+		}
+
+		if environment.Output != nil {
+			fmt.Fprintf(environment.Output, auditWriteMessageTemplateConstant, sanitizedOutput)
+		}
+		environment.auditReportExecuted = true
+		return nil
+	}
+
+	commandOptions := audit.CommandOptions{
+		Roots:             roots,
+		DebugOutput:       debugOutput,
+		IncludeAllFolders: includeAll,
+		InspectionDepth:   depth,
+	}
+
+	if runError := environment.AuditService.Run(ctx, commandOptions); runError != nil {
+		environment.auditReportExecuted = true
+		return runError
+	}
+
+	environment.auditReportExecuted = true
+	return nil
+}
+
+func writeAuditReportFile(destination string, inspections []audit.RepositoryInspection) error {
+	if len(strings.TrimSpace(destination)) == 0 {
+		return errors.New("audit report destination missing")
+	}
+
+	targetDirectory := filepath.Dir(destination)
+	if targetDirectory != auditCurrentDirectorySentinelConstant {
+		if mkdirError := os.MkdirAll(targetDirectory, auditDirectoryPermissionsConstant); mkdirError != nil {
+			return mkdirError
+		}
+	}
+
+	fileHandle, createError := os.Create(destination)
+	if createError != nil {
+		return createError
+	}
+	defer fileHandle.Close()
+
+	writer := csv.NewWriter(fileHandle)
+	header := []string{
+		auditCSVHeaderFolderNameConstant,
+		auditCSVHeaderFinalRepositoryConstant,
+		auditCSVHeaderNameMatchesConstant,
+		auditCSVHeaderRemoteDefaultConstant,
+		auditCSVHeaderLocalBranchConstant,
+		auditCSVHeaderInSyncConstant,
+		auditCSVHeaderRemoteProtocolConstant,
+		auditCSVHeaderOriginCanonicalConstant,
+	}
+
+	if writeError := writer.Write(header); writeError != nil {
+		return writeError
+	}
+
+	for inspectionIndex := range inspections {
+		row := buildAuditReportRow(inspections[inspectionIndex])
+		if writeError := writer.Write(row); writeError != nil {
+			return writeError
+		}
+	}
+
+	writer.Flush()
+	return writer.Error()
 }

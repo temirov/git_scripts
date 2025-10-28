@@ -2,255 +2,148 @@ package tests
 
 import (
 	"context"
-	"fmt"
-	"os"
-	"path/filepath"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
-	"go.uber.org/zap/zaptest/observer"
 
 	"github.com/temirov/gix/internal/execshell"
 	migrate "github.com/temirov/gix/internal/migrate"
-	"github.com/temirov/gix/internal/migrate/testsupport"
+	migratecli "github.com/temirov/gix/internal/migrate/cli"
 	flagutils "github.com/temirov/gix/internal/utils/flags"
+	"github.com/temirov/gix/internal/workflow"
 )
 
-const (
-	integrationRepositoryOneNameConstant         = "repository-one"
-	integrationRepositoryTwoNameConstant         = "repository-two"
-	integrationRepositoryOneRemoteConstant       = "git@github.com:integration/repository-one.git"
-	integrationRepositoryTwoRemoteConstant       = "git@github.com:integration/repository-two.git"
-	integrationRepositoryOneIdentifierConstant   = "integration/repository-one"
-	integrationRepositoryTwoIdentifierConstant   = "integration/repository-two"
-	integrationBlockingReasonConstant            = "open pull requests still target source branch"
-	integrationMigrationCompletedMessageConstant = "Default branch update completed"
-	integrationSafetyWarningMessageConstant      = "Branch deletion blocked by safety gates"
-	integrationFailureWarningMessageConstant     = "Default branch update failed"
-	integrationRepositoryFieldNameConstant       = "repository"
-)
+var integrationBoundRootFlagHolders []*flagutils.RootFlagValues
 
-func TestBranchDefaultCommandIntegration(testInstance *testing.T) {
-	testCases := []struct {
-		name                  string
-		repositoryDefinitions []integrationRepositoryDefinition
-		expectError           bool
-	}{
-		{
-			name: "processes_multiple_repositories",
-			repositoryDefinitions: []integrationRepositoryDefinition{
-				{
-					directoryName:      integrationRepositoryOneNameConstant,
-					remoteURL:          integrationRepositoryOneRemoteConstant,
-					expectedIdentifier: integrationRepositoryOneIdentifierConstant,
-					outcome: testsupport.ServiceOutcome{
-						Result: migrate.MigrationResult{SafetyStatus: migrate.SafetyStatus{SafeToDelete: true}},
-					},
-				},
-				{
-					directoryName:      integrationRepositoryTwoNameConstant,
-					remoteURL:          integrationRepositoryTwoRemoteConstant,
-					expectedIdentifier: integrationRepositoryTwoIdentifierConstant,
-					outcome: testsupport.ServiceOutcome{
-						Result: migrate.MigrationResult{
-							SafetyStatus: migrate.SafetyStatus{
-								SafeToDelete:    false,
-								BlockingReasons: []string{integrationBlockingReasonConstant},
-							},
-						},
-					},
-					expectSafetyWarning: true,
-				},
-			},
-			expectError: false,
+func TestBranchDefaultCommandInvokesTaskRunner(t *testing.T) {
+	t.Helper()
+
+	root := "/tmp/integration-root"
+	discoverer := &integrationRepositoryDiscoverer{repositories: []string{root}}
+	executor := &integrationGitExecutor{}
+	manager := integrationGitRepositoryManager{}
+	runner := &integrationRecordingTaskRunner{}
+
+	builder := migratecli.CommandBuilder{
+		LoggerProvider:       func() *zap.Logger { return zap.NewNop() },
+		Discoverer:           discoverer,
+		GitExecutor:          executor,
+		GitRepositoryManager: manager,
+		ConfigurationProvider: func() migrate.CommandConfiguration {
+			return migrate.CommandConfiguration{RepositoryRoots: []string{root}, TargetBranch: "master"}
 		},
-		{
-			name: "continues_after_service_failure",
-			repositoryDefinitions: []integrationRepositoryDefinition{
-				{
-					directoryName:        integrationRepositoryOneNameConstant,
-					remoteURL:            integrationRepositoryOneRemoteConstant,
-					expectedIdentifier:   integrationRepositoryOneIdentifierConstant,
-					outcome:              testsupport.ServiceOutcome{Error: fmt.Errorf("worktree dirty")},
-					expectFailureWarning: true,
-				},
-				{
-					directoryName:      integrationRepositoryTwoNameConstant,
-					remoteURL:          integrationRepositoryTwoRemoteConstant,
-					expectedIdentifier: integrationRepositoryTwoIdentifierConstant,
-					outcome:            testsupport.ServiceOutcome{Result: migrate.MigrationResult{SafetyStatus: migrate.SafetyStatus{SafeToDelete: true}}},
-				},
-			},
-			expectError: true,
+		TaskRunnerFactory: func(workflow.Dependencies) migratecli.TaskRunnerExecutor { return runner },
+	}
+
+	command, buildError := builder.Build()
+	require.NoError(t, buildError)
+	bindRootAndExecutionFlags(command)
+
+	command.SetContext(context.Background())
+	command.SetArgs([]string{"--" + flagutils.DefaultRootFlagName, root})
+
+	executionError := command.Execute()
+	require.NoError(t, executionError)
+
+	require.Len(t, runner.definitions, 1)
+	require.Equal(t, "branch.default", runner.definitions[0].Actions[0].Type)
+}
+
+func TestBranchDefaultCommandRespectsFlags(t *testing.T) {
+	t.Helper()
+
+	root := "/tmp/integration-root-flags"
+	discoverer := &integrationRepositoryDiscoverer{repositories: []string{root}}
+	executor := &integrationGitExecutor{}
+	manager := integrationGitRepositoryManager{}
+	runner := &integrationRecordingTaskRunner{}
+
+	builder := migratecli.CommandBuilder{
+		LoggerProvider:       func() *zap.Logger { return zap.NewNop() },
+		Discoverer:           discoverer,
+		GitExecutor:          executor,
+		GitRepositoryManager: manager,
+		ConfigurationProvider: func() migrate.CommandConfiguration {
+			return migrate.CommandConfiguration{}
 		},
+		TaskRunnerFactory: func(workflow.Dependencies) migratecli.TaskRunnerExecutor { return runner },
 	}
 
-	for testCaseIndex := range testCases {
-		testCase := testCases[testCaseIndex]
-		subtestName := fmt.Sprintf("%d_%s", testCaseIndex, testCase.name)
+	command, buildError := builder.Build()
+	require.NoError(t, buildError)
+	bindRootAndExecutionFlags(command)
 
-		testInstance.Run(subtestName, func(subtest *testing.T) {
-			workingDirectory := subtest.TempDir()
+	command.SetContext(context.Background())
+	command.SetArgs([]string{
+		"--" + flagutils.DefaultRootFlagName, root,
+		"--to", "stable",
+		"--" + flagutils.DryRunFlagName + "=yes",
+	})
 
-			repositoryRemotes := make(map[string]string, len(testCase.repositoryDefinitions))
-			serviceOutcomes := make(map[string]testsupport.ServiceOutcome, len(testCase.repositoryDefinitions))
-			defaultBranches := make(map[string]string, len(testCase.repositoryDefinitions))
-			expectedSafetyWarnings := make([]string, 0, len(testCase.repositoryDefinitions))
-			expectedFailureWarnings := make([]string, 0, len(testCase.repositoryDefinitions))
-			expectedIdentifiers := make(map[string]string, len(testCase.repositoryDefinitions))
-			expectedRepositories := make([]string, 0, len(testCase.repositoryDefinitions))
+	executionError := command.Execute()
+	require.NoError(t, executionError)
 
-			for _, definition := range testCase.repositoryDefinitions {
-				repositoryPath := filepath.Join(workingDirectory, definition.directoryName)
-				gitDirectory := filepath.Join(repositoryPath, ".git")
-				require.NoError(subtest, os.MkdirAll(gitDirectory, 0o755))
-
-				cleanedPath := filepath.Clean(repositoryPath)
-				repositoryRemotes[cleanedPath] = definition.remoteURL
-				serviceOutcomes[cleanedPath] = definition.outcome
-				expectedIdentifiers[cleanedPath] = definition.expectedIdentifier
-				defaultBranches[definition.expectedIdentifier] = "main"
-				expectedRepositories = append(expectedRepositories, cleanedPath)
-
-				if definition.expectSafetyWarning {
-					expectedSafetyWarnings = append(expectedSafetyWarnings, cleanedPath)
-				}
-				if definition.expectFailureWarning {
-					expectedFailureWarnings = append(expectedFailureWarnings, cleanedPath)
-				}
-			}
-
-			require.Len(subtest, expectedRepositories, len(testCase.repositoryDefinitions))
-
-			commandExecutor := &testsupport.CommandExecutorStub{
-				RepositoryRemotes:         repositoryRemotes,
-				RepositoryDefaultBranches: defaultBranches,
-			}
-			migrationService := &testsupport.ServiceStub{Outcomes: serviceOutcomes}
-
-			logCore, observedLogs := observer.New(zap.DebugLevel)
-			logger := zap.New(logCore)
-
-			builder := migrate.CommandBuilder{
-				LoggerProvider: func() *zap.Logger { return logger },
-				Executor:       commandExecutor,
-				ServiceProvider: func(migrate.ServiceDependencies) (migrate.MigrationExecutor, error) {
-					return migrationService, nil
-				},
-				WorkingDirectory: workingDirectory,
-			}
-
-			command, buildError := builder.Build()
-			require.NoError(subtest, buildError)
-			flagutils.BindRootFlags(command, flagutils.RootFlagValues{}, flagutils.RootFlagDefinition{Name: flagutils.DefaultRootFlagName, Enabled: true})
-
-			command.SetContext(context.Background())
-			command.SetArgs([]string{"--" + flagutils.DefaultRootFlagName, workingDirectory})
-
-			executionError := command.Execute()
-			if testCase.expectError {
-				require.Error(subtest, executionError)
-			} else {
-				require.NoError(subtest, executionError)
-			}
-
-			executedRepositories := collectIntegrationRepositories(migrationService.ExecutedOptions)
-			require.ElementsMatch(subtest, expectedRepositories, executedRepositories)
-
-			for _, options := range migrationService.ExecutedOptions {
-				expectedIdentifier, exists := expectedIdentifiers[options.RepositoryPath]
-				require.True(subtest, exists)
-				require.Equal(subtest, expectedIdentifier, options.RepositoryIdentifier)
-				require.Equal(subtest, migrate.BranchMain, options.SourceBranch)
-				require.Equal(subtest, migrate.BranchMaster, options.TargetBranch)
-			}
-
-			executedGitPaths := collectIntegrationGitPaths(commandExecutor.ExecutedGitCommands)
-			require.ElementsMatch(subtest, expectedRepositories, executedGitPaths)
-
-			logEntries := observedLogs.All()
-			successfulRepositories := filterSuccessfulRepositories(expectedRepositories, expectedFailureWarnings)
-			verifyIntegrationInfoLogs(subtest, logEntries, successfulRepositories)
-			verifyIntegrationWarnings(subtest, logEntries, integrationSafetyWarningMessageConstant, expectedSafetyWarnings)
-			verifyIntegrationWarnings(subtest, logEntries, integrationFailureWarningMessageConstant, expectedFailureWarnings)
-		})
-	}
+	require.Equal(t, "stable", runner.definitions[0].Actions[0].Options["target"])
+	require.True(t, runner.runtimeOptions.DryRun)
 }
 
-type integrationRepositoryDefinition struct {
-	directoryName        string
-	remoteURL            string
-	expectedIdentifier   string
-	outcome              testsupport.ServiceOutcome
-	expectSafetyWarning  bool
-	expectFailureWarning bool
+type integrationRecordingTaskRunner struct {
+	roots          []string
+	definitions    []workflow.TaskDefinition
+	runtimeOptions workflow.RuntimeOptions
 }
 
-func collectIntegrationRepositories(options []migrate.MigrationOptions) []string {
-	repositories := make([]string, 0, len(options))
-	for _, option := range options {
-		repositories = append(repositories, option.RepositoryPath)
-	}
-	return repositories
+func (runner *integrationRecordingTaskRunner) Run(_ context.Context, roots []string, definitions []workflow.TaskDefinition, options workflow.RuntimeOptions) error {
+	runner.roots = append([]string{}, roots...)
+	runner.definitions = append([]workflow.TaskDefinition{}, definitions...)
+	runner.runtimeOptions = options
+	return nil
 }
 
-func collectIntegrationGitPaths(commands []execshell.CommandDetails) []string {
-	paths := make([]string, 0, len(commands))
-	for _, commandDetails := range commands {
-		paths = append(paths, commandDetails.WorkingDirectory)
-	}
-	return paths
+type integrationRepositoryDiscoverer struct {
+	repositories []string
 }
 
-func verifyIntegrationInfoLogs(testInstance *testing.T, entries []observer.LoggedEntry, expectedRepositories []string) {
-	infoEntries := filterIntegrationLogs(entries, zapcore.InfoLevel, integrationMigrationCompletedMessageConstant)
-	require.Len(testInstance, infoEntries, len(expectedRepositories))
-	for _, entry := range infoEntries {
-		repositoryValue, present := entry.ContextMap()[integrationRepositoryFieldNameConstant]
-		require.True(testInstance, present)
-		require.Contains(testInstance, expectedRepositories, repositoryValue)
-	}
+func (discoverer *integrationRepositoryDiscoverer) DiscoverRepositories([]string) ([]string, error) {
+	return append([]string{}, discoverer.repositories...), nil
 }
 
-func verifyIntegrationWarnings(testInstance *testing.T, entries []observer.LoggedEntry, message string, expectedRepositories []string) {
-	warningEntries := filterIntegrationLogs(entries, zapcore.WarnLevel, message)
-	repositoryValues := make([]string, 0, len(warningEntries))
-	for _, entry := range warningEntries {
-		if repositoryValue, present := entry.ContextMap()[integrationRepositoryFieldNameConstant]; present {
-			repositoryValues = append(repositoryValues, repositoryValue.(string))
-		}
-	}
-	require.ElementsMatch(testInstance, expectedRepositories, repositoryValues)
+type integrationGitExecutor struct{}
+
+func (integrationGitExecutor) ExecuteGit(context.Context, execshell.CommandDetails) (execshell.ExecutionResult, error) {
+	return execshell.ExecutionResult{}, nil
 }
 
-func filterIntegrationLogs(entries []observer.LoggedEntry, level zapcore.Level, message string) []observer.LoggedEntry {
-	matched := make([]observer.LoggedEntry, 0)
-	for _, entry := range entries {
-		if entry.Level == level && entry.Message == message {
-			matched = append(matched, entry)
-		}
-	}
-	return matched
+func (integrationGitExecutor) ExecuteGitHubCLI(context.Context, execshell.CommandDetails) (execshell.ExecutionResult, error) {
+	return execshell.ExecutionResult{}, nil
 }
 
-func filterSuccessfulRepositories(allRepositories []string, failureRepositories []string) []string {
-	if len(failureRepositories) == 0 {
-		return append([]string{}, allRepositories...)
-	}
+type integrationGitRepositoryManager struct{}
 
-	failureSet := make(map[string]struct{}, len(failureRepositories))
-	for _, repositoryPath := range failureRepositories {
-		failureSet[repositoryPath] = struct{}{}
-	}
+func (integrationGitRepositoryManager) CheckCleanWorktree(context.Context, string) (bool, error) {
+	return true, nil
+}
+func (integrationGitRepositoryManager) GetCurrentBranch(context.Context, string) (string, error) {
+	return "main", nil
+}
+func (integrationGitRepositoryManager) GetRemoteURL(context.Context, string, string) (string, error) {
+	return "", nil
+}
+func (integrationGitRepositoryManager) SetRemoteURL(context.Context, string, string, string) error {
+	return nil
+}
 
-	successful := make([]string, 0, len(allRepositories))
-	for _, repositoryPath := range allRepositories {
-		if _, failed := failureSet[repositoryPath]; failed {
-			continue
-		}
-		successful = append(successful, repositoryPath)
-	}
-	return successful
+func bindRootAndExecutionFlags(command *cobra.Command) {
+	rootValues := flagutils.BindRootFlags(command, flagutils.RootFlagValues{}, flagutils.RootFlagDefinition{Name: flagutils.DefaultRootFlagName, Enabled: true})
+	integrationBoundRootFlagHolders = append(integrationBoundRootFlagHolders, rootValues)
+	flagutils.BindExecutionFlags(
+		command,
+		flagutils.ExecutionDefaults{},
+		flagutils.ExecutionFlagDefinitions{
+			DryRun:    flagutils.ExecutionFlagDefinition{Name: flagutils.DryRunFlagName, Usage: flagutils.DryRunFlagUsage, Enabled: true},
+			AssumeYes: flagutils.ExecutionFlagDefinition{Name: flagutils.AssumeYesFlagName, Usage: flagutils.AssumeYesFlagUsage, Shorthand: flagutils.AssumeYesFlagShorthand, Enabled: true},
+		},
+	)
 }

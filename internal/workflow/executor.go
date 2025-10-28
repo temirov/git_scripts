@@ -151,6 +151,7 @@ func (executor *Executor) Execute(executionContext context.Context, roots []stri
 		Logger:            executor.dependencies.Logger,
 		DryRun:            runtimeOptions.DryRun,
 	}
+	environment.State = state
 
 	for operationIndex := range executor.operations {
 		operation := executor.operations[operationIndex]

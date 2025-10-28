@@ -27,6 +27,7 @@ const (
 	configurationPathRequiredMessageConstant  = "workflow configuration path required; provide a positional argument or --config flag"
 	loadConfigurationErrorTemplateConstant    = "unable to load workflow configuration: %w"
 	buildOperationsErrorTemplateConstant      = "unable to build workflow operations: %w"
+	buildTasksErrorTemplateConstant           = "unable to build workflow tasks: %w"
 	gitRepositoryManagerErrorTemplateConstant = "unable to construct repository manager: %w"
 	gitHubClientErrorTemplateConstant         = "unable to construct GitHub client: %w"
 )
@@ -40,6 +41,7 @@ type CommandBuilder struct {
 	PrompterFactory              PrompterFactory
 	HumanReadableLoggingProvider func() bool
 	ConfigurationProvider        func() CommandConfiguration
+	TaskRunnerFactory            func(workflow.Dependencies) TaskRunnerExecutor
 }
 
 // Build constructs the workflow command.
@@ -93,6 +95,29 @@ func (builder *CommandBuilder) run(command *cobra.Command, arguments []string) e
 		return fmt.Errorf(buildOperationsErrorTemplateConstant, operationsError)
 	}
 
+	commandConfiguration := builder.resolveConfiguration()
+
+	requireCleanDefault := commandConfiguration.RequireClean
+	if command != nil {
+		requireCleanFlagValue, requireCleanFlagChanged, requireCleanFlagError := flagutils.BoolFlag(command, requireCleanFlagNameConstant)
+		if requireCleanFlagError != nil && !errors.Is(requireCleanFlagError, flagutils.ErrFlagNotDefined) {
+			return requireCleanFlagError
+		}
+		if requireCleanFlagChanged {
+			requireCleanDefault = requireCleanFlagValue
+		}
+	}
+
+	workflow.ApplyDefaults(operations, workflow.OperationDefaults{RequireClean: requireCleanDefault})
+
+	taskDefinitions, taskRuntimeOptions, taskBuildError := buildWorkflowTasks(operations)
+	if taskBuildError != nil {
+		return fmt.Errorf(buildTasksErrorTemplateConstant, taskBuildError)
+	}
+	if len(taskDefinitions) == 0 {
+		return nil
+	}
+
 	logger := resolveLogger(builder.LoggerProvider)
 	humanReadableLogging := false
 	if builder.HumanReadableLoggingProvider != nil {
@@ -129,22 +154,7 @@ func (builder *CommandBuilder) run(command *cobra.Command, arguments []string) e
 		Errors:               utils.NewFlushingWriter(command.ErrOrStderr()),
 	}
 
-	executor := workflow.NewExecutor(operations, workflowDependencies)
-
-	commandConfiguration := builder.resolveConfiguration()
-
-	requireCleanDefault := commandConfiguration.RequireClean
-	if command != nil {
-		requireCleanFlagValue, requireCleanFlagChanged, requireCleanFlagError := flagutils.BoolFlag(command, requireCleanFlagNameConstant)
-		if requireCleanFlagError != nil && !errors.Is(requireCleanFlagError, flagutils.ErrFlagNotDefined) {
-			return requireCleanFlagError
-		}
-		if requireCleanFlagChanged {
-			requireCleanDefault = requireCleanFlagValue
-		}
-	}
-
-	workflow.ApplyDefaults(operations, workflow.OperationDefaults{RequireClean: requireCleanDefault})
+	taskRunner := resolveTaskRunner(builder.TaskRunnerFactory, workflowDependencies)
 
 	roots, rootsError := rootutils.Resolve(command, remainingArguments, commandConfiguration.Roots)
 	if rootsError != nil {
@@ -161,9 +171,15 @@ func (builder *CommandBuilder) run(command *cobra.Command, arguments []string) e
 		assumeYes = executionFlags.AssumeYes
 	}
 
-	runtimeOptions := workflow.RuntimeOptions{DryRun: dryRun, AssumeYes: assumeYes}
+	runtimeOptions := workflow.RuntimeOptions{
+		DryRun:                               dryRun,
+		AssumeYes:                            assumeYes,
+		IncludeNestedRepositories:            taskRuntimeOptions.IncludeNestedRepositories,
+		ProcessRepositoriesByDescendingDepth: taskRuntimeOptions.ProcessRepositoriesByDescendingDepth,
+		CaptureInitialWorktreeStatus:         taskRuntimeOptions.CaptureInitialWorktreeStatus,
+	}
 
-	return executor.Execute(command.Context(), roots, runtimeOptions)
+	return taskRunner.Run(command.Context(), roots, taskDefinitions, runtimeOptions)
 }
 
 func (builder *CommandBuilder) resolveConfiguration() CommandConfiguration {

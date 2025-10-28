@@ -20,17 +20,19 @@ type Operation interface {
 
 // Environment exposes shared dependencies for workflow operations.
 type Environment struct {
-	AuditService      *audit.Service
-	GitExecutor       shared.GitExecutor
-	RepositoryManager *gitrepo.RepositoryManager
-	GitHubClient      *githubcli.Client
-	FileSystem        shared.FileSystem
-	Prompter          shared.ConfirmationPrompter
-	PromptState       *PromptState
-	Output            io.Writer
-	Errors            io.Writer
-	Logger            *zap.Logger
-	DryRun            bool
+	AuditService        *audit.Service
+	GitExecutor         shared.GitExecutor
+	RepositoryManager   *gitrepo.RepositoryManager
+	GitHubClient        *githubcli.Client
+	FileSystem          shared.FileSystem
+	Prompter            shared.ConfirmationPrompter
+	PromptState         *PromptState
+	Output              io.Writer
+	Errors              io.Writer
+	Logger              *zap.Logger
+	DryRun              bool
+	State               *State
+	auditReportExecuted bool
 }
 
 // OperationDefaults captures fallback behaviors shared across operations.
