@@ -209,9 +209,12 @@ func (executor Executor) ensureGitIgnore(ctx context.Context, repositoryPath str
 
 func (executor Executor) pathsInHistory(ctx context.Context, repositoryPath string, paths []string) (bool, error) {
 	for _, pathEntry := range paths {
-		_, err := executor.executeGit(ctx, repositoryPath, "rev-list", "--quiet", "--all", "--", pathEntry)
+		result, err := executor.executeGit(ctx, repositoryPath, "rev-list", "--all", "--", pathEntry)
 		if err == nil {
-			return true, nil
+			if len(strings.TrimSpace(result.StandardOutput)) > 0 {
+				return true, nil
+			}
+			continue
 		}
 		var commandFailed execshell.CommandFailedError
 		if errors.As(err, &commandFailed) {

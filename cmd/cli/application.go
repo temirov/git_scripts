@@ -103,6 +103,7 @@ const (
 	reposProtocolOperationNameConstant                               = "repo-protocol-convert"
 	repoReleaseOperationNameConstant                                 = "repo-release"
 	repoHistoryOperationNameConstant                                 = "repo-history-remove"
+	repoFilesReplaceOperationNameConstant                            = "repo-files-replace"
 	workflowCommandOperationNameConstant                             = "workflow"
 	branchRefreshOperationNameConstant                               = "branch-refresh"
 	branchDefaultOperationNameConstant                               = "branch-default"
@@ -132,6 +133,12 @@ const (
 	repoPackagesNamespaceShortDescriptionConstant                    = "GitHub Packages maintenance commands"
 	packagesDeleteCommandUseNameConstant                             = "delete"
 	packagesDeleteCommandAliasConstant                               = "prune"
+	repoFilesNamespaceUseNameConstant                                = "files"
+	repoFilesNamespaceAliasConstant                                  = "f"
+	repoFilesNamespaceShortDescriptionConstant                       = "Repository file commands"
+	filesReplaceCommandUseNameConstant                               = "replace"
+	filesReplaceCommandAliasConstant                                 = "sub"
+	filesReplaceCommandLongDescriptionConstant                       = "repo files replace applies string substitutions to files matched by glob patterns, optionally enforcing safeguards and running a follow-up command."
 	repoReleaseCommandUseNameConstant                                = "release"
 	repoReleaseCommandUsageTemplateConstant                          = repoReleaseCommandUseNameConstant + " <tag>"
 	repoReleaseCommandAliasConstant                                  = "rel"
@@ -204,13 +211,14 @@ var commandOperationRequirements = map[string][]string{
 	branchNamespaceUseNameConstant + "/" + branchChangeCommandUseNameConstant: {branchChangeOperationNameConstant},
 	repoNamespaceUseNameConstant + "/" + repoReleaseCommandUseNameConstant:    {repoReleaseOperationNameConstant},
 	repoNamespaceUseNameConstant + "/" + removeCommandUseNameConstant:         {repoHistoryOperationNameConstant},
-	renameCommandUseNameConstant:                                              {reposRenameOperationNameConstant},
-	reposProtocolOperationNameConstant:                                        {reposProtocolOperationNameConstant},
-	reposRemotesOperationNameConstant:                                         {reposRemotesOperationNameConstant},
-	reposRenameOperationNameConstant:                                          {reposRenameOperationNameConstant},
-	updateProtocolCommandUseNameConstant:                                      {reposProtocolOperationNameConstant},
-	updateRemoteCanonicalUseNameConstant:                                      {reposRemotesOperationNameConstant},
-	workflowCommandOperationNameConstant:                                      {workflowCommandOperationNameConstant},
+	repoNamespaceUseNameConstant + "/" + repoFilesNamespaceUseNameConstant + "/" + filesReplaceCommandUseNameConstant: {repoFilesReplaceOperationNameConstant},
+	renameCommandUseNameConstant:         {reposRenameOperationNameConstant},
+	reposProtocolOperationNameConstant:   {reposProtocolOperationNameConstant},
+	reposRemotesOperationNameConstant:    {reposRemotesOperationNameConstant},
+	reposRenameOperationNameConstant:     {reposRenameOperationNameConstant},
+	updateProtocolCommandUseNameConstant: {reposProtocolOperationNameConstant},
+	updateRemoteCanonicalUseNameConstant: {reposRemotesOperationNameConstant},
+	workflowCommandOperationNameConstant: {workflowCommandOperationNameConstant},
 }
 
 var requiredOperationConfigurationNames = collectRequiredOperationConfigurationNames()
@@ -613,6 +621,14 @@ func NewApplication() *Application {
 		ConfigurationProvider:        application.reposRemoveConfiguration,
 	}
 
+	replaceBuilder := repos.ReplaceCommandBuilder{
+		LoggerProvider: func() *zap.Logger {
+			return application.logger
+		},
+		HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
+		ConfigurationProvider:        application.reposReplaceConfiguration,
+	}
+
 	workflowBuilder := workflowcmd.CommandBuilder{
 		LoggerProvider: func() *zap.Logger {
 			return application.logger
@@ -696,6 +712,15 @@ func NewApplication() *Application {
 	}
 	if len(repoPackagesCommand.Commands()) > 0 {
 		repoNamespaceCommand.AddCommand(repoPackagesCommand)
+	}
+
+	repoFilesCommand := newNamespaceCommand(repoFilesNamespaceUseNameConstant, repoFilesNamespaceShortDescriptionConstant, repoFilesNamespaceAliasConstant)
+	if filesReplaceCommand, filesReplaceBuildError := replaceBuilder.Build(); filesReplaceBuildError == nil {
+		configureCommandMetadata(filesReplaceCommand, filesReplaceCommandUseNameConstant, filesReplaceCommand.Short, filesReplaceCommandLongDescriptionConstant, filesReplaceCommandAliasConstant)
+		repoFilesCommand.AddCommand(filesReplaceCommand)
+	}
+	if len(repoFilesCommand.Commands()) > 0 {
+		repoNamespaceCommand.AddCommand(repoFilesCommand)
 	}
 
 	if removeCommand, removeBuildError := removeBuilder.Build(); removeBuildError == nil {
@@ -1128,6 +1153,21 @@ func (application *Application) reposRemoveConfiguration() repos.RemoveConfigura
 	application.decodeOperationConfiguration(repoHistoryOperationNameConstant, &configuration)
 
 	options, optionsExist := application.lookupOperationOptions(repoHistoryOperationNameConstant)
+	if !optionsExist || !optionExists(options, dryRunOptionKeyConstant) {
+		configuration.DryRun = application.configuration.Common.DryRun
+	}
+	if !optionsExist || !optionExists(options, assumeYesOptionKeyConstant) {
+		configuration.AssumeYes = application.configuration.Common.AssumeYes
+	}
+
+	return configuration.Sanitize()
+}
+
+func (application *Application) reposReplaceConfiguration() repos.ReplaceConfiguration {
+	configuration := repos.DefaultToolsConfiguration().Replace
+	application.decodeOperationConfiguration(repoFilesReplaceOperationNameConstant, &configuration)
+
+	options, optionsExist := application.lookupOperationOptions(repoFilesReplaceOperationNameConstant)
 	if !optionsExist || !optionExists(options, dryRunOptionKeyConstant) {
 		configuration.DryRun = application.configuration.Common.DryRun
 	}

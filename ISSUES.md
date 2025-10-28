@@ -260,7 +260,8 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
         echo "Purged from history: ${purge_paths[*]}"
         ```
         Resolution: Added a task-runner-backed `repo rm` command and history purge action that wraps git-filter-repo, supports dry-run planning, restores remotes/upstreams, and updates docs/tests.
-    - [ ] [GX-21] Implement a task to perform replacements in files. The input is a glob to be used to identify the files (*.go, *.sum etc), a string to find, a string to replace, a command to run after the successfull replacement, a safeguard before the execution(the conditioons can be clean tree, master branch, a presence of some file or folder). Look at tols ns-rewrite for an example of a specialized case where we replace a package name.
+    - [x] [GX-21] Implement a task to perform replacements in files. The input is a glob to be used to identify the files (*.go, *.sum etc), a string to find, a string to replace, a command to run after the successfull replacement, a safeguard before the execution(the conditioons can be clean tree, master branch, a presence of some file or folder). Look at tols ns-rewrite for an example of a specialized case where we replace a package name.
+        Resolution: Added a `repo.files.replace` task action and CLI command that perform glob-based find/replace operations with configurable safeguards, optional post-replacement commands, and comprehensive unit coverage.
 
 
 ## Improvements
@@ -399,6 +400,12 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
         Resolution: Replaced the flag usage with `<LOCAL|user>`, added a reusable choice placeholder formatter, expanded CLI and configuration loader tests to cover explicit `--config` precedence, and documented the capitalized `LOCAL` scope in the README.
 
 ## Maintenance
+
+- [ ] [GX-400] Update the documentation @README.md and focus on the usefullness to the user. Move the technical details to @ARCHITECTURE.md
+  - README now focuses on user workflows, technical setup lives in `ARCHITECTURE.md`, and the changelog records the update.
+- [ ] [GX-401] Ensure architrecture matches the reality of code. Update @ARCHITECTURE.md when needed
+  - Architecture guide now covers the full-screen controller, keyboard shortcuts modal, analytics bootstrap, and version refresh utility so documentation mirrors the active code.
+- [ ] [GX-402] Review @POLICY.md and verify what code areas need improvements and refactoring. Prepare a detailed plan of refactoring. Check for bugs, missing tests, poor coding practices, uplication and slop. Ensure strong encapsulation and following the principles og @AGENTS.md and policies of @POLICY.md
 
 ## Planning 
 do not work on the issues below, not ready
