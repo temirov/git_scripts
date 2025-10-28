@@ -22,9 +22,9 @@ const (
 
 // Options configures the protocol conversion workflow.
 type Options struct {
-	RepositoryPath           string
-	OriginOwnerRepository    string
-	CanonicalOwnerRepository string
+	RepositoryPath           shared.RepositoryPath
+	OriginOwnerRepository    *shared.OwnerRepository
+	CanonicalOwnerRepository *shared.OwnerRepository
 	CurrentProtocol          shared.RemoteProtocol
 	TargetProtocol           shared.RemoteProtocol
 	DryRun                   bool
@@ -51,14 +51,16 @@ func NewExecutor(dependencies Dependencies) *Executor {
 
 // Execute performs the conversion using the executor's dependencies.
 func (executor *Executor) Execute(executionContext context.Context, options Options) {
+	repositoryPath := options.RepositoryPath.String()
+
 	if executor.dependencies.GitManager == nil {
-		executor.printfError(failureMessage, "", options.RepositoryPath)
+		executor.printfError(failureMessage, "", repositoryPath)
 		return
 	}
 
-	currentURL, fetchError := executor.dependencies.GitManager.GetRemoteURL(executionContext, options.RepositoryPath, shared.OriginRemoteNameConstant)
+	currentURL, fetchError := executor.dependencies.GitManager.GetRemoteURL(executionContext, repositoryPath, shared.OriginRemoteNameConstant)
 	if fetchError != nil {
-		executor.printfError(failureMessage, "", options.RepositoryPath)
+		executor.printfError(failureMessage, "", repositoryPath)
 		return
 	}
 
@@ -67,47 +69,51 @@ func (executor *Executor) Execute(executionContext context.Context, options Opti
 		return
 	}
 
-	ownerRepo := strings.TrimSpace(options.CanonicalOwnerRepository)
-	if len(ownerRepo) == 0 {
-		ownerRepo = strings.TrimSpace(options.OriginOwnerRepository)
+	var ownerRepository *shared.OwnerRepository
+	if options.CanonicalOwnerRepository != nil {
+		ownerRepository = options.CanonicalOwnerRepository
+	} else if options.OriginOwnerRepository != nil {
+		ownerRepository = options.OriginOwnerRepository
 	}
 
-	if len(ownerRepo) == 0 {
-		executor.printfError(ownerRepoErrorMessage, options.RepositoryPath)
+	if ownerRepository == nil {
+		executor.printfError(ownerRepoErrorMessage, repositoryPath)
 		return
 	}
 
-	targetURL, targetError := remotes.BuildRemoteURL(options.TargetProtocol, ownerRepo)
+	ownerRepoString := ownerRepository.String()
+
+	targetURL, targetError := remotes.BuildRemoteURL(options.TargetProtocol, ownerRepoString)
 	if targetError != nil {
-		executor.printfError(targetErrorMessage, string(options.TargetProtocol), options.RepositoryPath)
+		executor.printfError(targetErrorMessage, string(options.TargetProtocol), repositoryPath)
 		return
 	}
 
 	if options.DryRun {
-		executor.printfOutput(planMessage, options.RepositoryPath, currentURL, targetURL)
+		executor.printfOutput(planMessage, repositoryPath, currentURL, targetURL)
 		return
 	}
 
 	if !options.AssumeYes && executor.dependencies.Prompter != nil {
-		prompt := fmt.Sprintf(promptTemplate, options.RepositoryPath, currentProtocol, options.TargetProtocol)
+		prompt := fmt.Sprintf(promptTemplate, repositoryPath, currentProtocol, options.TargetProtocol)
 		confirmationResult, promptError := executor.dependencies.Prompter.Confirm(prompt)
 		if promptError != nil {
-			executor.printfError(failureMessage, targetURL, options.RepositoryPath)
+			executor.printfError(failureMessage, targetURL, repositoryPath)
 			return
 		}
 		if !confirmationResult.Confirmed {
-			executor.printfOutput(declinedMessage, options.RepositoryPath)
+			executor.printfOutput(declinedMessage, repositoryPath)
 			return
 		}
 	}
 
-	updateError := executor.dependencies.GitManager.SetRemoteURL(executionContext, options.RepositoryPath, shared.OriginRemoteNameConstant, targetURL)
+	updateError := executor.dependencies.GitManager.SetRemoteURL(executionContext, repositoryPath, shared.OriginRemoteNameConstant, targetURL)
 	if updateError != nil {
-		executor.printfError(failureMessage, targetURL, options.RepositoryPath)
+		executor.printfError(failureMessage, targetURL, repositoryPath)
 		return
 	}
 
-	executor.printfOutput(successMessage, options.RepositoryPath, targetURL)
+	executor.printfOutput(successMessage, repositoryPath, targetURL)
 }
 
 // Execute performs the conversion using transient executor state.
