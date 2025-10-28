@@ -110,6 +110,12 @@ func (executor Executor) Execute(ctx context.Context, options Options) error {
 		return nil
 	}
 
+	if len(strings.TrimSpace(remoteName)) > 0 {
+		if err := executor.fetchRemoteRefs(ctx, repositoryPath, remoteName); err != nil {
+			return err
+		}
+	}
+
 	if err := executor.ensureGitIgnore(ctx, repositoryPath, paths); err != nil {
 		return err
 	}
@@ -258,6 +264,11 @@ func (executor Executor) postRewriteHousekeeping(ctx context.Context, repository
 	}
 	_, _ = executor.executeGit(ctx, repositoryPath, gitLfsSubcommand, gitLfsPruneSubcommand)
 	return nil
+}
+
+func (executor Executor) fetchRemoteRefs(ctx context.Context, repositoryPath string, remoteName string) error {
+	_, err := executor.executeGit(ctx, repositoryPath, gitFetchSubcommand, gitPruneFlag, gitTagsFlag, remoteName)
+	return err
 }
 
 func (executor Executor) restoreRemote(ctx context.Context, repositoryPath string, remoteName string, remoteURL string) {
