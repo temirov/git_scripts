@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+### Docs 📚
+- Re-centered the README on user workflows and added `ARCHITECTURE.md` to document command wiring, package layout, and configuration internals.
+
 ## [v0.1.4]
 
 ### Features ✨

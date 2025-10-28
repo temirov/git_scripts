@@ -13,20 +13,20 @@ import (
 )
 
 const (
-	readmeFileNameConstant             = "README.md"
-	yamlFenceStartConstant             = "```yaml"
-	yamlFenceEndConstant               = "```"
-	configHeaderMarkerConstant         = "# config.yaml"
-	readmeSnippetTestNameConstant      = "readme_workflow_configuration"
-	readmeSnippetTemporaryPattern      = "readme-config-*.yaml"
-	expectedOperationCount             = 8
-	parentDirectoryReferenceConstant   = ".."
-	missingHeaderMessageConstant       = "README example missing config header marker"
-	missingStartFenceMessageConstant   = "README example missing yaml fence start"
-	missingEndFenceMessageConstant     = "README example missing yaml fence end"
-	unexpectedOperationMessageTemplate = "unexpected operation %s"
-	duplicateOperationMessageTemplate  = "duplicate operation %s"
-	defaultTempDirectoryRootConstant   = ""
+	documentationFileNameConstant       = "ARCHITECTURE.md"
+	yamlFenceStartConstant              = "```yaml"
+	yamlFenceEndConstant                = "```"
+	configHeaderMarkerConstant          = "# config.yaml"
+	architectureSnippetTestNameConstant = "architecture_workflow_configuration"
+	architectureSnippetTemporaryPattern = "architecture-config-*.yaml"
+	expectedOperationCount              = 8
+	parentDirectoryReferenceConstant    = ".."
+	missingHeaderMessageConstant        = "Architecture example missing config header marker"
+	missingStartFenceMessageConstant    = "Architecture example missing yaml fence start"
+	missingEndFenceMessageConstant      = "Architecture example missing yaml fence end"
+	unexpectedOperationMessageTemplate  = "unexpected operation %s"
+	duplicateOperationMessageTemplate   = "duplicate operation %s"
+	defaultTempDirectoryRootConstant    = ""
 )
 
 var expectedCommandOperations = map[string]struct{}{
@@ -49,12 +49,12 @@ type readmeOperationConfiguration struct {
 	Options   map[string]any `yaml:"with"`
 }
 
-func TestReadmeWorkflowConfigurationParses(testInstance *testing.T) {
+func TestArchitectureWorkflowConfigurationParses(testInstance *testing.T) {
 	workingDirectory, workingDirectoryError := os.Getwd()
 	require.NoError(testInstance, workingDirectoryError)
 
-	readmePath := filepath.Join(workingDirectory, parentDirectoryReferenceConstant, readmeFileNameConstant)
-	contentBytes, readError := os.ReadFile(readmePath)
+	documentationPath := filepath.Join(workingDirectory, parentDirectoryReferenceConstant, documentationFileNameConstant)
+	contentBytes, readError := os.ReadFile(documentationPath)
 	require.NoError(testInstance, readError)
 
 	contentText := string(contentBytes)
@@ -76,7 +76,7 @@ func TestReadmeWorkflowConfigurationParses(testInstance *testing.T) {
 		configuration string
 	}{
 		{
-			name:          readmeSnippetTestNameConstant,
+			name:          architectureSnippetTestNameConstant,
 			configuration: snippetContent,
 		},
 	}
@@ -84,7 +84,7 @@ func TestReadmeWorkflowConfigurationParses(testInstance *testing.T) {
 	for _, testCase := range testCases {
 		testCase := testCase
 		testInstance.Run(testCase.name, func(subtest *testing.T) {
-			tempFile, tempFileError := os.CreateTemp(defaultTempDirectoryRootConstant, readmeSnippetTemporaryPattern)
+			tempFile, tempFileError := os.CreateTemp(defaultTempDirectoryRootConstant, architectureSnippetTemporaryPattern)
 			require.NoError(subtest, tempFileError)
 			subtest.Cleanup(func() {
 				require.NoError(subtest, os.Remove(tempFile.Name()))
