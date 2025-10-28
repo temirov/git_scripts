@@ -102,6 +102,7 @@ const (
 	reposRemotesOperationNameConstant                                = "repo-remote-update"
 	reposProtocolOperationNameConstant                               = "repo-protocol-convert"
 	repoReleaseOperationNameConstant                                 = "repo-release"
+	repoHistoryOperationNameConstant                                 = "repo-history-remove"
 	workflowCommandOperationNameConstant                             = "workflow"
 	branchRefreshOperationNameConstant                               = "branch-refresh"
 	branchDefaultOperationNameConstant                               = "branch-default"
@@ -135,6 +136,10 @@ const (
 	repoReleaseCommandUsageTemplateConstant                          = repoReleaseCommandUseNameConstant + " <tag>"
 	repoReleaseCommandAliasConstant                                  = "rel"
 	repoReleaseCommandLongDescriptionConstant                        = "repo release annotates the provided tag (default message 'Release <tag>') and pushes it to the configured remote. Provide the tag as the first argument before any optional repository roots or flags."
+	removeCommandUseNameConstant                                     = "rm"
+	removeCommandAliasConstant                                       = "purge"
+	removeCommandShortDescriptionConstant                            = "Rewrite history to delete selected paths"
+	removeCommandLongDescriptionConstant                             = "repo rm rewrites repository history to purge the specified paths using git-filter-repo. Provide one or more paths before optional repository roots or flags."
 	branchNamespaceUseNameConstant                                   = "branch"
 	branchNamespaceAliasConstant                                     = "b"
 	branchNamespaceShortDescriptionConstant                          = "Branch management commands"
@@ -198,6 +203,7 @@ var commandOperationRequirements = map[string][]string{
 	refreshCommandUseNameConstant:                                             {branchRefreshOperationNameConstant},
 	branchNamespaceUseNameConstant + "/" + branchChangeCommandUseNameConstant: {branchChangeOperationNameConstant},
 	repoNamespaceUseNameConstant + "/" + repoReleaseCommandUseNameConstant:    {repoReleaseOperationNameConstant},
+	repoNamespaceUseNameConstant + "/" + removeCommandUseNameConstant:         {repoHistoryOperationNameConstant},
 	renameCommandUseNameConstant:                                              {reposRenameOperationNameConstant},
 	reposProtocolOperationNameConstant:                                        {reposProtocolOperationNameConstant},
 	reposRemotesOperationNameConstant:                                         {reposRemotesOperationNameConstant},
@@ -599,6 +605,14 @@ func NewApplication() *Application {
 		ConfigurationProvider:        application.reposProtocolConfiguration,
 	}
 
+	removeBuilder := repos.RemoveCommandBuilder{
+		LoggerProvider: func() *zap.Logger {
+			return application.logger
+		},
+		HumanReadableLoggingProvider: application.humanReadableLoggingEnabled,
+		ConfigurationProvider:        application.reposRemoveConfiguration,
+	}
+
 	workflowBuilder := workflowcmd.CommandBuilder{
 		LoggerProvider: func() *zap.Logger {
 			return application.logger
@@ -682,6 +696,11 @@ func NewApplication() *Application {
 	}
 	if len(repoPackagesCommand.Commands()) > 0 {
 		repoNamespaceCommand.AddCommand(repoPackagesCommand)
+	}
+
+	if removeCommand, removeBuildError := removeBuilder.Build(); removeBuildError == nil {
+		configureCommandMetadata(removeCommand, removeCommandUseNameConstant, removeCommandShortDescriptionConstant, removeCommandLongDescriptionConstant, removeCommandAliasConstant)
+		repoNamespaceCommand.AddCommand(removeCommand)
 	}
 
 	if releaseCommand, releaseBuildError := releaseBuilder.Build(); releaseBuildError == nil {
@@ -1102,6 +1121,21 @@ func (application *Application) reposProtocolConfiguration() repos.ProtocolConfi
 	}
 
 	return configuration
+}
+
+func (application *Application) reposRemoveConfiguration() repos.RemoveConfiguration {
+	configuration := repos.DefaultToolsConfiguration().Remove
+	application.decodeOperationConfiguration(repoHistoryOperationNameConstant, &configuration)
+
+	options, optionsExist := application.lookupOperationOptions(repoHistoryOperationNameConstant)
+	if !optionsExist || !optionExists(options, dryRunOptionKeyConstant) {
+		configuration.DryRun = application.configuration.Common.DryRun
+	}
+	if !optionsExist || !optionExists(options, assumeYesOptionKeyConstant) {
+		configuration.AssumeYes = application.configuration.Common.AssumeYes
+	}
+
+	return configuration.Sanitize()
 }
 
 func (application *Application) workflowCommandConfiguration() workflowcmd.CommandConfiguration {

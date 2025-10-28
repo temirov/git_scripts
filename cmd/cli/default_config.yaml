@@ -29,6 +29,14 @@ operations:
     with:
       roots:
         - .
+  - operation: repo-history-remove
+    with:
+      roots:
+        - .
+      remote: ""
+      push: true
+      restore: true
+      push_missing: false
   - operation: repo-folders-rename
     with:
       roots:

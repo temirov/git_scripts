@@ -11,6 +11,7 @@ import (
 
 	"github.com/temirov/gix/internal/audit"
 	"github.com/temirov/gix/internal/releases"
+	"github.com/temirov/gix/internal/repos/history"
 	"github.com/temirov/gix/internal/repos/shared"
 )
 
@@ -21,6 +22,7 @@ const (
 	taskActionBranchDefault      = "branch.default"
 	taskActionReleaseTag         = "repo.release.tag"
 	taskActionAuditReport        = "audit.report"
+	taskActionHistoryPurge       = "repo.history.purge"
 
 	releaseActionMessageTemplate = "RELEASED: %s -> %s"
 )
@@ -32,6 +34,7 @@ var taskActionHandlers = map[string]taskActionHandlerFunc{
 	taskActionBranchDefault:      handleBranchDefaultAction,
 	taskActionReleaseTag:         handleReleaseTagAction,
 	taskActionAuditReport:        handleAuditReportAction,
+	taskActionHistoryPurge:       handleHistoryPurgeAction,
 }
 
 type taskActionHandlerFunc func(ctx context.Context, environment *Environment, repository *RepositoryState, parameters map[string]any) error
@@ -392,6 +395,100 @@ func collectAuditRoots(state *State, repository *RepositoryState) []string {
 	}
 
 	return roots
+}
+
+func handleHistoryPurgeAction(ctx context.Context, environment *Environment, repository *RepositoryState, parameters map[string]any) error {
+	if environment == nil || repository == nil {
+		return nil
+	}
+
+	rawPaths, exists := parameters["paths"]
+	if !exists {
+		return errors.New("history purge action requires 'paths'")
+	}
+	paths, pathsError := readHistoryPaths(rawPaths)
+	if pathsError != nil {
+		return pathsError
+	}
+	if len(paths) == 0 {
+		return errors.New("history purge action requires at least one path")
+	}
+
+	reader := newOptionReader(parameters)
+
+	remoteName, _, remoteError := reader.stringValue("remote")
+	if remoteError != nil {
+		return remoteError
+	}
+
+	pushEnabled := true
+	if value, exists, err := reader.boolValue("push"); err != nil {
+		return err
+	} else if exists {
+		pushEnabled = value
+	}
+
+	restoreEnabled := true
+	if value, exists, err := reader.boolValue("restore"); err != nil {
+		return err
+	} else if exists {
+		restoreEnabled = value
+	}
+
+	pushMissing := false
+	if value, exists, err := reader.boolValue("push_missing"); err != nil {
+		return err
+	} else if exists {
+		pushMissing = value
+	}
+
+	executor := history.NewExecutor(history.Dependencies{
+		GitExecutor:       environment.GitExecutor,
+		RepositoryManager: environment.RepositoryManager,
+		FileSystem:        environment.FileSystem,
+		Output:            environment.Output,
+	})
+
+	options := history.Options{
+		RepositoryPath: repository.Path,
+		Paths:          paths,
+		RemoteName:     remoteName,
+		Push:           pushEnabled,
+		Restore:        restoreEnabled,
+		PushMissing:    pushMissing,
+		DryRun:         environment.DryRun,
+	}
+
+	return executor.Execute(ctx, options)
+}
+
+func readHistoryPaths(raw any) ([]string, error) {
+	switch typed := raw.(type) {
+	case []string:
+		return append([]string{}, typed...), nil
+	case []any:
+		paths := make([]string, 0, len(typed))
+		for index := range typed {
+			value, ok := typed[index].(string)
+			if !ok {
+				return nil, fmt.Errorf("history purge action paths must be strings")
+			}
+			trimmed := strings.TrimSpace(value)
+			if len(trimmed) == 0 {
+				continue
+			}
+			paths = append(paths, trimmed)
+		}
+		return paths, nil
+	case string:
+		trimmed := strings.TrimSpace(typed)
+		if len(trimmed) == 0 {
+			return []string{}, nil
+		}
+		return []string{trimmed}, nil
+	default:
+		return nil, fmt.Errorf("history purge action requires 'paths' to be a string or list of strings")
+	}
 }
 
 func writeAuditReportFile(destination string, inspections []audit.RepositoryInspection) error {
