@@ -278,13 +278,7 @@ func handleAuditReportAction(ctx context.Context, environment *Environment, repo
 		depth = audit.InspectionDepthMinimal
 	}
 
-	roots := []string{}
-	if environment.State != nil && len(environment.State.Roots) > 0 {
-		roots = append(roots, environment.State.Roots...)
-	} else if repository != nil && len(strings.TrimSpace(repository.Path)) > 0 {
-		roots = []string{repository.Path}
-	}
-
+	roots := collectAuditRoots(environment.State, repository)
 	if len(roots) == 0 {
 		environment.auditReportExecuted = true
 		return nil
@@ -296,11 +290,6 @@ func handleAuditReportAction(ctx context.Context, environment *Environment, repo
 	}
 	sanitizedOutput := strings.TrimSpace(outputValue)
 	writeToFile := outputExists && len(sanitizedOutput) > 0
-
-	if len(roots) == 0 {
-		environment.auditReportExecuted = true
-		return nil
-	}
 
 	if environment.DryRun {
 		target := auditReportDestinationStdoutConstant
@@ -347,6 +336,65 @@ func handleAuditReportAction(ctx context.Context, environment *Environment, repo
 
 	environment.auditReportExecuted = true
 	return nil
+}
+
+func collectAuditRoots(state *State, repository *RepositoryState) []string {
+	seen := make(map[string]struct{})
+	roots := []string{}
+	appendRoot := func(path string) {
+		sanitized := strings.TrimSpace(path)
+		if len(sanitized) == 0 {
+			return
+		}
+		if _, exists := seen[sanitized]; exists {
+			return
+		}
+		seen[sanitized] = struct{}{}
+		roots = append(roots, sanitized)
+	}
+
+	if state != nil {
+		repositoryPaths := make([]string, 0, len(state.Repositories))
+		for _, repositoryState := range state.Repositories {
+			if repositoryState == nil {
+				continue
+			}
+			sanitizedRepositoryPath := strings.TrimSpace(repositoryState.Path)
+			if len(sanitizedRepositoryPath) == 0 {
+				continue
+			}
+			repositoryPaths = append(repositoryPaths, sanitizedRepositoryPath)
+			appendRoot(sanitizedRepositoryPath)
+		}
+
+		for _, root := range state.Roots {
+			sanitizedRoot := strings.TrimSpace(root)
+			if len(sanitizedRoot) == 0 {
+				continue
+			}
+			if len(repositoryPaths) == 0 {
+				appendRoot(sanitizedRoot)
+				continue
+			}
+
+			for _, repositoryPath := range repositoryPaths {
+				relative, relativeError := filepath.Rel(sanitizedRoot, repositoryPath)
+				if relativeError != nil {
+					continue
+				}
+				if relative == "." || (len(relative) > 0 && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) && relative != "..") {
+					appendRoot(sanitizedRoot)
+					break
+				}
+			}
+		}
+	}
+
+	if len(roots) == 0 && repository != nil {
+		appendRoot(repository.Path)
+	}
+
+	return roots
 }
 
 func handleHistoryPurgeAction(ctx context.Context, environment *Environment, repository *RepositoryState, parameters map[string]any) error {
