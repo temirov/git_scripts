@@ -31,31 +31,29 @@ If aa repository doesnt have a remote, there is nothing to fetch, but we can sti
   - Resolution: `ARCHITECTURE.md` now documents the current Cobra command flow, workflow step registry, and per-package responsibilities so the guide mirrors the Go CLI.
 - [x] [GX-402] Review @POLICY.md and verify what code areas need improvements and refactoring. Prepare a detailed plan of refactoring. Check for bugs, missing tests, poor coding practices, uplication and slop. Ensure strong encapsulation and following the principles og @AGENTS.md and policies of @POLICY.md
   - Resolution: Authored `docs/policy_refactor_plan.md` detailing domain-model introductions, error strategy, shared helper cleanup, and new test coverage aligned with the confident-programming policy.
+- [ ] [GX-403] Introduce domain types for repository metadata and enforce edge validation
+  - Add smart constructors for repository paths, owner/repository slugs, remote URLs, remote names, branch names, and protocols under `internal/repos/domain` (or `shared`), rejecting invalid input with sentinel errors.
+  - Replace raw string fields across `internal/repos` option structs and `internal/workflow` task definitions with the new domain types.
+  - Update CLI builders (`cmd/cli/repos/*`, `cmd/cli/workflow/*`) to validate inputs once and construct domain values before invoking services.
+- [ ] [GX-404] Establish contextual error strategy for repository executors
+  - Define typed sentinel errors (for example, `ErrUnknownProtocol`, `ErrCanonicalOwnerMissing`) with helpers that wrap them using operation + subject + stable code identifiers.
+  - Refactor `internal/repos/remotes`, `internal/repos/protocol`, `internal/repos/rename`, and `internal/repos/history` executors to return contextual errors instead of printing failure strings, leaving user messaging to CLI/reporters.
+  - Adjust CLI layers and tests to assert on wrapped errors and render human-readable output.
+- [ ] [GX-405] Consolidate shared helpers and eliminate duplicated validation
+  - Extract owner/repository parsing into a single reusable helper and share prompt/output formatting via a reporter interface.
+  - Remove repeated `strings.TrimSpace` and similar defensive code paths, trusting normalized domain types introduced in GX-403.
+  - Review boolean flags such as `AssumeYes` and `RequireCleanWorktree`; convert to clearer enums or document retained semantics when multiple behaviors are conflated.
+- [ ] [GX-406] Expand regression coverage for policy compliance
+  - Add table-driven tests for the new domain constructors and protocol conversion edge cases (current vs. target protocol mismatches, missing owner slugs, unknown protocols).
+  - Test dependency resolvers in `internal/repos/dependencies` to ensure logger wiring and error propagation.
+  - Extend workflow integration tests to confirm domain types propagate correctly through task execution.
+- [ ] [GX-407] Update documentation and CI tooling for the refactor
+  - Document newly introduced domain types, error codes, and edge-validation flow in `docs/cli_design.md` (or a dedicated `docs/refactor_status.md`) and cross-link from `POLICY.md`.
+  - Update developer docs describing prompt/output handling after GX-405 cleanup.
+  - Extend CI to run `staticcheck` and `ineffassign` alongside the existing `go test ./...` gate.
 
 ## Planning 
 do not work on the issues below, not ready
 
     - [ ] [GX-22] Implement adding licenses to repos. The prototype is under tools/licenser
     - [ ] [GX-23] Implement git retag, which allows to alter git history and straigtens up the git tags based on the timeline. The prototype is under tools/git_retag
-    - Roadmap:
-        Phase A – Domain Modeling
-            1. Introduce smart constructors for repository identifiers (path, owner, repo, remote URL, remote name, branch, protocol) under `internal/repos/domain` or extend `shared`.
-            2. Replace raw string usage across `internal/repos` and `internal/workflow` with the new domain types.
-            3. Update CLI builders (`cmd/cli/repos`, `cmd/cli/workflow`) to validate inputs once and emit the domain types.
-        Phase B – Error Strategy
-            1. Define sentinel errors (e.g., `ErrUnknownProtocol`, `ErrCanonicalOwnerMissing`) and helpers that wrap them with operation+subject codes.
-            2. Refactor executors (`remotes`, `protocol`, `rename`, `history`) to return contextual errors; move user messaging to CLI reporters.
-            3. Adapt tests to assert on wrapped errors rather than stdout strings.
-        Phase C – Service Cleanup
-            1. Centralize owner/repo parsing and output/prompt helpers for reuse.
-            2. Remove duplicated `strings.TrimSpace` validation by trusting normalized domain types.
-            3. Review boolean flags (`AssumeYes`, `RequireCleanWorktree`) and replace with sum-types where behaviors diverge.
-        Phase D – Testing Expansion
-            1. Add table-driven unit tests for the new constructors and protocol conversion edge cases.
-            2. Cover dependency resolver helpers in `internal/repos/dependencies`.
-            3. Extend workflow integration tests to ensure domain types propagate correctly.
-        Phase E – Documentation & Tooling
-            1. Document new domain types and error codes (`docs/refactor_status.md` or `POLICY.md` addendum).
-            2. Update `docs/cli_design.md` with edge-validation guidance.
-            3. Extend CI to include `staticcheck` and `ineffassign` alongside `go test ./...`.
-    - Note: The roadmap listed above applies to [GX-402]; although appended after the planning guard it remains the authoritative execution plan for the maintenance refactor sequence.
