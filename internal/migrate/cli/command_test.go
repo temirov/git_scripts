@@ -17,10 +17,9 @@ import (
 )
 
 const (
-	rootFlagArgumentConstant         = "--" + flagutils.DefaultRootFlagName
-	dryRunFlagArgumentConstant       = "--" + flagutils.DryRunFlagName
-	assumeYesFlagArgumentConstant    = "--" + flagutils.AssumeYesFlagName
-	targetBranchFlagArgumentConstant = "--to"
+	rootFlagArgumentConstant      = "--" + flagutils.DefaultRootFlagName
+	dryRunFlagArgumentConstant    = "--" + flagutils.DryRunFlagName
+	assumeYesFlagArgumentConstant = "--" + flagutils.AssumeYesFlagName
 )
 
 var boundRootFlagHolders []*flagutils.RootFlagValues
@@ -100,8 +99,8 @@ func TestCommandFlagsOverrideConfiguration(t *testing.T) {
 
 	command.SetContext(context.Background())
 	command.SetArgs([]string{
+		"stable",
 		rootFlagArgumentConstant, flagRoot,
-		targetBranchFlagArgumentConstant, "stable",
 		dryRunFlagArgumentConstant + "=yes",
 		assumeYesFlagArgumentConstant,
 	})
