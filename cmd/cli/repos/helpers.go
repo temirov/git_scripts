@@ -78,8 +78,3 @@ func displayCommandHelp(command *cobra.Command) error {
 	}
 	return command.Help()
 }
-
-func resolveRootFlagValues(command *cobra.Command) []string {
-	values, _ := rootutils.FlagValues(command)
-	return values
-}

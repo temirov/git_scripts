@@ -2,6 +2,7 @@ package remotes
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -24,7 +25,6 @@ const (
 	gitProtocolURLTemplate           = "git@github.com:%s.git"
 	sshProtocolURLTemplate           = "ssh://git@github.com/%s.git"
 	httpsProtocolURLTemplate         = "https://github.com/%s.git"
-	ownerRepositorySeparator         = "/"
 )
 
 // Options configures the remote update workflow.
@@ -164,30 +164,11 @@ func (executor *Executor) printfOutput(format string, arguments ...any) {
 	executor.dependencies.Reporter.Printf(format, arguments...)
 }
 
-func canonicalOwner(ownerRepository string) string {
-	trimmed := strings.TrimSpace(ownerRepository)
-	if len(trimmed) == 0 {
-		return ""
-	}
-
-	segments := strings.Split(trimmed, ownerRepositorySeparator)
-	if len(segments) == 0 {
-		return ""
-	}
-
-	owner := strings.TrimSpace(segments[0])
-	if len(owner) == 0 {
-		return ""
-	}
-
-	return owner
-}
-
 // BuildRemoteURL formats the canonical remote URL for the provided protocol and owner/repository tuple.
 func BuildRemoteURL(protocol shared.RemoteProtocol, ownerRepo string) (string, error) {
 	trimmedOwnerRepo := strings.TrimSpace(ownerRepo)
 	if len(trimmedOwnerRepo) == 0 {
-		return "", fmt.Errorf(ownerRepoNotDetectedErrorMessage)
+		return "", errors.New(ownerRepoNotDetectedErrorMessage)
 	}
 
 	switch protocol {

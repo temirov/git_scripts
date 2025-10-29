@@ -1,6 +1,7 @@
 package ghcr
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -27,7 +28,7 @@ const OrganizationOwnerType OwnerType = ownerTypeOrganizationConstant
 func ParseOwnerType(ownerTypeValue string) (OwnerType, error) {
 	trimmedValue := strings.TrimSpace(ownerTypeValue)
 	if len(trimmedValue) == 0 {
-		return "", fmt.Errorf(ownerTypeEmptyErrorMessageConstant)
+		return "", errors.New(ownerTypeEmptyErrorMessageConstant)
 	}
 
 	lowerCasedValue := strings.ToLower(trimmedValue)

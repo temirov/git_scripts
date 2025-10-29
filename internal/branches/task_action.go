@@ -37,7 +37,7 @@ func handleBranchCleanupAction(ctx context.Context, environment *workflow.Enviro
 		return errors.New(branchCleanupRemoteError)
 	}
 
-	limitValue, _ := parameters["limit"]
+	limitValue := parameters["limit"]
 	cleanupLimit := defaultBranchCleanupLimit
 	if trimmedLimit := strings.TrimSpace(stringify(limitValue)); len(trimmedLimit) > 0 {
 		parsedLimit, parseError := strconv.Atoi(trimmedLimit)

@@ -106,3 +106,10 @@ Workflows reuse repository discovery, confirmation prompts, and logging so you c
 - Detailed architecture, package layout, and command wiring: [ARCHITECTURE.md](ARCHITECTURE.md)
 - Historical roadmap and design notes: [docs/cli_design.md](docs/cli_design.md)
 - Recent changes: [CHANGELOG.md](CHANGELOG.md)
+
+## Developer notes
+
+- Repository services accept domain types from `internal/repos/shared` (paths, owners, remotes, branches); CLI edges construct them so executors run without defensive validation.
+- Executor errors surface via the contextual catalog in `internal/repos/errors`, which prints `PLAN-*`, `*-DONE`, and `*-SKIP` banners through the shared reporter.
+- Confirmation prompts respect the `[a/N/y]` contract everywhere; passing `--yes` (or setting `assume_yes: true` in workflows) flips the shared confirmation policy to auto-accept.
+- Run `make ci` before submitting patches; it enforces formatting plus `go vet`, `staticcheck`, `ineffassign`, and the unit/integration test suites.

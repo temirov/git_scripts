@@ -192,3 +192,38 @@ Before implementation starts, please review and confirm:
 5. Integration scenarios capture the necessary coverage; suggest additions if specific edge cases are missing.
 
 Once these points are approved, we will proceed with Cobra scaffolding and incremental porting of each script into Go services following this design.
+
+## 8. Repository domain model and executor contracts (GX-403 – GX-406)
+
+### 8.1 Smart constructors and invariants
+Repository-facing services now consume domain types defined in `internal/repos/shared`. Each type rejects invalid input at construction time so executors and workflows operate on validated values only.
+
+- `RepositoryPath` (`NewRepositoryPath`) normalises absolute paths and rejects newline characters.
+- `OwnerSlug`, `RepositoryName`, and `OwnerRepository` enforce GitHub slug rules and canonicalise whitespace.
+- `RemoteURL`, `RemoteName`, and `BranchName` guard against embedded whitespace and empty input.
+- `RemoteProtocol` parses protocol identifiers (`git`, `ssh`, `https`, `other`) and exposes a `Validate` helper for stored values.
+
+CLI commands, workflow operations, and dependency resolvers are responsible for constructing these types. Once constructed, services assume the invariants hold, matching the confident-programming policy.
+
+### 8.2 Edge validation workflow
+1. Cobra edges trim and validate flag/argument strings before building domain types.
+2. Workflow task runners read repository inspection data, call `shared.Parse*Optional` helpers, and propagate typed values into executor `Options`.
+3. Executors accept the domain structs and focus on orchestration (calls to Git, filesystem, confirmation prompts).
+4. Tests cover both constructor success paths and error scenarios so new validation rules cannot regress silently.
+
+### 8.3 Contextual error catalog
+`internal/repos/errors` defines sentinel codes (for example `origin_owner_missing`, `remote_update_failed`, `history_rewrite_failed`) and wraps them in `OperationError`. Executors use `errors.Wrap`/`errors.WrapMessage` to attach:
+
+- the operation identifier (`repo.protocol.convert`, `repo.remote.update`, `repo.folder.rename`, `repo.history.purge`);
+- the repository path subject; and
+- the human-readable message emitted through the shared reporter.
+
+Callers can inspect `OperationError.Code()` to branch on behaviour, while CLI layers render the formatted text (e.g. `ERROR: failed to set origin`). This catalog is the single source of truth for automation hooks and integration tests.
+
+### 8.4 Prompting and structured output
+Executors share two cross-cutting utilities from `internal/repos/shared`:
+
+- `ConfirmationPolicy` expresses whether to prompt (`ConfirmationPrompt`) or auto-accept (`ConfirmationAssumeYes`). Workflow edges enable `assume_yes` by flipping this policy; CLI surfaces map `--yes` to the same behaviour.
+- `Reporter` is a tiny interface that writes plan, skip, and success banners (`PLAN-CONVERT`, `UPDATE-REMOTE-DONE`, `CONVERT-SKIP`, etc.) to an `io.Writer`. Both CLI commands and workflow runners pass a writer backed by `cmd.OutOrStdout()` so tests can assert against deterministic strings.
+
+Prompts always expose the same template (`Convert 'origin' in '<path>' (https → ssh)? [a/N/y] `) and record “apply to all” selections in the shared `ConfirmationResult`. Declines print a `*-SKIP` banner; approvals continue with the executor flow.
