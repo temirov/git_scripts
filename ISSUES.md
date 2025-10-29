@@ -16,12 +16,13 @@ default branch update failed: GitHub Pages update failed: GetPagesConfig operati
 ```
 The Pages may be not configured and that's ok
 - Resolution: GitHub Pages lookup/update failures during `branch default` now emit warnings and the migration continues, leaving branch promotion untouched.
-- [ ] [GX-202] have descriptive and actionable error messages, explaining where was the failure and why the command failed:
+- [x] [GX-202] have descriptive and actionable error messages, explaining where was the failure and why the command failed:
 ```
 14:56:43 tyemirov@computercat:~/Development/Poodle $ gix --roots . b cd master
 failed to fetch updates: git command exited with code 128
 ```
 If a repository doesnt have a remote, there is nothing to fetch, but we can still change the default branch, methinks. Identify non-critical steps and ensure they produce warnings but are non-blocking. Encode this semntics into tasks and workflows.
+- Resolution: `branch cd` now logs `FETCH-SKIP`/`PULL-SKIP` warnings when network operations fail and continues switching branches, so repositories without remotes (or offline) still migrate.
 
 ## BugFixes (300–399)
 
