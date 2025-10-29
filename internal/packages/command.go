@@ -3,7 +3,6 @@ package packages
 import (
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -293,30 +292,6 @@ func (builder *CommandBuilder) resolveRepositoryMetadataResolver(logger *zap.Log
 		RepositoryManager: repositoryManager,
 		GitHubResolver:    githubResolver,
 	}, nil
-}
-
-func (builder *CommandBuilder) resolveWorkingDirectory() (string, error) {
-	if builder.WorkingDirectoryResolver != nil {
-		directory, resolutionError := builder.WorkingDirectoryResolver()
-		if resolutionError != nil {
-			return "", fmt.Errorf(workingDirectoryResolutionErrorTemplateConstant, resolutionError)
-		}
-		trimmedDirectory := strings.TrimSpace(directory)
-		if len(trimmedDirectory) == 0 {
-			return "", errors.New(workingDirectoryEmptyErrorMessageConstant)
-		}
-		return trimmedDirectory, nil
-	}
-
-	directory, resolutionError := os.Getwd()
-	if resolutionError != nil {
-		return "", fmt.Errorf(workingDirectoryResolutionErrorTemplateConstant, resolutionError)
-	}
-	trimmedDirectory := strings.TrimSpace(directory)
-	if len(trimmedDirectory) == 0 {
-		return "", errors.New(workingDirectoryEmptyErrorMessageConstant)
-	}
-	return trimmedDirectory, nil
 }
 
 func (builder *CommandBuilder) resolveRepositoryDependencies(logger *zap.Logger) (shared.GitRepositoryManager, shared.GitHubMetadataResolver, error) {

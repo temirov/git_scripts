@@ -1,8 +1,10 @@
-GO_SOURCES := $(shell find . -name '*.go' -not -path "./vendor/*")
+GO_SOURCES := $(shell find . -name '*.go' -not -path "./vendor/*" -not -path "./.git/*" -not -path "*/.git/*")
 UNIT_PACKAGES := $(shell go list ./... | grep -v '/tests$$')
 RELEASE_TARGETS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64
 RELEASE_DIRECTORY := dist
 RELEASE_BINARY_NAME := gix
+STATICCHECK_MODULE := honnef.co/go/tools/cmd/staticcheck@master
+INEFFASSIGN_MODULE := github.com/gordonklaus/ineffassign@latest
 
 .PHONY: format check-format lint test test-unit test-integration build release ci
 
@@ -19,6 +21,8 @@ check-format:
 
 lint:
 	go vet ./...
+	go run $(STATICCHECK_MODULE) ./...
+	go run $(INEFFASSIGN_MODULE) ./...
 
 test-unit:
 	go test $(UNIT_PACKAGES)

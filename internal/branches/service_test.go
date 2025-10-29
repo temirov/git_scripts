@@ -156,16 +156,6 @@ func registerResponse(executor *fakeCommandExecutor, toolName string, arguments 
 	executor.responses[buildCommandKey(toolName, arguments)] = fakeCommandResponse{result: result, err: commandError}
 }
 
-func registerRepositoryResponse(executor *fakeCommandExecutor, workingDirectory string, toolName string, arguments []string, result execshell.ExecutionResult, commandError error) {
-	if executor.repositoryResponses == nil {
-		executor.repositoryResponses = map[string]map[string]fakeCommandResponse{}
-	}
-	if executor.repositoryResponses[workingDirectory] == nil {
-		executor.repositoryResponses[workingDirectory] = map[string]fakeCommandResponse{}
-	}
-	executor.repositoryResponses[workingDirectory][buildCommandKey(toolName, arguments)] = fakeCommandResponse{result: result, err: commandError}
-}
-
 func buildRemoteOutput(branchNames []string) string {
 	var builder strings.Builder
 	for branchIndex := range branchNames {

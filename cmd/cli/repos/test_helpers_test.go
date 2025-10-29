@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/temirov/gix/internal/execshell"
-	"github.com/temirov/gix/internal/githubcli"
 	"github.com/temirov/gix/internal/repos/shared"
 )
 
@@ -69,14 +68,6 @@ func (manager *fakeGitRepositoryManager) SetRemoteURL(_ context.Context, reposit
 	manager.setCalls = append(manager.setCalls, remoteUpdateCall{repositoryPath: repositoryPath, remoteURL: remoteURL})
 	manager.remoteURL = remoteURL
 	return nil
-}
-
-type fakeGitHubResolver struct {
-	metadata githubcli.RepositoryMetadata
-}
-
-func (resolver *fakeGitHubResolver) ResolveRepoMetadata(context.Context, string) (githubcli.RepositoryMetadata, error) {
-	return resolver.metadata, nil
 }
 
 type recordingPrompter struct {

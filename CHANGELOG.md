@@ -14,6 +14,11 @@
 - Re-centered the README on user workflows and added `ARCHITECTURE.md` to document command wiring, package layout, and configuration internals.
 - Expanded `ARCHITECTURE.md` with current package responsibilities, dependency resolution, and workflow step registration details.
 - Added GX-402 refactor roadmap capturing policy gaps, phased domain/error refactors, and test expansion tasks.
+- Documented the repository domain model, error catalog, and prompt/reporting semantics in `docs/cli_design.md`, with cross-links from `POLICY.md` and README developer notes.
+
+### Testing 🧪
+- Expanded regression coverage for repository domain constructors, protocol conversion edge cases, dependency resolvers, and workflow canonical messaging to enforce policy guarantees.
+- `make ci` now executes `go vet`, `staticcheck`, and `ineffassign` before running the test suites; cleaned up legacy unused helpers to keep the new lint gates green.
 
 ## [v0.1.4]
 

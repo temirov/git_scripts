@@ -1253,15 +1253,6 @@ func optionExists(options map[string]any, optionKey string) bool {
 	return false
 }
 
-func (application *Application) operationOptionExists(operationName string, optionKey string) bool {
-	options, exists := application.lookupOperationOptions(operationName)
-	if !exists {
-		return false
-	}
-
-	return optionExists(options, optionKey)
-}
-
 func (application *Application) validateOperationConfigurations(command *cobra.Command) error {
 	if len(application.configuration.Operations) == 0 {
 		return nil

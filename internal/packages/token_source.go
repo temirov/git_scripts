@@ -2,6 +2,7 @@ package packages
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -70,7 +71,7 @@ func NewTokenResolver(environmentLookup EnvironmentLookup, fileReader FileReader
 func ParseTokenSource(sourceValue string) (TokenSourceConfiguration, error) {
 	trimmedValue := strings.TrimSpace(sourceValue)
 	if len(trimmedValue) == 0 {
-		return TokenSourceConfiguration{}, fmt.Errorf(tokenSourceMissingErrorMessageConstant)
+		return TokenSourceConfiguration{}, errors.New(tokenSourceMissingErrorMessageConstant)
 	}
 
 	components := strings.SplitN(trimmedValue, tokenSourceSeparatorConstant, 2)
@@ -87,12 +88,12 @@ func ParseTokenSource(sourceValue string) (TokenSourceConfiguration, error) {
 	switch sourceType {
 	case environmentTokenSourceTypeValueConstant:
 		if len(reference) == 0 {
-			return TokenSourceConfiguration{}, fmt.Errorf(environmentNameMissingErrorMessageConstant)
+			return TokenSourceConfiguration{}, errors.New(environmentNameMissingErrorMessageConstant)
 		}
 		return TokenSourceConfiguration{Type: TokenSourceTypeEnvironment, Reference: reference}, nil
 	case fileTokenSourceTypeValueConstant:
 		if len(reference) == 0 {
-			return TokenSourceConfiguration{}, fmt.Errorf(filePathMissingErrorMessageConstant)
+			return TokenSourceConfiguration{}, errors.New(filePathMissingErrorMessageConstant)
 		}
 		return TokenSourceConfiguration{Type: TokenSourceTypeFile, Reference: reference}, nil
 	default:
@@ -110,7 +111,7 @@ func (resolver *tokenResolver) ResolveToken(resolutionContext context.Context, s
 	switch source.Type {
 	case TokenSourceTypeEnvironment:
 		if resolver.environmentLookup == nil {
-			return "", fmt.Errorf(environmentLookupNilErrorMessageConstant)
+			return "", errors.New(environmentLookupNilErrorMessageConstant)
 		}
 		value, found := resolver.environmentLookup(source.Reference)
 		if !found {
@@ -123,7 +124,7 @@ func (resolver *tokenResolver) ResolveToken(resolutionContext context.Context, s
 		return trimmedValue, nil
 	case TokenSourceTypeFile:
 		if resolver.fileReader == nil {
-			return "", fmt.Errorf(fileReaderNilErrorMessageConstant)
+			return "", errors.New(fileReaderNilErrorMessageConstant)
 		}
 		contents, readError := resolver.fileReader(source.Reference)
 		if readError != nil {
