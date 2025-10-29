@@ -7,7 +7,8 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
 
 ## Improvements (200–299)
 
-- [ ] [GX-200] Remove `--to` flag from default command and accept the new branch as an argument, e.g. `gix b default master`
+- [x] [GX-200] Remove `--to` flag from default command and accept the new branch as an argument, e.g. `gix b default master`
+  - Resolution: `branch default` now takes the target branch as a positional argument while still honoring configured defaults; docs and tests updated accordingly.
 - [ ] [GX-201] Identify non-critical operations and turn them into warnings, which do not stop the flow:
 ```
 14:58:29 tyemirov@computercat:~/Development/Poodle/product_page_analysis.py [main] $ gix b default --to master

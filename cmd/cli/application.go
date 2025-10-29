@@ -151,6 +151,7 @@ const (
 	branchNamespaceAliasConstant                                     = "b"
 	branchNamespaceShortDescriptionConstant                          = "Branch management commands"
 	defaultCommandUseNameConstant                                    = "default"
+	defaultCommandUsageTemplateConstant                              = defaultCommandUseNameConstant + " <target-branch>"
 	refreshCommandUseNameConstant                                    = "refresh"
 	branchChangeCommandUseNameConstant                               = "cd"
 	branchChangeCommandUsageTemplateConstant                         = branchChangeCommandUseNameConstant + " <branch>"
@@ -742,7 +743,7 @@ func NewApplication() *Application {
 
 	branchNamespaceCommand := newNamespaceCommand(branchNamespaceUseNameConstant, branchNamespaceShortDescriptionConstant, branchNamespaceAliasConstant)
 	if branchDefaultNestedCommand, branchDefaultNestedError := branchDefaultBuilder.Build(); branchDefaultNestedError == nil {
-		configureCommandMetadata(branchDefaultNestedCommand, defaultCommandUseNameConstant, branchDefaultNestedCommand.Short, branchDefaultNestedLongDescriptionConstant)
+		configureCommandMetadata(branchDefaultNestedCommand, defaultCommandUsageTemplateConstant, branchDefaultNestedCommand.Short, branchDefaultNestedLongDescriptionConstant)
 		branchNamespaceCommand.AddCommand(branchDefaultNestedCommand)
 	}
 	if branchChangeCommand, branchChangeError := branchChangeBuilder.Build(); branchChangeError == nil {

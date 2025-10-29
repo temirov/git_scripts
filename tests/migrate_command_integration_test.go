@@ -77,8 +77,8 @@ func TestBranchDefaultCommandRespectsFlags(t *testing.T) {
 
 	command.SetContext(context.Background())
 	command.SetArgs([]string{
+		"stable",
 		"--" + flagutils.DefaultRootFlagName, root,
-		"--to", "stable",
 		"--" + flagutils.DryRunFlagName + "=yes",
 	})
 

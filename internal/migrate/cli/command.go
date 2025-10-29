@@ -21,10 +21,9 @@ import (
 
 const (
 	commandUseConstant                  = "branch-default"
+	commandUseTemplateConstant          = commandUseConstant + " <target-branch>"
 	commandShortDescriptionConstant     = "Set the repository default branch"
 	commandLongDescriptionConstant      = "branch-default retargets workflows, updates GitHub configuration, and evaluates safety gates before promoting the requested branch, automatically detecting the current default branch."
-	targetBranchFlagNameConstant        = "to"
-	targetBranchFlagUsageConstant       = "Target branch to promote to default"
 	taskNameTemplateConstant            = "Promote default branch to %s"
 	taskActionBranchDefaultTypeConstant = "branch.default"
 	taskOptionTargetBranchKeyConstant   = "target"
@@ -55,16 +54,14 @@ type CommandBuilder struct {
 // Build constructs the branch-default command.
 func (builder *CommandBuilder) Build() (*cobra.Command, error) {
 	command := &cobra.Command{
-		Use:           commandUseConstant,
+		Use:           commandUseTemplateConstant,
 		Short:         commandShortDescriptionConstant,
 		Long:          commandLongDescriptionConstant,
 		SilenceErrors: true,
 		SilenceUsage:  true,
-		Args:          cobra.NoArgs,
+		Args:          cobra.MaximumNArgs(1),
 		RunE:          builder.runDefault,
 	}
-
-	command.Flags().String(targetBranchFlagNameConstant, string(migrate.BranchMaster), targetBranchFlagUsageConstant)
 
 	return command, nil
 }
@@ -170,19 +167,14 @@ func (builder *CommandBuilder) parseOptions(command *cobra.Command, arguments []
 		}
 	}
 
-	repositoryRoots, resolveRootsError := rootutils.Resolve(command, arguments, configuration.RepositoryRoots)
+	repositoryRoots, resolveRootsError := rootutils.Resolve(command, nil, configuration.RepositoryRoots)
 	if resolveRootsError != nil {
 		return commandOptions{}, resolveRootsError
 	}
 
 	targetBranchName := strings.TrimSpace(configuration.TargetBranch)
-	if len(targetBranchName) == 0 {
-		targetBranchName = string(migrate.BranchMaster)
-	}
-
-	if command != nil && command.Flags().Changed(targetBranchFlagNameConstant) {
-		flagValue, _ := command.Flags().GetString(targetBranchFlagNameConstant)
-		targetBranchName = strings.TrimSpace(flagValue)
+	if len(arguments) > 0 {
+		targetBranchName = strings.TrimSpace(arguments[0])
 	}
 
 	if len(targetBranchName) == 0 {

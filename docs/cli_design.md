@@ -38,7 +38,7 @@ The following tables document each script. "Inputs" include both positional argu
 | Aspect | Details |
 | --- | --- |
 | Primary purpose | Safely migrate a repository’s default branch from `main` to `master`, updating workflows, GitHub Pages, PR targets, local branches, and remote settings. |
-| Inputs & flags | Optional `--debug` flag (enables shell tracing). No positional arguments; must run inside target repository. |
+| Inputs & flags | Target branch as positional argument (for example, `master`) plus optional `--debug` flag (enables shell tracing). Must run inside target repository. |
 | Environment variables | Relies on Git configuration for remote URLs and GitHub CLI authentication context. |
 | External dependencies | `git`, `gh`, `jq`, `sed`, `find`, standard GNU coreutils. Requires authenticated `gh` session. |
 | Network/API usage | Extensive `gh api` usage: fetch repository metadata, GitHub Pages config, branch protection checks, open PRs. Uses `gh pr list`/`gh pr edit`. Pushes branches via `git push`. |
@@ -64,7 +64,7 @@ The new CLI (working name **`git-maintenance`**) will use Cobra for command/flag
 - `git-maintenance repo-remote-update`
 - `git-maintenance repo-protocol-convert`
 - `git-maintenance repo-prs-purge`
-- `git-maintenance branch-default`
+- `git-maintenance branch-default <target-branch>`
 - `git-maintenance repo-packages-purge`
 
 ### 3.1 Flag and Behavior Mapping
