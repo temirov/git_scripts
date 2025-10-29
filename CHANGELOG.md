@@ -1,27 +1,35 @@
 # Changelog
+## [v0.2.0-rc.1]
 
-## [Unreleased]
+### Features ✨
+- Added `repo files replace` command for file replacement tasks across repositories.
+- Added `repo history purge` command with task-runner orchestration and dry-run previews.
+- Routed the workflow CLI through the shared task runner so declarative workflow steps execute as orchestrated tasks.
+- `branch default` command now accepts the target branch as a positional argument (`gix b default master`) while retaining configuration fallbacks and removing the legacy `--to` flag.
 
 ### Improvements ⚙️
 - Introduced validated domain types for repository paths, owner/repo tuples, remotes, and branch names, refactoring repository executors and workflow options to consume the new constructors.
-- Added contextual error catalog and refactored repository executors/workflow bridges to emit and surface stable sentinel codes instead of printing ad-hoc failure strings.
-- Consolidated repository helper utilities (optional owner parsing, confirmation policies, shared reporter) and removed duplicated string normalization across protocol, remotes, and rename workflows.
-- `branch default` now accepts the target branch as a positional argument (`gix b default master`), retaining configuration fallbacks while removing the legacy `--to` flag.
-- GitHub Pages configuration failures encountered during `branch default` are downgraded to warnings so branch promotion can proceed when Pages is not configured.
-- `branch cd` now reports network issues as `FETCH-SKIP`/`PULL-SKIP` warnings instead of aborting when remotes are missing or offline.
+- Added a contextual error catalog and updated repository executors/workflow bridges to emit stable sentinel codes instead of ad-hoc failure strings.
+- Consolidated repository helper utilities (optional owner parsing, confirmation policies, shared reporter) and removed duplicated normalization across workflows.
+- Downgraded GitHub Pages configuration failures encountered during `branch default` to warnings so branch promotion proceeds when Pages is not configured.
+- `branch cd` reports network issues as `FETCH-SKIP`/`PULL-SKIP` warnings instead of aborting when remotes are missing or offline.
+- Refined repository executors and workflow bridges to use the new domain constructors and error handling.
 
 ### Bug Fixes 🐛
-- Prevented `branch cd` from aborting when repositories lack remotes by skipping fetch/pull operations and creating untracked branches when necessary.
-
-### Docs 📚
-- Re-centered the README on user workflows and added `ARCHITECTURE.md` to document command wiring, package layout, and configuration internals.
-- Expanded `ARCHITECTURE.md` with current package responsibilities, dependency resolution, and workflow step registration details.
-- Added GX-402 refactor roadmap capturing policy gaps, phased domain/error refactors, and test expansion tasks.
-- Documented the repository domain model, error catalog, and prompt/reporting semantics in `docs/cli_design.md`, with cross-links from `POLICY.md` and README developer notes.
+- Prevented `branch cd` from aborting when repositories lack remotes by skipping network operations and creating untracked branches.
+- Fixed history purge test alignment with multi-path commands.
+- Fixed audit roots handling after renames and improved test coverage.
 
 ### Testing 🧪
 - Expanded regression coverage for repository domain constructors, protocol conversion edge cases, dependency resolvers, and workflow canonical messaging to enforce policy guarantees.
-- `make ci` now executes `go vet`, `staticcheck`, and `ineffassign` before running the test suites; cleaned up legacy unused helpers to keep the new lint gates green.
+- Added coverage for task executor behavior and workflow command unit tests.
+- Updated `make ci` to run additional linters (`go vet`, `staticcheck`, `ineffassign`) before tests and cleaned up legacy unused helpers to keep the new gates green.
+- Covered policy regressions related to repository domain and workflow messaging.
+
+### Docs 📚
+- Added `ARCHITECTURE.md` documenting command wiring, package layout, configuration internals, and current package responsibilities with workflow step registration details.
+- Re-centered README on user workflows and refreshed CLI design documentation with repository domain model coverage, prompt/reporting semantics, and cross-links from `POLICY.md`.
+- Added the GX-402 refactor roadmap capturing policy gaps, domain/error refactors, and test expansion tasks.
 
 ## [v0.1.4]
 
