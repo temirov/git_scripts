@@ -6,6 +6,7 @@ import (
 	"io"
 	"strings"
 
+	repoerrors "github.com/temirov/gix/internal/repos/errors"
 	"github.com/temirov/gix/internal/repos/remotes"
 	"github.com/temirov/gix/internal/repos/shared"
 )
@@ -36,7 +37,6 @@ type Dependencies struct {
 	GitManager shared.GitRepositoryManager
 	Prompter   shared.ConfirmationPrompter
 	Output     io.Writer
-	Errors     io.Writer
 }
 
 // Executor orchestrates protocol conversions for repository remotes.
@@ -50,23 +50,31 @@ func NewExecutor(dependencies Dependencies) *Executor {
 }
 
 // Execute performs the conversion using the executor's dependencies.
-func (executor *Executor) Execute(executionContext context.Context, options Options) {
+func (executor *Executor) Execute(executionContext context.Context, options Options) error {
 	repositoryPath := options.RepositoryPath.String()
 
 	if executor.dependencies.GitManager == nil {
-		executor.printfError(failureMessage, "", repositoryPath)
-		return
+		return repoerrors.WrapMessage(
+			repoerrors.OperationProtocolConvert,
+			repositoryPath,
+			repoerrors.ErrGitManagerUnavailable,
+			fmt.Sprintf(failureMessage, "", repositoryPath),
+		)
 	}
 
 	currentURL, fetchError := executor.dependencies.GitManager.GetRemoteURL(executionContext, repositoryPath, shared.OriginRemoteNameConstant)
 	if fetchError != nil {
-		executor.printfError(failureMessage, "", repositoryPath)
-		return
+		return repoerrors.Wrap(
+			repoerrors.OperationProtocolConvert,
+			repositoryPath,
+			repoerrors.ErrRemoteEnumerationFailed,
+			fetchError,
+		)
 	}
 
 	currentProtocol := detectProtocol(currentURL)
 	if currentProtocol != options.CurrentProtocol {
-		return
+		return nil
 	}
 
 	var ownerRepository *shared.OwnerRepository
@@ -77,48 +85,65 @@ func (executor *Executor) Execute(executionContext context.Context, options Opti
 	}
 
 	if ownerRepository == nil {
-		executor.printfError(ownerRepoErrorMessage, repositoryPath)
-		return
+		return repoerrors.WrapMessage(
+			repoerrors.OperationProtocolConvert,
+			repositoryPath,
+			repoerrors.ErrOriginOwnerMissing,
+			fmt.Sprintf(ownerRepoErrorMessage, repositoryPath),
+		)
 	}
 
 	ownerRepoString := ownerRepository.String()
 
 	targetURL, targetError := remotes.BuildRemoteURL(options.TargetProtocol, ownerRepoString)
 	if targetError != nil {
-		executor.printfError(targetErrorMessage, string(options.TargetProtocol), repositoryPath)
-		return
+		return repoerrors.WrapMessage(
+			repoerrors.OperationProtocolConvert,
+			repositoryPath,
+			repoerrors.ErrUnknownProtocol,
+			fmt.Sprintf(targetErrorMessage, string(options.TargetProtocol), repositoryPath),
+		)
 	}
 
 	if options.DryRun {
 		executor.printfOutput(planMessage, repositoryPath, currentURL, targetURL)
-		return
+		return nil
 	}
 
 	if !options.AssumeYes && executor.dependencies.Prompter != nil {
 		prompt := fmt.Sprintf(promptTemplate, repositoryPath, currentProtocol, options.TargetProtocol)
 		confirmationResult, promptError := executor.dependencies.Prompter.Confirm(prompt)
 		if promptError != nil {
-			executor.printfError(failureMessage, targetURL, repositoryPath)
-			return
+			return repoerrors.WrapMessage(
+				repoerrors.OperationProtocolConvert,
+				repositoryPath,
+				repoerrors.ErrUserConfirmationFailed,
+				fmt.Sprintf(failureMessage, targetURL, repositoryPath),
+			)
 		}
 		if !confirmationResult.Confirmed {
 			executor.printfOutput(declinedMessage, repositoryPath)
-			return
+			return nil
 		}
 	}
 
 	updateError := executor.dependencies.GitManager.SetRemoteURL(executionContext, repositoryPath, shared.OriginRemoteNameConstant, targetURL)
 	if updateError != nil {
-		executor.printfError(failureMessage, targetURL, repositoryPath)
-		return
+		return repoerrors.WrapMessage(
+			repoerrors.OperationProtocolConvert,
+			repositoryPath,
+			repoerrors.ErrRemoteUpdateFailed,
+			fmt.Sprintf(failureMessage, targetURL, repositoryPath),
+		)
 	}
 
 	executor.printfOutput(successMessage, repositoryPath, targetURL)
+	return nil
 }
 
 // Execute performs the conversion using transient executor state.
-func Execute(executionContext context.Context, dependencies Dependencies, options Options) {
-	NewExecutor(dependencies).Execute(executionContext, options)
+func Execute(executionContext context.Context, dependencies Dependencies, options Options) error {
+	return NewExecutor(dependencies).Execute(executionContext, options)
 }
 
 func (executor *Executor) printfOutput(format string, arguments ...any) {
@@ -126,13 +151,6 @@ func (executor *Executor) printfOutput(format string, arguments ...any) {
 		return
 	}
 	fmt.Fprintf(executor.dependencies.Output, format, arguments...)
-}
-
-func (executor *Executor) printfError(format string, arguments ...any) {
-	if executor.dependencies.Errors == nil {
-		return
-	}
-	fmt.Fprintf(executor.dependencies.Errors, format, arguments...)
 }
 
 func detectProtocol(remoteURL string) shared.RemoteProtocol {

@@ -40,7 +40,6 @@ func (operation *RenameOperation) Execute(executionContext context.Context, envi
 		Prompter:   environment.Prompter,
 		Clock:      shared.SystemClock{},
 		Output:     environment.Output,
-		Errors:     environment.Errors,
 	}
 
 	for repositoryIndex := range state.Repositories {
@@ -76,7 +75,12 @@ func (operation *RenameOperation) Execute(executionContext context.Context, envi
 			EnsureParentDirectories: plan.IncludeOwner,
 		}
 
-		rename.Execute(executionContext, dependencies, options)
+		if executionError := rename.Execute(executionContext, dependencies, options); executionError != nil {
+			if logRepositoryOperationError(environment, executionError) {
+				continue
+			}
+			return fmt.Errorf("rename directories: %w", executionError)
+		}
 
 		if environment.DryRun {
 			continue

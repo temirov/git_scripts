@@ -105,7 +105,12 @@ func (operation *CanonicalRemoteOperation) Execute(executionContext context.Cont
 			OwnerConstraint:          ownerConstraint,
 		}
 
-		remotes.Execute(executionContext, dependencies, options)
+		if executionError := remotes.Execute(executionContext, dependencies, options); executionError != nil {
+			if logRepositoryOperationError(environment, executionError) {
+				continue
+			}
+			return fmt.Errorf("canonical remote update: %w", executionError)
+		}
 
 		if environment.DryRun {
 			continue

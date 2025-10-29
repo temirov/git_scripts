@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/temirov/gix/internal/execshell"
+	repoerrors "github.com/temirov/gix/internal/repos/errors"
 	"github.com/temirov/gix/internal/repos/shared"
 )
 
@@ -89,14 +90,24 @@ func NewExecutor(dependencies Dependencies) Executor {
 // Execute rewrites repository history according to the provided options.
 func (executor Executor) Execute(ctx context.Context, options Options) error {
 	if executor.dependencies.GitExecutor == nil || executor.dependencies.RepositoryManager == nil || executor.dependencies.FileSystem == nil {
-		return errors.New("history purge requires git executor, repository manager, and filesystem")
+		return repoerrors.Wrap(
+			repoerrors.OperationHistoryPurge,
+			options.RepositoryPath.String(),
+			repoerrors.ErrExecutorDependenciesMissing,
+			errors.New("history purge requires git executor, repository manager, and filesystem"),
+		)
 	}
 
 	repositoryPath := options.RepositoryPath.String()
 
 	paths := normalizePaths(options.Paths)
 	if len(paths) == 0 {
-		return errors.New(pathsRequiredErrorMessage)
+		return repoerrors.Wrap(
+			repoerrors.OperationHistoryPurge,
+			repositoryPath,
+			repoerrors.ErrPathsRequired,
+			nil,
+		)
 	}
 
 	requestedRemote := ""
@@ -113,17 +124,32 @@ func (executor Executor) Execute(ctx context.Context, options Options) error {
 
 	if len(strings.TrimSpace(remoteName)) > 0 {
 		if err := executor.fetchRemoteRefs(ctx, repositoryPath, remoteName); err != nil {
-			return err
+			return repoerrors.Wrap(
+				repoerrors.OperationHistoryPurge,
+				repositoryPath,
+				repoerrors.ErrFetchFailed,
+				err,
+			)
 		}
 	}
 
 	if err := executor.ensureGitIgnore(ctx, repositoryPath, paths); err != nil {
-		return err
+		return repoerrors.Wrap(
+			repoerrors.OperationHistoryPurge,
+			repositoryPath,
+			repoerrors.ErrHistoryGitIgnoreUpdateFailed,
+			err,
+		)
 	}
 
 	hasHistory, historyError := executor.pathsInHistory(ctx, repositoryPath, paths)
 	if historyError != nil {
-		return historyError
+		return repoerrors.Wrap(
+			repoerrors.OperationHistoryPurge,
+			repositoryPath,
+			repoerrors.ErrHistoryInspectionFailed,
+			historyError,
+		)
 	}
 	if !hasHistory {
 		executor.printf(skipMessageTemplate, repositoryPath, joinedPaths)
@@ -131,24 +157,44 @@ func (executor Executor) Execute(ctx context.Context, options Options) error {
 	}
 
 	if err := executor.runFilterRepo(ctx, repositoryPath, paths); err != nil {
-		return err
+		return repoerrors.Wrap(
+			repoerrors.OperationHistoryPurge,
+			repositoryPath,
+			repoerrors.ErrHistoryRewriteFailed,
+			err,
+		)
 	}
 
 	if err := executor.cleanupFilterRepo(ctx, repositoryPath); err != nil {
-		return err
+		return repoerrors.Wrap(
+			repoerrors.OperationHistoryPurge,
+			repositoryPath,
+			repoerrors.ErrHistoryRewriteFailed,
+			err,
+		)
 	}
 
 	executor.restoreRemote(ctx, repositoryPath, remoteName, savedRemoteURL)
 
 	if options.Push && len(strings.TrimSpace(remoteName)) > 0 {
 		if err := executor.forcePush(ctx, repositoryPath, remoteName); err != nil {
-			return err
+			return repoerrors.Wrap(
+				repoerrors.OperationHistoryPurge,
+				repositoryPath,
+				repoerrors.ErrHistoryPushFailed,
+				err,
+			)
 		}
 	}
 
 	if options.Restore && len(strings.TrimSpace(remoteName)) > 0 {
 		if err := executor.restoreUpstreams(ctx, repositoryPath, remoteName, options.PushMissing); err != nil {
-			return err
+			return repoerrors.Wrap(
+				repoerrors.OperationHistoryPurge,
+				repositoryPath,
+				repoerrors.ErrHistoryRestoreFailed,
+				err,
+			)
 		}
 	}
 

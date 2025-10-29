@@ -6,6 +6,7 @@ import (
 	"io"
 	"strings"
 
+	repoerrors "github.com/temirov/gix/internal/repos/errors"
 	"github.com/temirov/gix/internal/repos/shared"
 )
 
@@ -57,17 +58,25 @@ func NewExecutor(dependencies Dependencies) *Executor {
 }
 
 // Execute performs the remote update according to the provided options.
-func (executor *Executor) Execute(executionContext context.Context, options Options) {
+func (executor *Executor) Execute(executionContext context.Context, options Options) error {
 	repositoryPath := options.RepositoryPath.String()
 
 	if options.OriginOwnerRepository == nil {
-		executor.printfOutput(skipParseMessage, repositoryPath)
-		return
+		return repoerrors.WrapMessage(
+			repoerrors.OperationCanonicalRemote,
+			repositoryPath,
+			repoerrors.ErrOriginOwnerMissing,
+			fmt.Sprintf(skipParseMessage, repositoryPath),
+		)
 	}
 
 	if options.CanonicalOwnerRepository == nil {
-		executor.printfOutput(skipCanonicalMessage, repositoryPath)
-		return
+		return repoerrors.WrapMessage(
+			repoerrors.OperationCanonicalRemote,
+			repositoryPath,
+			repoerrors.ErrCanonicalOwnerMissing,
+			fmt.Sprintf(skipCanonicalMessage, repositoryPath),
+		)
 	}
 
 	originOwner := options.OriginOwnerRepository.String()
@@ -75,13 +84,17 @@ func (executor *Executor) Execute(executionContext context.Context, options Opti
 
 	if strings.EqualFold(originOwner, canonicalOwner) {
 		executor.printfOutput(skipSameMessage, repositoryPath)
-		return
+		return nil
 	}
 
 	targetURL, targetError := BuildRemoteURL(options.RemoteProtocol, canonicalOwner)
 	if targetError != nil {
-		executor.printfOutput(skipTargetMessage, repositoryPath)
-		return
+		return repoerrors.WrapMessage(
+			repoerrors.OperationCanonicalRemote,
+			repositoryPath,
+			repoerrors.ErrRemoteURLBuildFailed,
+			fmt.Sprintf(skipTargetMessage, repositoryPath),
+		)
 	}
 
 	currentOriginURL := ""
@@ -91,39 +104,52 @@ func (executor *Executor) Execute(executionContext context.Context, options Opti
 
 	if options.DryRun {
 		executor.printfOutput(planMessage, repositoryPath, currentOriginURL, targetURL)
-		return
+		return nil
 	}
 
 	if !options.AssumeYes && executor.dependencies.Prompter != nil {
 		prompt := fmt.Sprintf(promptTemplate, repositoryPath, originOwner, canonicalOwner)
 		confirmationResult, promptError := executor.dependencies.Prompter.Confirm(prompt)
 		if promptError != nil {
-			executor.printfOutput(skipTargetMessage, repositoryPath)
-			return
+			return repoerrors.WrapMessage(
+				repoerrors.OperationCanonicalRemote,
+				repositoryPath,
+				repoerrors.ErrUserConfirmationFailed,
+				fmt.Sprintf(skipTargetMessage, repositoryPath),
+			)
 		}
 		if !confirmationResult.Confirmed {
 			executor.printfOutput(declinedMessage, repositoryPath)
-			return
+			return nil
 		}
 	}
 
 	if executor.dependencies.GitManager == nil {
-		executor.printfOutput(failureMessage, repositoryPath)
-		return
+		return repoerrors.WrapMessage(
+			repoerrors.OperationCanonicalRemote,
+			repositoryPath,
+			repoerrors.ErrGitManagerUnavailable,
+			fmt.Sprintf(failureMessage, repositoryPath),
+		)
 	}
 
 	updateError := executor.dependencies.GitManager.SetRemoteURL(executionContext, repositoryPath, shared.OriginRemoteNameConstant, targetURL)
 	if updateError != nil {
-		executor.printfOutput(failureMessage, repositoryPath)
-		return
+		return repoerrors.WrapMessage(
+			repoerrors.OperationCanonicalRemote,
+			repositoryPath,
+			repoerrors.ErrRemoteUpdateFailed,
+			fmt.Sprintf(failureMessage, repositoryPath),
+		)
 	}
 
 	executor.printfOutput(successMessage, repositoryPath, targetURL)
+	return nil
 }
 
 // Execute performs the remote update workflow using transient executor state.
-func Execute(executionContext context.Context, dependencies Dependencies, options Options) {
-	NewExecutor(dependencies).Execute(executionContext, options)
+func Execute(executionContext context.Context, dependencies Dependencies, options Options) error {
+	return NewExecutor(dependencies).Execute(executionContext, options)
 }
 
 func (executor *Executor) printfOutput(format string, arguments ...any) {

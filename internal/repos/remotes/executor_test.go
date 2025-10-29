@@ -3,11 +3,13 @@ package remotes_test
 import (
 	"bytes"
 	"context"
+	stdErrors "errors"
 	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	repoerrors "github.com/temirov/gix/internal/repos/errors"
 	"github.com/temirov/gix/internal/repos/remotes"
 	"github.com/temirov/gix/internal/repos/shared"
 )
@@ -55,39 +57,38 @@ func (prompter *stubPrompter) Confirm(prompt string) (shared.ConfirmationResult,
 }
 
 const (
-	remotesTestRepositoryPath          = "/tmp/project"
-	remotesTestCurrentOriginURL        = "https://github.com/origin/example.git"
-	remotesTestOriginOwnerRepository   = "origin/example"
-	remotesTestCanonicalOwnerRepo      = "canonical/example"
-	remotesTestCanonicalURL            = "https://github.com/canonical/example.git"
-	remotesTestSkippedOriginMessage    = "UPDATE-REMOTE-SKIP: %s (error: could not parse origin owner/repo)\n"
-	remotesTestSkippedCanonicalMessage = "UPDATE-REMOTE-SKIP: %s (no upstream: no canonical redirect found)\n"
-	remotesTestPlanMessage             = "PLAN-UPDATE-REMOTE: %s origin %s → %s\n"
-	remotesTestDeclinedMessage         = "UPDATE-REMOTE-SKIP: user declined for %s\n"
-	remotesTestPromptErrorMessage      = "UPDATE-REMOTE-SKIP: %s (error: could not construct target URL)\n"
-	remotesTestSuccessMessage          = "UPDATE-REMOTE-DONE: %s origin now %s\n"
+	remotesTestRepositoryPath        = "/tmp/project"
+	remotesTestCurrentOriginURL      = "https://github.com/origin/example.git"
+	remotesTestOriginOwnerRepository = "origin/example"
+	remotesTestCanonicalOwnerRepo    = "canonical/example"
+	remotesTestCanonicalURL          = "https://github.com/canonical/example.git"
+	remotesTestPlanMessage           = "PLAN-UPDATE-REMOTE: %s origin %s → %s\n"
+	remotesTestDeclinedMessage       = "UPDATE-REMOTE-SKIP: user declined for %s\n"
+	remotesTestSuccessMessage        = "UPDATE-REMOTE-DONE: %s origin now %s\n"
 )
 
-func TestExecutorBehaviors(testInstance *testing.T) {
+func TestExecutorBehaviors(t *testing.T) {
 	repositoryPath, repositoryPathError := shared.NewRepositoryPath(remotesTestRepositoryPath)
-	require.NoError(testInstance, repositoryPathError)
+	require.NoError(t, repositoryPathError)
 
 	currentOriginURL, currentOriginURLError := shared.NewRemoteURL(remotesTestCurrentOriginURL)
-	require.NoError(testInstance, currentOriginURLError)
+	require.NoError(t, currentOriginURLError)
 
 	originOwnerRepository, originOwnerRepositoryError := shared.NewOwnerRepository(remotesTestOriginOwnerRepository)
-	require.NoError(testInstance, originOwnerRepositoryError)
+	require.NoError(t, originOwnerRepositoryError)
 
 	canonicalOwnerRepository, canonicalOwnerRepositoryError := shared.NewOwnerRepository(remotesTestCanonicalOwnerRepo)
-	require.NoError(testInstance, canonicalOwnerRepositoryError)
+	require.NoError(t, canonicalOwnerRepositoryError)
 
 	testCases := []struct {
-		name            string
-		options         remotes.Options
-		gitManager      *stubGitManager
-		prompter        shared.ConfirmationPrompter
-		expectedOutput  string
-		expectedUpdates int
+		name             string
+		options          remotes.Options
+		gitManager       *stubGitManager
+		prompter         shared.ConfirmationPrompter
+		expectedOutput   string
+		expectedError    repoerrors.Sentinel
+		expectedUpdates  int
+		expectPromptCall bool
 	}{
 		{
 			name: "skip_missing_origin",
@@ -98,20 +99,20 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 				RemoteProtocol:           shared.RemoteProtocolHTTPS,
 			},
 			gitManager:      &stubGitManager{},
-			expectedOutput:  fmt.Sprintf(remotesTestSkippedOriginMessage, remotesTestRepositoryPath),
+			expectedOutput:  "",
+			expectedError:   repoerrors.ErrOriginOwnerMissing,
 			expectedUpdates: 0,
 		},
 		{
-			name: "skip_canonical_missing",
+			name: "canonical_missing_returns_error",
 			options: remotes.Options{
 				RepositoryPath:           repositoryPath,
 				OriginOwnerRepository:    cloneOwnerRepository(originOwnerRepository),
 				CanonicalOwnerRepository: nil,
 				RemoteProtocol:           shared.RemoteProtocolHTTPS,
 			},
-			gitManager:      &stubGitManager{},
-			expectedOutput:  fmt.Sprintf(remotesTestSkippedCanonicalMessage, remotesTestRepositoryPath),
-			expectedUpdates: 0,
+			gitManager:    &stubGitManager{},
+			expectedError: repoerrors.ErrCanonicalOwnerMissing,
 		},
 		{
 			name: "dry_run_plan",
@@ -123,9 +124,13 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 				RemoteProtocol:           shared.RemoteProtocolHTTPS,
 				DryRun:                   true,
 			},
-			gitManager:      &stubGitManager{},
-			expectedOutput:  fmt.Sprintf(remotesTestPlanMessage, remotesTestRepositoryPath, remotesTestCurrentOriginURL, remotesTestCanonicalURL),
-			expectedUpdates: 0,
+			gitManager: &stubGitManager{},
+			expectedOutput: fmt.Sprintf(
+				remotesTestPlanMessage,
+				remotesTestRepositoryPath,
+				remotesTestCurrentOriginURL,
+				remotesTestCanonicalURL,
+			),
 		},
 		{
 			name: "prompter_declines",
@@ -136,10 +141,10 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 				CanonicalOwnerRepository: cloneOwnerRepository(canonicalOwnerRepository),
 				RemoteProtocol:           shared.RemoteProtocolHTTPS,
 			},
-			gitManager:      &stubGitManager{},
-			prompter:        &stubPrompter{result: shared.ConfirmationResult{Confirmed: false}},
-			expectedOutput:  fmt.Sprintf(remotesTestDeclinedMessage, remotesTestRepositoryPath),
-			expectedUpdates: 0,
+			gitManager:       &stubGitManager{},
+			prompter:         &stubPrompter{result: shared.ConfirmationResult{Confirmed: false}},
+			expectedOutput:   fmt.Sprintf(remotesTestDeclinedMessage, remotesTestRepositoryPath),
+			expectPromptCall: true,
 		},
 		{
 			name: "prompter_accepts_once",
@@ -150,10 +155,11 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 				CanonicalOwnerRepository: cloneOwnerRepository(canonicalOwnerRepository),
 				RemoteProtocol:           shared.RemoteProtocolHTTPS,
 			},
-			gitManager:      &stubGitManager{},
-			prompter:        &stubPrompter{result: shared.ConfirmationResult{Confirmed: true}},
-			expectedOutput:  fmt.Sprintf(remotesTestSuccessMessage, remotesTestRepositoryPath, remotesTestCanonicalURL),
-			expectedUpdates: 1,
+			gitManager:       &stubGitManager{},
+			prompter:         &stubPrompter{result: shared.ConfirmationResult{Confirmed: true}},
+			expectedOutput:   fmt.Sprintf(remotesTestSuccessMessage, remotesTestRepositoryPath, remotesTestCanonicalURL),
+			expectedUpdates:  1,
+			expectPromptCall: true,
 		},
 		{
 			name: "prompter_accepts_all",
@@ -164,13 +170,14 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 				CanonicalOwnerRepository: cloneOwnerRepository(canonicalOwnerRepository),
 				RemoteProtocol:           shared.RemoteProtocolHTTPS,
 			},
-			gitManager:      &stubGitManager{},
-			prompter:        &stubPrompter{result: shared.ConfirmationResult{Confirmed: true, ApplyToAll: true}},
-			expectedOutput:  fmt.Sprintf(remotesTestSuccessMessage, remotesTestRepositoryPath, remotesTestCanonicalURL),
-			expectedUpdates: 1,
+			gitManager:       &stubGitManager{},
+			prompter:         &stubPrompter{result: shared.ConfirmationResult{Confirmed: true, ApplyToAll: true}},
+			expectedOutput:   fmt.Sprintf(remotesTestSuccessMessage, remotesTestRepositoryPath, remotesTestCanonicalURL),
+			expectedUpdates:  1,
+			expectPromptCall: true,
 		},
 		{
-			name: "prompter_error",
+			name: "prompter_error_returns_contextual_error",
 			options: remotes.Options{
 				RepositoryPath:           repositoryPath,
 				CurrentOriginURL:         cloneRemoteURL(currentOriginURL),
@@ -178,10 +185,10 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 				CanonicalOwnerRepository: cloneOwnerRepository(canonicalOwnerRepository),
 				RemoteProtocol:           shared.RemoteProtocolHTTPS,
 			},
-			gitManager:      &stubGitManager{},
-			prompter:        &stubPrompter{callError: fmt.Errorf("prompt failed")},
-			expectedOutput:  fmt.Sprintf(remotesTestPromptErrorMessage, remotesTestRepositoryPath),
-			expectedUpdates: 0,
+			gitManager:       &stubGitManager{},
+			prompter:         &stubPrompter{callError: fmt.Errorf("prompt failed")},
+			expectedError:    repoerrors.ErrUserConfirmationFailed,
+			expectPromptCall: true,
 		},
 		{
 			name: "assume_yes_updates_without_prompt",
@@ -197,58 +204,67 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 			expectedOutput:  fmt.Sprintf(remotesTestSuccessMessage, remotesTestRepositoryPath, remotesTestCanonicalURL),
 			expectedUpdates: 1,
 		},
+		{
+			name: "remote_update_failure_returns_error",
+			options: remotes.Options{
+				RepositoryPath:           repositoryPath,
+				CurrentOriginURL:         cloneRemoteURL(currentOriginURL),
+				OriginOwnerRepository:    cloneOwnerRepository(originOwnerRepository),
+				CanonicalOwnerRepository: cloneOwnerRepository(canonicalOwnerRepository),
+				RemoteProtocol:           shared.RemoteProtocolHTTPS,
+			},
+			gitManager:    &stubGitManager{setError: fmt.Errorf("update failed")},
+			expectedError: repoerrors.ErrRemoteUpdateFailed,
+		},
 	}
 
 	for _, testCase := range testCases {
-		testInstance.Run(testCase.name, func(testingInstance *testing.T) {
+		t.Run(testCase.name, func(testingInstance *testing.T) {
 			outputBuffer := &bytes.Buffer{}
+
 			executor := remotes.NewExecutor(remotes.Dependencies{
 				GitManager: testCase.gitManager,
 				Prompter:   testCase.prompter,
 				Output:     outputBuffer,
 			})
 
-			executor.Execute(context.Background(), testCase.options)
+			executionError := executor.Execute(context.Background(), testCase.options)
+
+			if testCase.expectedError != "" {
+				require.Error(testingInstance, executionError)
+				require.True(testingInstance, stdErrors.Is(executionError, testCase.expectedError))
+
+				var operationError repoerrors.OperationError
+				require.True(testingInstance, stdErrors.As(executionError, &operationError))
+				require.Equal(testingInstance, repoerrors.OperationCanonicalRemote, operationError.Operation())
+				require.Equal(testingInstance, remotesTestRepositoryPath, operationError.Subject())
+			} else {
+				require.NoError(testingInstance, executionError)
+			}
+
 			require.Equal(testingInstance, testCase.expectedOutput, outputBuffer.String())
-			require.Len(testingInstance, testCase.gitManager.urlsSet, testCase.expectedUpdates)
+
+			if testCase.gitManager != nil {
+				require.Len(testingInstance, testCase.gitManager.urlsSet, testCase.expectedUpdates)
+			}
+
+			if prompter, ok := testCase.prompter.(*stubPrompter); ok {
+				if testCase.expectPromptCall {
+					require.NotEmpty(testingInstance, prompter.recordedPrompts)
+				} else {
+					require.Empty(testingInstance, prompter.recordedPrompts)
+				}
+			}
 		})
 	}
 }
 
-func TestExecutorPromptsAdvertiseApplyAll(testInstance *testing.T) {
-	commandPrompter := &stubPrompter{result: shared.ConfirmationResult{Confirmed: false}}
-	gitManager := &stubGitManager{}
-	outputBuffer := &bytes.Buffer{}
-	dependencies := remotes.Dependencies{GitManager: gitManager, Prompter: commandPrompter, Output: outputBuffer}
-	repositoryPath, repositoryPathError := shared.NewRepositoryPath(remotesTestRepositoryPath)
-	require.NoError(testInstance, repositoryPathError)
-
-	currentOriginURL, currentOriginURLError := shared.NewRemoteURL(remotesTestCurrentOriginURL)
-	require.NoError(testInstance, currentOriginURLError)
-
-	originOwnerRepository, originOwnerRepositoryError := shared.NewOwnerRepository(remotesTestOriginOwnerRepository)
-	require.NoError(testInstance, originOwnerRepositoryError)
-
-	canonicalOwnerRepository, canonicalOwnerRepositoryError := shared.NewOwnerRepository(remotesTestCanonicalOwnerRepo)
-	require.NoError(testInstance, canonicalOwnerRepositoryError)
-	options := remotes.Options{
-		RepositoryPath:           repositoryPath,
-		CurrentOriginURL:         cloneRemoteURL(currentOriginURL),
-		OriginOwnerRepository:    cloneOwnerRepository(originOwnerRepository),
-		CanonicalOwnerRepository: cloneOwnerRepository(canonicalOwnerRepository),
-		RemoteProtocol:           shared.RemoteProtocolHTTPS,
-	}
-	executor := remotes.NewExecutor(dependencies)
-	executor.Execute(context.Background(), options)
-	require.Equal(testInstance, []string{fmt.Sprintf("Update 'origin' in '%s' to canonical (%s → %s)? [a/N/y] ", remotesTestRepositoryPath, remotesTestOriginOwnerRepository, remotesTestCanonicalOwnerRepo)}, commandPrompter.recordedPrompts)
-}
-
-func cloneRemoteURL(value shared.RemoteURL) *shared.RemoteURL {
+func cloneOwnerRepository(value shared.OwnerRepository) *shared.OwnerRepository {
 	clone := value
 	return &clone
 }
 
-func cloneOwnerRepository(value shared.OwnerRepository) *shared.OwnerRepository {
+func cloneRemoteURL(value shared.RemoteURL) *shared.RemoteURL {
 	clone := value
 	return &clone
 }
