@@ -39,6 +39,7 @@ const (
 	workflowCommitErrorTemplateConstant        = "unable to commit workflow updates: %w"
 	workflowPushErrorTemplateConstant          = "unable to push workflow updates: %w"
 	pagesUpdateErrorTemplateConstant           = "GitHub Pages update failed: %w"
+	pagesUpdateWarningMessageConstant          = "GitHub Pages update skipped"
 	defaultBranchUpdateErrorTemplateConstant   = "unable to update default branch: %w"
 	pullRequestListErrorTemplateConstant       = "unable to list pull requests: %w"
 	pullRequestRetargetErrorTemplateConstant   = "unable to retarget pull request #%d: %w"
@@ -197,7 +198,17 @@ func (service *Service) Execute(executionContext context.Context, options Migrat
 		TargetBranch:         options.TargetBranch,
 	})
 	if pagesError != nil {
-		return MigrationResult{}, fmt.Errorf(pagesUpdateErrorTemplateConstant, pagesError)
+		if isNonCriticalPagesError(pagesError) {
+			service.logger.Warn(
+				pagesUpdateWarningMessageConstant,
+				zap.String(repositoryPathFieldNameConstant, options.RepositoryPath),
+				zap.String(repositoryIdentifierFieldNameConstant, options.RepositoryIdentifier),
+				zap.Error(pagesError),
+			)
+			pagesUpdated = false
+		} else {
+			return MigrationResult{}, fmt.Errorf(pagesUpdateErrorTemplateConstant, pagesError)
+		}
 	}
 
 	if err := service.gitHubClient.SetDefaultBranch(executionContext, options.RepositoryIdentifier, string(options.TargetBranch)); err != nil {
@@ -252,6 +263,15 @@ func (service *Service) Execute(executionContext context.Context, options Migrat
 	}
 
 	return result, nil
+}
+
+func isNonCriticalPagesError(err error) bool {
+	var operationError githubcli.OperationError
+	if errors.As(err, &operationError) {
+		return true
+	}
+	var decodingError githubcli.ResponseDecodingError
+	return errors.As(err, &decodingError)
 }
 
 func (service *Service) validateOptions(options MigrationOptions) error {

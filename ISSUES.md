@@ -9,12 +9,13 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
 
 - [x] [GX-200] Remove `--to` flag from default command and accept the new branch as an argument, e.g. `gix b default master`
   - Resolution: `branch default` now takes the target branch as a positional argument while still honoring configured defaults; docs and tests updated accordingly.
-- [ ] [GX-201] Identify non-critical operations and turn them into warnings, which do not stop the flow:
+- [x] [GX-201] Identify non-critical operations and turn them into warnings, which do not stop the flow:
 ```
 14:58:29 tyemirov@computercat:~/Development/Poodle/product_page_analysis.py [main] $ gix b default --to master
 default branch update failed: GitHub Pages update failed: GetPagesConfig operation failed: gh command exited with code 1
 ```
 The Pages may be not configured and that's ok
+- Resolution: GitHub Pages lookup/update failures during `branch default` now emit warnings and the migration continues, leaving branch promotion untouched.
 - [ ] [GX-202] have descriptive and actionable error messages, explaining where was the failure and why the command failed:
 ```
 14:56:43 tyemirov@computercat:~/Development/Poodle $ gix --roots . b cd master
