@@ -39,10 +39,11 @@ If a repository doesnt have a remote, there is nothing to fetch, but we can stil
   - Resolution: Added `internal/repos/errors` sentinel catalog, refactored remotes/protocol/rename/history executors to wrap failures with operation-specific codes, taught workflow operations to log the contextual errors, and extended unit/integration tests to assert on the new propagation semantics.
 - [x] [GX-405] Consolidate shared helpers and eliminate duplicated validation
   - Resolution: Added shared reporter/policy helpers for repository executors, refactored protocol/remotes/rename workflows to reuse optional owner parsing and structured confirmation policies, and updated tests/CLI bridges to exercise the new abstractions without redundant trimming or boolean flags.
-- [ ] [GX-406] Expand regression coverage for policy compliance
+- [x] [GX-406] Expand regression coverage for policy compliance
   - Add table-driven tests for the new domain constructors and protocol conversion edge cases (current vs. target protocol mismatches, missing owner slugs, unknown protocols).
   - Test dependency resolvers in `internal/repos/dependencies` to ensure logger wiring and error propagation.
   - Extend workflow integration tests to confirm domain types propagate correctly through task execution.
+- Resolution: Added shared constructor/optional parser tables, expanded protocol executor edge cases, introduced resolver unit tests, and enforced canonical messaging in workflow integration output; suites now cover policy boundaries.
 - [ ] [GX-407] Update documentation and CI tooling for the refactor
   - Document newly introduced domain types, error codes, and edge-validation flow in `docs/cli_design.md` (or a dedicated `docs/refactor_status.md`) and cross-link from `POLICY.md`.
   - Update developer docs describing prompt/output handling after GX-405 cleanup.

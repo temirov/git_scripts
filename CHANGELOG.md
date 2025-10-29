@@ -15,6 +15,9 @@
 - Expanded `ARCHITECTURE.md` with current package responsibilities, dependency resolution, and workflow step registration details.
 - Added GX-402 refactor roadmap capturing policy gaps, phased domain/error refactors, and test expansion tasks.
 
+### Testing 🧪
+- Expanded regression coverage for repository domain constructors, protocol conversion edge cases, dependency resolvers, and workflow canonical messaging to enforce policy guarantees.
+
 ## [v0.1.4]
 
 ### Features ✨

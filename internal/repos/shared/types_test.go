@@ -104,46 +104,132 @@ func TestNewRepositoryName(t *testing.T) {
 func TestNewOwnerRepository(t *testing.T) {
 	t.Parallel()
 
-	ownerRepo, err := shared.NewOwnerRepository("owner/repo")
-	require.NoError(t, err)
-	require.Equal(t, "owner", ownerRepo.Owner().String())
-	require.Equal(t, "repo", ownerRepo.Repository().String())
+	testCases := []struct {
+		name          string
+		input         string
+		expectedOwner string
+		expectedRepo  string
+		expectError   bool
+	}{
+		{name: "valid_owner_repo", input: "owner/repo", expectedOwner: "owner", expectedRepo: "repo"},
+		{name: "rejects_missing_separator", input: "invalid", expectError: true},
+		{name: "rejects_invalid_owner", input: "bad owner/repo", expectError: true},
+		{name: "rejects_invalid_repository", input: "owner/bad repo", expectError: true},
+	}
 
-	_, err = shared.NewOwnerRepository("invalid")
-	require.Error(t, err)
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(testingInstance *testing.T) {
+			testingInstance.Parallel()
+
+			result, err := shared.NewOwnerRepository(testCase.input)
+			if testCase.expectError {
+				require.Error(testingInstance, err)
+				require.ErrorIs(testingInstance, err, shared.ErrOwnerRepositoryInvalid)
+				return
+			}
+
+			require.NoError(testingInstance, err)
+			require.Equal(testingInstance, testCase.expectedOwner, result.Owner().String())
+			require.Equal(testingInstance, testCase.expectedRepo, result.Repository().String())
+		})
+	}
 }
 
 func TestNewRemoteURL(t *testing.T) {
 	t.Parallel()
 
-	result, err := shared.NewRemoteURL("https://github.com/owner/repo.git")
-	require.NoError(t, err)
-	require.Equal(t, "https://github.com/owner/repo.git", result.String())
+	testCases := []struct {
+		name        string
+		input       string
+		expected    string
+		expectError bool
+	}{
+		{name: "valid_url", input: "https://github.com/owner/repo.git", expected: "https://github.com/owner/repo.git"},
+		{name: "rejects_empty", input: "  ", expectError: true},
+		{name: "rejects_whitespace", input: "https://github.com/owner repo.git", expectError: true},
+	}
 
-	_, err = shared.NewRemoteURL("  ")
-	require.Error(t, err)
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(testingInstance *testing.T) {
+			testingInstance.Parallel()
+
+			result, err := shared.NewRemoteURL(testCase.input)
+			if testCase.expectError {
+				require.Error(testingInstance, err)
+				require.ErrorIs(testingInstance, err, shared.ErrRemoteURLInvalid)
+				return
+			}
+
+			require.NoError(testingInstance, err)
+			require.Equal(testingInstance, testCase.expected, result.String())
+		})
+	}
 }
 
 func TestNewRemoteName(t *testing.T) {
 	t.Parallel()
 
-	value, err := shared.NewRemoteName("origin")
-	require.NoError(t, err)
-	require.Equal(t, "origin", value.String())
+	testCases := []struct {
+		name        string
+		input       string
+		expected    string
+		expectError bool
+	}{
+		{name: "valid_name", input: "origin", expected: "origin"},
+		{name: "rejects_whitespace", input: "invalid name", expectError: true},
+		{name: "rejects_empty", input: " ", expectError: true},
+	}
 
-	_, err = shared.NewRemoteName("invalid name")
-	require.Error(t, err)
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(testingInstance *testing.T) {
+			testingInstance.Parallel()
+
+			result, err := shared.NewRemoteName(testCase.input)
+			if testCase.expectError {
+				require.Error(testingInstance, err)
+				require.ErrorIs(testingInstance, err, shared.ErrRemoteNameInvalid)
+				return
+			}
+
+			require.NoError(testingInstance, err)
+			require.Equal(testingInstance, testCase.expected, result.String())
+		})
+	}
 }
 
 func TestNewBranchName(t *testing.T) {
 	t.Parallel()
 
-	name, err := shared.NewBranchName("feature/new-ui")
-	require.NoError(t, err)
-	require.Equal(t, "feature/new-ui", name.String())
+	testCases := []struct {
+		name        string
+		input       string
+		expected    string
+		expectError bool
+	}{
+		{name: "valid_branch", input: "feature/new-ui", expected: "feature/new-ui"},
+		{name: "rejects_whitespace", input: "with space", expectError: true},
+		{name: "rejects_empty", input: "", expectError: true},
+	}
 
-	_, err = shared.NewBranchName("with space")
-	require.Error(t, err)
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(testingInstance *testing.T) {
+			testingInstance.Parallel()
+
+			result, err := shared.NewBranchName(testCase.input)
+			if testCase.expectError {
+				require.Error(testingInstance, err)
+				require.ErrorIs(testingInstance, err, shared.ErrBranchNameInvalid)
+				return
+			}
+
+			require.NoError(testingInstance, err)
+			require.Equal(testingInstance, testCase.expected, result.String())
+		})
+	}
 }
 
 func TestParseRemoteProtocol(t *testing.T) {
@@ -179,4 +265,137 @@ func TestParseRemoteProtocol(t *testing.T) {
 
 	require.NoError(t, shared.RemoteProtocolSSH.Validate())
 	require.Error(t, shared.RemoteProtocol("invalid").Validate())
+}
+
+func TestNewOwnerRepositoryFromParts(t *testing.T) {
+	t.Parallel()
+
+	owner, ownerErr := shared.NewOwnerSlug("owner")
+	require.NoError(t, ownerErr)
+
+	repository, repositoryErr := shared.NewRepositoryName("repo")
+	require.NoError(t, repositoryErr)
+
+	result := shared.NewOwnerRepositoryFromParts(owner, repository)
+	require.Equal(t, "owner/repo", result.String())
+}
+
+func TestParseOwnerRepositoryOptional(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name        string
+		input       string
+		expected    string
+		expectNil   bool
+		expectError bool
+	}{
+		{name: "empty_returns_nil", input: "   ", expectNil: true},
+		{name: "valid_owner_repo", input: "owner/repo", expected: "owner/repo"},
+		{name: "invalid_owner_repo", input: "invalid", expectError: true},
+	}
+
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(testingInstance *testing.T) {
+			testingInstance.Parallel()
+
+			result, err := shared.ParseOwnerRepositoryOptional(testCase.input)
+			if testCase.expectError {
+				require.Error(testingInstance, err)
+				require.ErrorIs(testingInstance, err, shared.ErrOwnerRepositoryInvalid)
+				return
+			}
+
+			require.NoError(testingInstance, err)
+
+			if testCase.expectNil {
+				require.Nil(testingInstance, result)
+				return
+			}
+
+			require.NotNil(testingInstance, result)
+			require.Equal(testingInstance, testCase.expected, result.String())
+		})
+	}
+}
+
+func TestParseOwnerSlugOptional(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name        string
+		input       string
+		expected    string
+		expectNil   bool
+		expectError bool
+	}{
+		{name: "empty_returns_nil", input: "", expectNil: true},
+		{name: "valid_slug", input: "owner", expected: "owner"},
+		{name: "invalid_slug", input: "owner/repo", expectError: true},
+	}
+
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(testingInstance *testing.T) {
+			testingInstance.Parallel()
+
+			result, err := shared.ParseOwnerSlugOptional(testCase.input)
+			if testCase.expectError {
+				require.Error(testingInstance, err)
+				require.ErrorIs(testingInstance, err, shared.ErrOwnerSlugInvalid)
+				return
+			}
+
+			require.NoError(testingInstance, err)
+
+			if testCase.expectNil {
+				require.Nil(testingInstance, result)
+				return
+			}
+
+			require.NotNil(testingInstance, result)
+			require.Equal(testingInstance, testCase.expected, result.String())
+		})
+	}
+}
+
+func TestParseRemoteURLOptional(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name        string
+		input       string
+		expected    string
+		expectNil   bool
+		expectError bool
+	}{
+		{name: "empty_returns_nil", input: "", expectNil: true},
+		{name: "valid_url", input: "https://github.com/owner/repo.git", expected: "https://github.com/owner/repo.git"},
+		{name: "invalid_url_contains_whitespace", input: "https://github.com/owner repo.git", expectError: true},
+	}
+
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(testingInstance *testing.T) {
+			testingInstance.Parallel()
+
+			result, err := shared.ParseRemoteURLOptional(testCase.input)
+			if testCase.expectError {
+				require.Error(testingInstance, err)
+				require.ErrorIs(testingInstance, err, shared.ErrRemoteURLInvalid)
+				return
+			}
+
+			require.NoError(testingInstance, err)
+
+			if testCase.expectNil {
+				require.Nil(testingInstance, result)
+				return
+			}
+
+			require.NotNil(testingInstance, result)
+			require.Equal(testingInstance, testCase.expected, result.String())
+		})
+	}
 }

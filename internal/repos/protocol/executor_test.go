@@ -66,7 +66,9 @@ const (
 	protocolTestOriginOwnerRepo    = "origin/example"
 	protocolTestCanonicalOwnerRepo = "canonical/example"
 	protocolTestOriginURL          = "https://github.com/origin/example.git"
+	protocolTestGitOriginURL       = "git@github.com:origin/example.git"
 	protocolTestTargetURL          = "ssh://git@github.com/canonical/example.git"
+	protocolTestOriginTargetURL    = "ssh://git@github.com/origin/example.git"
 	protocolTestPlanMessage        = "PLAN-CONVERT: %s origin %s → %s\n"
 	protocolTestDeclinedMessage    = "CONVERT-SKIP: user declined for %s\n"
 	protocolTestSuccessMessage     = "CONVERT-DONE: %s origin now %s\n"
@@ -83,14 +85,15 @@ func TestExecutorBehaviors(t *testing.T) {
 	require.NoError(t, canonicalOwnerRepositoryError)
 
 	testCases := []struct {
-		name             string
-		options          protocol.Options
-		gitManager       *stubGitManager
-		prompter         shared.ConfirmationPrompter
-		expectedOutput   string
-		expectedError    repoerrors.Sentinel
-		expectedUpdates  int
-		expectPromptCall bool
+		name              string
+		options           protocol.Options
+		gitManager        *stubGitManager
+		prompter          shared.ConfirmationPrompter
+		expectedOutput    string
+		expectedError     repoerrors.Sentinel
+		expectedUpdates   int
+		expectedTargetURL string
+		expectPromptCall  bool
 	}{
 		{
 			name: "owner_repo_missing",
@@ -103,6 +106,17 @@ func TestExecutorBehaviors(t *testing.T) {
 			},
 			gitManager:    &stubGitManager{currentURL: protocolTestOriginURL},
 			expectedError: repoerrors.ErrOriginOwnerMissing,
+		},
+		{
+			name: "current_protocol_mismatch_skips",
+			options: protocol.Options{
+				RepositoryPath:           repositoryPath,
+				OriginOwnerRepository:    cloneOwnerRepository(originOwnerRepository),
+				CanonicalOwnerRepository: cloneOwnerRepository(canonicalOwnerRepository),
+				CurrentProtocol:          shared.RemoteProtocolHTTPS,
+				TargetProtocol:           shared.RemoteProtocolSSH,
+			},
+			gitManager: &stubGitManager{currentURL: protocolTestGitOriginURL},
 		},
 		{
 			name: "dry_run_plan",
@@ -145,11 +159,12 @@ func TestExecutorBehaviors(t *testing.T) {
 				CurrentProtocol:          shared.RemoteProtocolHTTPS,
 				TargetProtocol:           shared.RemoteProtocolSSH,
 			},
-			gitManager:       &stubGitManager{currentURL: protocolTestOriginURL},
-			prompter:         &stubPrompter{result: shared.ConfirmationResult{Confirmed: true}},
-			expectedOutput:   fmt.Sprintf(protocolTestSuccessMessage, protocolTestRepositoryPath, protocolTestTargetURL),
-			expectedUpdates:  1,
-			expectPromptCall: true,
+			gitManager:        &stubGitManager{currentURL: protocolTestOriginURL},
+			prompter:          &stubPrompter{result: shared.ConfirmationResult{Confirmed: true}},
+			expectedOutput:    fmt.Sprintf(protocolTestSuccessMessage, protocolTestRepositoryPath, protocolTestTargetURL),
+			expectedUpdates:   1,
+			expectedTargetURL: protocolTestTargetURL,
+			expectPromptCall:  true,
 		},
 		{
 			name: "prompter_accepts_all",
@@ -160,11 +175,12 @@ func TestExecutorBehaviors(t *testing.T) {
 				CurrentProtocol:          shared.RemoteProtocolHTTPS,
 				TargetProtocol:           shared.RemoteProtocolSSH,
 			},
-			gitManager:       &stubGitManager{currentURL: protocolTestOriginURL},
-			prompter:         &stubPrompter{result: shared.ConfirmationResult{Confirmed: true, ApplyToAll: true}},
-			expectedOutput:   fmt.Sprintf(protocolTestSuccessMessage, protocolTestRepositoryPath, protocolTestTargetURL),
-			expectedUpdates:  1,
-			expectPromptCall: true,
+			gitManager:        &stubGitManager{currentURL: protocolTestOriginURL},
+			prompter:          &stubPrompter{result: shared.ConfirmationResult{Confirmed: true, ApplyToAll: true}},
+			expectedOutput:    fmt.Sprintf(protocolTestSuccessMessage, protocolTestRepositoryPath, protocolTestTargetURL),
+			expectedUpdates:   1,
+			expectedTargetURL: protocolTestTargetURL,
+			expectPromptCall:  true,
 		},
 		{
 			name: "prompter_error",
@@ -190,9 +206,38 @@ func TestExecutorBehaviors(t *testing.T) {
 				TargetProtocol:           shared.RemoteProtocolSSH,
 				ConfirmationPolicy:       shared.ConfirmationAssumeYes,
 			},
-			gitManager:      &stubGitManager{currentURL: protocolTestOriginURL},
-			expectedOutput:  fmt.Sprintf(protocolTestSuccessMessage, protocolTestRepositoryPath, protocolTestTargetURL),
-			expectedUpdates: 1,
+			gitManager:        &stubGitManager{currentURL: protocolTestOriginURL},
+			expectedOutput:    fmt.Sprintf(protocolTestSuccessMessage, protocolTestRepositoryPath, protocolTestTargetURL),
+			expectedUpdates:   1,
+			expectedTargetURL: protocolTestTargetURL,
+		},
+		{
+			name: "origin_owner_fallback_when_canonical_missing",
+			options: protocol.Options{
+				RepositoryPath:           repositoryPath,
+				OriginOwnerRepository:    cloneOwnerRepository(originOwnerRepository),
+				CanonicalOwnerRepository: nil,
+				CurrentProtocol:          shared.RemoteProtocolHTTPS,
+				TargetProtocol:           shared.RemoteProtocolSSH,
+				ConfirmationPolicy:       shared.ConfirmationAssumeYes,
+			},
+			gitManager:        &stubGitManager{currentURL: protocolTestOriginURL},
+			expectedOutput:    fmt.Sprintf(protocolTestSuccessMessage, protocolTestRepositoryPath, protocolTestOriginTargetURL),
+			expectedUpdates:   1,
+			expectedTargetURL: protocolTestOriginTargetURL,
+		},
+		{
+			name: "unknown_target_protocol_errors",
+			options: protocol.Options{
+				RepositoryPath:           repositoryPath,
+				OriginOwnerRepository:    cloneOwnerRepository(originOwnerRepository),
+				CanonicalOwnerRepository: cloneOwnerRepository(canonicalOwnerRepository),
+				CurrentProtocol:          shared.RemoteProtocolHTTPS,
+				TargetProtocol:           shared.RemoteProtocolOther,
+				ConfirmationPolicy:       shared.ConfirmationAssumeYes,
+			},
+			gitManager:    &stubGitManager{currentURL: protocolTestOriginURL},
+			expectedError: repoerrors.ErrUnknownProtocol,
 		},
 	}
 
@@ -224,6 +269,9 @@ func TestExecutorBehaviors(t *testing.T) {
 
 			if testCase.gitManager != nil {
 				require.Len(testingInstance, testCase.gitManager.setURLs, testCase.expectedUpdates)
+				if testCase.expectedTargetURL != "" && testCase.expectedUpdates > 0 {
+					require.Equal(testingInstance, testCase.expectedTargetURL, testCase.gitManager.setURLs[0])
+				}
 			}
 
 			if prompter, ok := testCase.prompter.(*stubPrompter); ok {
