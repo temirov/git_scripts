@@ -35,10 +35,8 @@ If a repository doesnt have a remote, there is nothing to fetch, but we can stil
   - Resolution: Authored `docs/policy_refactor_plan.md` detailing domain-model introductions, error strategy, shared helper cleanup, and new test coverage aligned with the confident-programming policy.
 - [x] [GX-403] Introduce domain types for repository metadata and enforce edge validation
   - Resolution: Added smart constructors in `internal/repos/shared` for repository paths, owners, repositories, remotes, branches, and protocols, refactored repos/workflow options to require these types, updated CLI/workflow edges to construct them once, and expanded tests to cover the new constructors.
-- [ ] [GX-404] Establish contextual error strategy for repository executors
-  - Define typed sentinel errors (for example, `ErrUnknownProtocol`, `ErrCanonicalOwnerMissing`) with helpers that wrap them using operation + subject + stable code identifiers.
-  - Refactor `internal/repos/remotes`, `internal/repos/protocol`, `internal/repos/rename`, and `internal/repos/history` executors to return contextual errors instead of printing failure strings, leaving user messaging to CLI/reporters.
-  - Adjust CLI layers and tests to assert on wrapped errors and render human-readable output.
+- [x] [GX-404] Establish contextual error strategy for repository executors
+  - Resolution: Added `internal/repos/errors` sentinel catalog, refactored remotes/protocol/rename/history executors to wrap failures with operation-specific codes, taught workflow operations to log the contextual errors, and extended unit/integration tests to assert on the new propagation semantics.
 - [ ] [GX-405] Consolidate shared helpers and eliminate duplicated validation
   - Extract owner/repository parsing into a single reusable helper and share prompt/output formatting via a reporter interface.
   - Remove repeated `strings.TrimSpace` and similar defensive code paths, trusting normalized domain types introduced in GX-403.

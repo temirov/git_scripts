@@ -34,7 +34,6 @@ func (operation *ProtocolConversionOperation) Execute(executionContext context.C
 		GitManager: environment.RepositoryManager,
 		Prompter:   environment.Prompter,
 		Output:     environment.Output,
-		Errors:     environment.Errors,
 	}
 
 	for repositoryIndex := range state.Repositories {
@@ -87,7 +86,12 @@ func (operation *ProtocolConversionOperation) Execute(executionContext context.C
 			AssumeYes:                assumeYes,
 		}
 
-		conversion.Execute(executionContext, dependencies, options)
+		if executionError := conversion.Execute(executionContext, dependencies, options); executionError != nil {
+			if logRepositoryOperationError(environment, executionError) {
+				continue
+			}
+			return fmt.Errorf("protocol conversion: %w", executionError)
+		}
 
 		if environment.DryRun {
 			continue

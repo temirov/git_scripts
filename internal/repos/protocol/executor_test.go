@@ -3,11 +3,13 @@ package protocol_test
 import (
 	"bytes"
 	"context"
+	stdErrors "errors"
 	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	repoerrors "github.com/temirov/gix/internal/repos/errors"
 	"github.com/temirov/gix/internal/repos/protocol"
 	"github.com/temirov/gix/internal/repos/shared"
 )
@@ -65,31 +67,30 @@ const (
 	protocolTestCanonicalOwnerRepo = "canonical/example"
 	protocolTestOriginURL          = "https://github.com/origin/example.git"
 	protocolTestTargetURL          = "ssh://git@github.com/canonical/example.git"
-	protocolTestOwnerRepoError     = "ERROR: cannot derive owner/repo for protocol conversion in %s\n"
 	protocolTestPlanMessage        = "PLAN-CONVERT: %s origin %s → %s\n"
 	protocolTestDeclinedMessage    = "CONVERT-SKIP: user declined for %s\n"
 	protocolTestSuccessMessage     = "CONVERT-DONE: %s origin now %s\n"
-	protocolTestFailureMessage     = "ERROR: failed to set origin to %s in %s\n"
 )
 
-func TestExecutorBehaviors(testInstance *testing.T) {
+func TestExecutorBehaviors(t *testing.T) {
 	repositoryPath, repositoryPathError := shared.NewRepositoryPath(protocolTestRepositoryPath)
-	require.NoError(testInstance, repositoryPathError)
+	require.NoError(t, repositoryPathError)
 
 	originOwnerRepository, originOwnerRepositoryError := shared.NewOwnerRepository(protocolTestOriginOwnerRepo)
-	require.NoError(testInstance, originOwnerRepositoryError)
+	require.NoError(t, originOwnerRepositoryError)
 
 	canonicalOwnerRepository, canonicalOwnerRepositoryError := shared.NewOwnerRepository(protocolTestCanonicalOwnerRepo)
-	require.NoError(testInstance, canonicalOwnerRepositoryError)
+	require.NoError(t, canonicalOwnerRepositoryError)
 
 	testCases := []struct {
-		name            string
-		options         protocol.Options
-		gitManager      *stubGitManager
-		prompter        shared.ConfirmationPrompter
-		expectedOutput  string
-		expectedErrors  string
-		expectedUpdates int
+		name             string
+		options          protocol.Options
+		gitManager       *stubGitManager
+		prompter         shared.ConfirmationPrompter
+		expectedOutput   string
+		expectedError    repoerrors.Sentinel
+		expectedUpdates  int
+		expectPromptCall bool
 	}{
 		{
 			name: "owner_repo_missing",
@@ -100,8 +101,8 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 				CurrentProtocol:          shared.RemoteProtocolHTTPS,
 				TargetProtocol:           shared.RemoteProtocolSSH,
 			},
-			gitManager:     &stubGitManager{currentURL: protocolTestOriginURL},
-			expectedErrors: fmt.Sprintf(protocolTestOwnerRepoError, protocolTestRepositoryPath),
+			gitManager:    &stubGitManager{currentURL: protocolTestOriginURL},
+			expectedError: repoerrors.ErrOriginOwnerMissing,
 		},
 		{
 			name: "dry_run_plan",
@@ -113,8 +114,13 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 				TargetProtocol:           shared.RemoteProtocolSSH,
 				DryRun:                   true,
 			},
-			gitManager:     &stubGitManager{currentURL: protocolTestOriginURL},
-			expectedOutput: fmt.Sprintf(protocolTestPlanMessage, protocolTestRepositoryPath, protocolTestOriginURL, protocolTestTargetURL),
+			gitManager: &stubGitManager{currentURL: protocolTestOriginURL},
+			expectedOutput: fmt.Sprintf(
+				protocolTestPlanMessage,
+				protocolTestRepositoryPath,
+				protocolTestOriginURL,
+				protocolTestTargetURL,
+			),
 		},
 		{
 			name: "prompter_declines",
@@ -125,9 +131,10 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 				CurrentProtocol:          shared.RemoteProtocolHTTPS,
 				TargetProtocol:           shared.RemoteProtocolSSH,
 			},
-			gitManager:     &stubGitManager{currentURL: protocolTestOriginURL},
-			prompter:       &stubPrompter{result: shared.ConfirmationResult{Confirmed: false}},
-			expectedOutput: fmt.Sprintf(protocolTestDeclinedMessage, protocolTestRepositoryPath),
+			gitManager:       &stubGitManager{currentURL: protocolTestOriginURL},
+			prompter:         &stubPrompter{result: shared.ConfirmationResult{Confirmed: false}},
+			expectedOutput:   fmt.Sprintf(protocolTestDeclinedMessage, protocolTestRepositoryPath),
+			expectPromptCall: true,
 		},
 		{
 			name: "prompter_accepts_once",
@@ -138,10 +145,11 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 				CurrentProtocol:          shared.RemoteProtocolHTTPS,
 				TargetProtocol:           shared.RemoteProtocolSSH,
 			},
-			gitManager:      &stubGitManager{currentURL: protocolTestOriginURL},
-			prompter:        &stubPrompter{result: shared.ConfirmationResult{Confirmed: true}},
-			expectedOutput:  fmt.Sprintf(protocolTestSuccessMessage, protocolTestRepositoryPath, protocolTestTargetURL),
-			expectedUpdates: 1,
+			gitManager:       &stubGitManager{currentURL: protocolTestOriginURL},
+			prompter:         &stubPrompter{result: shared.ConfirmationResult{Confirmed: true}},
+			expectedOutput:   fmt.Sprintf(protocolTestSuccessMessage, protocolTestRepositoryPath, protocolTestTargetURL),
+			expectedUpdates:  1,
+			expectPromptCall: true,
 		},
 		{
 			name: "prompter_accepts_all",
@@ -152,10 +160,11 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 				CurrentProtocol:          shared.RemoteProtocolHTTPS,
 				TargetProtocol:           shared.RemoteProtocolSSH,
 			},
-			gitManager:      &stubGitManager{currentURL: protocolTestOriginURL},
-			prompter:        &stubPrompter{result: shared.ConfirmationResult{Confirmed: true, ApplyToAll: true}},
-			expectedOutput:  fmt.Sprintf(protocolTestSuccessMessage, protocolTestRepositoryPath, protocolTestTargetURL),
-			expectedUpdates: 1,
+			gitManager:       &stubGitManager{currentURL: protocolTestOriginURL},
+			prompter:         &stubPrompter{result: shared.ConfirmationResult{Confirmed: true, ApplyToAll: true}},
+			expectedOutput:   fmt.Sprintf(protocolTestSuccessMessage, protocolTestRepositoryPath, protocolTestTargetURL),
+			expectedUpdates:  1,
+			expectPromptCall: true,
 		},
 		{
 			name: "prompter_error",
@@ -166,10 +175,10 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 				CurrentProtocol:          shared.RemoteProtocolHTTPS,
 				TargetProtocol:           shared.RemoteProtocolSSH,
 			},
-			gitManager:      &stubGitManager{currentURL: protocolTestOriginURL},
-			prompter:        &stubPrompter{callError: fmt.Errorf("prompt failure")},
-			expectedErrors:  fmt.Sprintf(protocolTestFailureMessage, protocolTestTargetURL, protocolTestRepositoryPath),
-			expectedUpdates: 0,
+			gitManager:       &stubGitManager{currentURL: protocolTestOriginURL},
+			prompter:         &stubPrompter{callError: fmt.Errorf("prompt failure")},
+			expectedError:    repoerrors.ErrUserConfirmationFailed,
+			expectPromptCall: true,
 		},
 		{
 			name: "assume_yes_updates_without_prompt",
@@ -188,39 +197,63 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		testInstance.Run(testCase.name, func(testingInstance *testing.T) {
+		t.Run(testCase.name, func(testingInstance *testing.T) {
 			outputBuffer := &bytes.Buffer{}
-			errorBuffer := &bytes.Buffer{}
 
 			executor := protocol.NewExecutor(protocol.Dependencies{
 				GitManager: testCase.gitManager,
 				Prompter:   testCase.prompter,
 				Output:     outputBuffer,
-				Errors:     errorBuffer,
 			})
 
-			executor.Execute(context.Background(), testCase.options)
+			executionError := executor.Execute(context.Background(), testCase.options)
+
+			if testCase.expectedError != "" {
+				require.Error(testingInstance, executionError)
+				require.True(testingInstance, stdErrors.Is(executionError, testCase.expectedError))
+
+				var operationError repoerrors.OperationError
+				require.True(testingInstance, stdErrors.As(executionError, &operationError))
+				require.Equal(testingInstance, repoerrors.OperationProtocolConvert, operationError.Operation())
+				require.Equal(testingInstance, protocolTestRepositoryPath, operationError.Subject())
+			} else {
+				require.NoError(testingInstance, executionError)
+			}
+
 			require.Equal(testingInstance, testCase.expectedOutput, outputBuffer.String())
-			require.Equal(testingInstance, testCase.expectedErrors, errorBuffer.String())
-			require.Len(testingInstance, testCase.gitManager.setURLs, testCase.expectedUpdates)
+
+			if testCase.gitManager != nil {
+				require.Len(testingInstance, testCase.gitManager.setURLs, testCase.expectedUpdates)
+			}
+
+			if prompter, ok := testCase.prompter.(*stubPrompter); ok {
+				if testCase.expectPromptCall {
+					require.NotEmpty(testingInstance, prompter.recordedPrompts)
+				} else {
+					require.Empty(testingInstance, prompter.recordedPrompts)
+				}
+			}
 		})
 	}
 }
 
-func TestExecutorPromptsAdvertiseApplyAll(testInstance *testing.T) {
+func TestExecutorPromptsAdvertiseApplyAll(t *testing.T) {
 	commandPrompter := &stubPrompter{result: shared.ConfirmationResult{Confirmed: false}}
 	gitManager := &stubGitManager{currentURL: protocolTestOriginURL}
 	outputBuffer := &bytes.Buffer{}
-	errorBuffer := &bytes.Buffer{}
-	dependencies := protocol.Dependencies{GitManager: gitManager, Prompter: commandPrompter, Output: outputBuffer, Errors: errorBuffer}
+	dependencies := protocol.Dependencies{
+		GitManager: gitManager,
+		Prompter:   commandPrompter,
+		Output:     outputBuffer,
+	}
 	repositoryPath, repositoryPathError := shared.NewRepositoryPath(protocolTestRepositoryPath)
-	require.NoError(testInstance, repositoryPathError)
+	require.NoError(t, repositoryPathError)
 
 	originOwnerRepository, originOwnerRepositoryError := shared.NewOwnerRepository(protocolTestOriginOwnerRepo)
-	require.NoError(testInstance, originOwnerRepositoryError)
+	require.NoError(t, originOwnerRepositoryError)
 
 	canonicalOwnerRepository, canonicalOwnerRepositoryError := shared.NewOwnerRepository(protocolTestCanonicalOwnerRepo)
-	require.NoError(testInstance, canonicalOwnerRepositoryError)
+	require.NoError(t, canonicalOwnerRepositoryError)
 	options := protocol.Options{
 		RepositoryPath:           repositoryPath,
 		OriginOwnerRepository:    cloneOwnerRepository(originOwnerRepository),
@@ -229,8 +262,14 @@ func TestExecutorPromptsAdvertiseApplyAll(testInstance *testing.T) {
 		TargetProtocol:           shared.RemoteProtocolSSH,
 	}
 	executor := protocol.NewExecutor(dependencies)
-	executor.Execute(context.Background(), options)
-	require.Equal(testInstance, []string{fmt.Sprintf("Convert 'origin' in '%s' (%s → %s)? [a/N/y] ", protocolTestRepositoryPath, shared.RemoteProtocolHTTPS, shared.RemoteProtocolSSH)}, commandPrompter.recordedPrompts)
+	executionError := executor.Execute(context.Background(), options)
+	require.NoError(t, executionError)
+	require.Equal(
+		t,
+		[]string{fmt.Sprintf("Convert 'origin' in '%s' (%s → %s)? [a/N/y] ", protocolTestRepositoryPath, shared.RemoteProtocolHTTPS, shared.RemoteProtocolSSH)},
+		commandPrompter.recordedPrompts,
+	)
+	require.Equal(t, fmt.Sprintf(protocolTestDeclinedMessage, protocolTestRepositoryPath), outputBuffer.String())
 }
 
 func cloneOwnerRepository(value shared.OwnerRepository) *shared.OwnerRepository {

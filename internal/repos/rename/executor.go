@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	repoerrors "github.com/temirov/gix/internal/repos/errors"
 	"github.com/temirov/gix/internal/repos/shared"
 )
 
@@ -50,7 +51,6 @@ type Dependencies struct {
 	Prompter   shared.ConfirmationPrompter
 	Clock      shared.Clock
 	Output     io.Writer
-	Errors     io.Writer
 }
 
 // Executor orchestrates rename planning and execution for repositories.
@@ -67,23 +67,31 @@ func NewExecutor(dependencies Dependencies) *Executor {
 }
 
 // Execute performs the rename workflow using the executor's dependencies.
-func (executor *Executor) Execute(executionContext context.Context, options Options) {
+func (executor *Executor) Execute(executionContext context.Context, options Options) error {
 	desiredName := strings.TrimSpace(options.DesiredFolderName)
 	if len(desiredName) == 0 {
-		return
+		return nil
 	}
 
 	repositoryPath := options.RepositoryPath.String()
 
 	if executor.dependencies.FileSystem == nil {
-		executor.printfError(failureMessage, repositoryPath, desiredName)
-		return
+		return repoerrors.Wrap(
+			repoerrors.OperationRenameDirectories,
+			repositoryPath,
+			repoerrors.ErrFilesystemUnavailable,
+			nil,
+		)
 	}
 
 	oldAbsolutePath, absError := executor.dependencies.FileSystem.Abs(repositoryPath)
 	if absError != nil {
-		executor.printfError(failureMessage, repositoryPath, desiredName)
-		return
+		return repoerrors.Wrap(
+			repoerrors.OperationRenameDirectories,
+			repositoryPath,
+			repoerrors.ErrFilesystemUnavailable,
+			absError,
+		)
 	}
 
 	parentDirectory := filepath.Dir(oldAbsolutePath)
@@ -91,41 +99,49 @@ func (executor *Executor) Execute(executionContext context.Context, options Opti
 
 	if options.DryRun {
 		executor.printPlan(executionContext, oldAbsolutePath, newAbsolutePath, options.RequireCleanWorktree, options.EnsureParentDirectories)
-		return
+		return nil
 	}
 
-	if !executor.validatePrerequisites(executionContext, oldAbsolutePath, newAbsolutePath, options.RequireCleanWorktree, options.EnsureParentDirectories) {
-		return
+	skip, prerequisiteError := executor.evaluatePrerequisites(executionContext, oldAbsolutePath, newAbsolutePath, options.RequireCleanWorktree, options.EnsureParentDirectories)
+	if prerequisiteError != nil {
+		return prerequisiteError
+	}
+	if skip {
+		return nil
 	}
 
 	if !options.AssumeYes && executor.dependencies.Prompter != nil {
 		prompt := fmt.Sprintf(promptTemplate, oldAbsolutePath, newAbsolutePath)
 		confirmationResult, promptError := executor.dependencies.Prompter.Confirm(prompt)
 		if promptError != nil {
-			executor.printfError(failureMessage, oldAbsolutePath, newAbsolutePath)
-			return
+			return repoerrors.Wrap(
+				repoerrors.OperationRenameDirectories,
+				oldAbsolutePath,
+				repoerrors.ErrUserConfirmationFailed,
+				promptError,
+			)
 		}
 		if !confirmationResult.Confirmed {
 			executor.printfOutput(skipMessage, oldAbsolutePath)
-			return
+			return nil
 		}
 	}
 
-	if !executor.ensureParentDirectory(newAbsolutePath, options.EnsureParentDirectories) {
-		executor.printfError(failureMessage, oldAbsolutePath, newAbsolutePath)
-		return
+	if ensureError := executor.ensureParentDirectory(newAbsolutePath, options.EnsureParentDirectories); ensureError != nil {
+		return ensureError
 	}
 
-	if executor.performRename(oldAbsolutePath, newAbsolutePath) {
-		executor.printfOutput(successMessage, oldAbsolutePath, newAbsolutePath)
-	} else {
-		executor.printfError(failureMessage, oldAbsolutePath, newAbsolutePath)
+	if renameError := executor.performRename(oldAbsolutePath, newAbsolutePath); renameError != nil {
+		return renameError
 	}
+
+	executor.printfOutput(successMessage, oldAbsolutePath, newAbsolutePath)
+	return nil
 }
 
 // Execute performs the rename workflow using transient executor state.
-func Execute(executionContext context.Context, dependencies Dependencies, options Options) {
-	NewExecutor(dependencies).Execute(executionContext, options)
+func Execute(executionContext context.Context, dependencies Dependencies, options Options) error {
+	return NewExecutor(dependencies).Execute(executionContext, options)
 }
 
 func (executor *Executor) printPlan(executionContext context.Context, oldAbsolutePath string, newAbsolutePath string, requireClean bool, ensureParentDirectories bool) {
@@ -158,36 +174,48 @@ func (executor *Executor) printPlan(executionContext context.Context, oldAbsolut
 	executor.printfOutput(planReadyMessage, oldAbsolutePath, newAbsolutePath)
 }
 
-func (executor *Executor) validatePrerequisites(executionContext context.Context, oldAbsolutePath string, newAbsolutePath string, requireClean bool, ensureParentDirectories bool) bool {
+func (executor *Executor) evaluatePrerequisites(executionContext context.Context, oldAbsolutePath string, newAbsolutePath string, requireClean bool, ensureParentDirectories bool) (bool, error) {
 	caseOnlyRename := isCaseOnlyRename(oldAbsolutePath, newAbsolutePath)
 	parentDetails := executor.parentDirectoryDetails(newAbsolutePath)
 
 	if oldAbsolutePath == newAbsolutePath {
 		executor.printfOutput(skipAlreadyNormalizedMessage, oldAbsolutePath)
-		return false
+		return true, nil
 	}
 
 	if requireClean && !executor.isClean(executionContext, oldAbsolutePath) {
 		executor.printfOutput(skipDirtyMessage, oldAbsolutePath)
-		return false
+		return true, nil
 	}
 
 	if parentDetails.exists && !parentDetails.isDirectory {
-		executor.printfError(errorParentNotDirectoryMessage, parentDetails.path)
-		return false
+		return true, repoerrors.WrapMessage(
+			repoerrors.OperationRenameDirectories,
+			parentDetails.path,
+			repoerrors.ErrParentNotDirectory,
+			fmt.Sprintf(errorParentNotDirectoryMessage, parentDetails.path),
+		)
 	}
 
 	if !ensureParentDirectories && !parentDetails.exists {
-		executor.printfError(errorParentMissingMessage, parentDetails.path)
-		return false
+		return true, repoerrors.WrapMessage(
+			repoerrors.OperationRenameDirectories,
+			parentDetails.path,
+			repoerrors.ErrParentMissing,
+			fmt.Sprintf(errorParentMissingMessage, parentDetails.path),
+		)
 	}
 
 	if executor.targetExists(newAbsolutePath) && !caseOnlyRename {
-		executor.printfError(errorTargetExistsMessage, newAbsolutePath)
-		return false
+		return true, repoerrors.WrapMessage(
+			repoerrors.OperationRenameDirectories,
+			newAbsolutePath,
+			repoerrors.ErrTargetExists,
+			fmt.Sprintf(errorTargetExistsMessage, newAbsolutePath),
+		)
 	}
 
-	return true
+	return false, nil
 }
 
 func (executor *Executor) isClean(executionContext context.Context, repositoryPath string) bool {
@@ -228,27 +256,53 @@ func (executor *Executor) targetExists(path string) bool {
 	return statError == nil
 }
 
-func (executor *Executor) ensureParentDirectory(newAbsolutePath string, ensureParentDirectories bool) bool {
+func (executor *Executor) ensureParentDirectory(newAbsolutePath string, ensureParentDirectories bool) error {
 	if !ensureParentDirectories {
-		return true
+		return nil
 	}
 
 	parentDetails := executor.parentDirectoryDetails(newAbsolutePath)
 	if parentDetails.exists {
-		return parentDetails.isDirectory
+		if parentDetails.isDirectory {
+			return nil
+		}
+		return repoerrors.WrapMessage(
+			repoerrors.OperationRenameDirectories,
+			parentDetails.path,
+			repoerrors.ErrParentNotDirectory,
+			fmt.Sprintf(errorParentNotDirectoryMessage, parentDetails.path),
+		)
 	}
 
 	if executor.dependencies.FileSystem == nil {
-		return false
+		return repoerrors.WrapMessage(
+			repoerrors.OperationRenameDirectories,
+			parentDetails.path,
+			repoerrors.ErrFilesystemUnavailable,
+			fmt.Sprintf(errorParentMissingMessage, parentDetails.path),
+		)
 	}
 
-	creationError := executor.dependencies.FileSystem.MkdirAll(parentDetails.path, parentDirectoryPermissionConstant)
-	return creationError == nil
+	if creationError := executor.dependencies.FileSystem.MkdirAll(parentDetails.path, parentDirectoryPermissionConstant); creationError != nil {
+		return repoerrors.WrapMessage(
+			repoerrors.OperationRenameDirectories,
+			parentDetails.path,
+			repoerrors.ErrParentCreationFailed,
+			fmt.Sprintf(errorParentMissingMessage, parentDetails.path),
+		)
+	}
+
+	return nil
 }
 
-func (executor *Executor) performRename(oldAbsolutePath string, newAbsolutePath string) bool {
+func (executor *Executor) performRename(oldAbsolutePath string, newAbsolutePath string) error {
 	if executor.dependencies.FileSystem == nil {
-		return false
+		return repoerrors.WrapMessage(
+			repoerrors.OperationRenameDirectories,
+			oldAbsolutePath,
+			repoerrors.ErrFilesystemUnavailable,
+			fmt.Sprintf(failureMessage, oldAbsolutePath, newAbsolutePath),
+		)
 	}
 
 	if executor.dependencies.Clock == nil {
@@ -256,25 +310,44 @@ func (executor *Executor) performRename(oldAbsolutePath string, newAbsolutePath 
 	}
 
 	if executor.dependencies.GitManager == nil {
-		return false
+		return repoerrors.WrapMessage(
+			repoerrors.OperationRenameDirectories,
+			oldAbsolutePath,
+			repoerrors.ErrGitManagerUnavailable,
+			fmt.Sprintf(failureMessage, oldAbsolutePath, newAbsolutePath),
+		)
 	}
 
-	renameError := executor.dependencies.FileSystem.Rename(oldAbsolutePath, newAbsolutePath)
-	if renameError == nil {
-		return true
+	if renameError := executor.dependencies.FileSystem.Rename(oldAbsolutePath, newAbsolutePath); renameError == nil {
+		return nil
 	}
 
+	var lastError error
 	for attempt := 0; attempt < 5; attempt++ {
 		intermediate := fmt.Sprintf(intermediateRenameTemplate, oldAbsolutePath, attempt)
-		if renameError = executor.dependencies.FileSystem.Rename(oldAbsolutePath, intermediate); renameError != nil {
+		if attemptError := executor.dependencies.FileSystem.Rename(oldAbsolutePath, intermediate); attemptError != nil {
+			lastError = attemptError
 			continue
 		}
-		if renameError = executor.dependencies.FileSystem.Rename(intermediate, newAbsolutePath); renameError == nil {
-			return true
+		if attemptError := executor.dependencies.FileSystem.Rename(intermediate, newAbsolutePath); attemptError == nil {
+			return nil
+		} else {
+			lastError = attemptError
 		}
 	}
 
-	return false
+	message := fmt.Sprintf(failureMessage, oldAbsolutePath, newAbsolutePath)
+	if lastError != nil {
+		trimmed := strings.TrimSuffix(message, "\n")
+		message = fmt.Sprintf("%s: %v\n", trimmed, lastError)
+	}
+
+	return repoerrors.WrapMessage(
+		repoerrors.OperationRenameDirectories,
+		oldAbsolutePath,
+		repoerrors.ErrRenameFailed,
+		message,
+	)
 }
 
 func (executor *Executor) printfOutput(format string, arguments ...any) {
@@ -282,13 +355,6 @@ func (executor *Executor) printfOutput(format string, arguments ...any) {
 		return
 	}
 	fmt.Fprintf(executor.dependencies.Output, format, arguments...)
-}
-
-func (executor *Executor) printfError(format string, arguments ...any) {
-	if executor.dependencies.Errors == nil {
-		return
-	}
-	fmt.Fprintf(executor.dependencies.Errors, format, arguments...)
 }
 
 func isCaseOnlyRename(oldPath string, newPath string) bool {

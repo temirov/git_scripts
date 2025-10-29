@@ -4,6 +4,7 @@
 
 ### Improvements ⚙️
 - Introduced validated domain types for repository paths, owner/repo tuples, remotes, and branch names, refactoring repository executors and workflow options to consume the new constructors.
+- Added contextual error catalog and refactored repository executors/workflow bridges to emit and surface stable sentinel codes instead of printing ad-hoc failure strings.
 
 ### Bug Fixes 🐛
 - Prevented `branch cd` from aborting when repositories lack remotes by skipping fetch/pull operations and creating untracked branches when necessary.
