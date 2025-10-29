@@ -23,6 +23,8 @@ If a repository doesnt have a remote, there is nothing to fetch, but we can stil
 
 ## BugFixes (300–399)
 
+- [x] [GX-300] `gix b default` aborts for repositories without remotes; it treats the `git fetch` failure as fatal instead of warning and skipping the fetch, so the branch switch never executes.
+  - Resolution: The branch change service now enumerates remotes once, skips fetch/pull when none exist, and creates branches without tracking nonexistent remotes. Added regression coverage for the zero-remote case.
 
 ## Maintenance (400–499)
 
