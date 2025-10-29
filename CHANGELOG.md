@@ -5,6 +5,9 @@
 ### Improvements ⚙️
 - Introduced validated domain types for repository paths, owner/repo tuples, remotes, and branch names, refactoring repository executors and workflow options to consume the new constructors.
 
+### Bug Fixes 🐛
+- Prevented `branch cd` from aborting when repositories lack remotes by skipping fetch/pull operations and creating untracked branches when necessary.
+
 ### Docs 📚
 - Re-centered the README on user workflows and added `ARCHITECTURE.md` to document command wiring, package layout, and configuration internals.
 - Expanded `ARCHITECTURE.md` with current package responsibilities, dependency resolution, and workflow step registration details.

@@ -100,28 +100,31 @@ func (service *Service) Change(executionContext context.Context, options Options
 
 	environment := map[string]string{gitTerminalPromptEnvironmentNameConstant: gitTerminalPromptEnvironmentDisableValue}
 
-	fetchArguments := []string{gitFetchSubcommandConstant}
-	useAllRemotes := false
-	if !remoteExplicitlyProvided {
-		remoteExists, remoteLookupErr := service.remoteExists(executionContext, trimmedRepositoryPath, remoteName, environment)
-		if remoteLookupErr != nil {
-			return Result{}, fmt.Errorf(gitFetchFailureTemplateConstant, fmt.Errorf(gitRemoteListFailureTemplateConstant, remoteLookupErr))
+	remoteEnumeration, remoteLookupErr := service.enumerateRemotes(executionContext, trimmedRepositoryPath, remoteName, environment)
+	if remoteLookupErr != nil {
+		return Result{}, fmt.Errorf(gitFetchFailureTemplateConstant, fmt.Errorf(gitRemoteListFailureTemplateConstant, remoteLookupErr))
+	}
+
+	useAllRemotes := !remoteExplicitlyProvided && remoteEnumeration.hasRemotes && !remoteEnumeration.requestedExists
+	shouldFetch := remoteEnumeration.hasRemotes && (!remoteExplicitlyProvided || remoteEnumeration.requestedExists)
+	shouldPull := shouldFetch
+	shouldTrackRemote := remoteEnumeration.requestedExists && shouldFetch
+
+	if shouldFetch {
+		fetchArguments := []string{gitFetchSubcommandConstant}
+		if useAllRemotes {
+			fetchArguments = append(fetchArguments, gitFetchAllFlagConstant, gitFetchPruneFlagConstant)
+		} else {
+			fetchArguments = append(fetchArguments, gitFetchPruneFlagConstant, remoteName)
 		}
-		useAllRemotes = !remoteExists
-	}
 
-	if useAllRemotes {
-		fetchArguments = append(fetchArguments, gitFetchAllFlagConstant, gitFetchPruneFlagConstant)
-	} else {
-		fetchArguments = append(fetchArguments, gitFetchPruneFlagConstant, remoteName)
-	}
-
-	if _, err := service.executor.ExecuteGit(executionContext, execshell.CommandDetails{
-		Arguments:            fetchArguments,
-		WorkingDirectory:     trimmedRepositoryPath,
-		EnvironmentVariables: environment,
-	}); err != nil {
-		return Result{}, fmt.Errorf(gitFetchFailureTemplateConstant, err)
+		if _, err := service.executor.ExecuteGit(executionContext, execshell.CommandDetails{
+			Arguments:            fetchArguments,
+			WorkingDirectory:     trimmedRepositoryPath,
+			EnvironmentVariables: environment,
+		}); err != nil {
+			return Result{}, fmt.Errorf(gitFetchFailureTemplateConstant, err)
+		}
 	}
 
 	branchCreated := false
@@ -130,9 +133,13 @@ func (service *Service) Change(executionContext context.Context, options Options
 		if !options.CreateIfMissing {
 			return Result{}, fmt.Errorf(gitSwitchFailureTemplateConstant, trimmedBranchName, switchResultErr)
 		}
-		trackReference := fmt.Sprintf("%s/%s", remoteName, trimmedBranchName)
+		switchArguments := []string{gitSwitchSubcommandConstant, gitCreateBranchFlagConstant, trimmedBranchName}
+		if shouldTrackRemote {
+			trackReference := fmt.Sprintf("%s/%s", remoteName, trimmedBranchName)
+			switchArguments = append(switchArguments, gitTrackFlagConstant, trackReference)
+		}
 		if _, err := service.executor.ExecuteGit(executionContext, execshell.CommandDetails{
-			Arguments:            []string{gitSwitchSubcommandConstant, gitCreateBranchFlagConstant, trimmedBranchName, gitTrackFlagConstant, trackReference},
+			Arguments:            switchArguments,
 			WorkingDirectory:     trimmedRepositoryPath,
 			EnvironmentVariables: environment,
 		}); err != nil {
@@ -141,12 +148,14 @@ func (service *Service) Change(executionContext context.Context, options Options
 		branchCreated = true
 	}
 
-	if _, err := service.executor.ExecuteGit(executionContext, execshell.CommandDetails{
-		Arguments:            []string{gitPullSubcommandConstant, gitPullRebaseFlagConstant},
-		WorkingDirectory:     trimmedRepositoryPath,
-		EnvironmentVariables: environment,
-	}); err != nil {
-		return Result{}, fmt.Errorf(gitPullFailureTemplateConstant, err)
+	if shouldPull {
+		if _, err := service.executor.ExecuteGit(executionContext, execshell.CommandDetails{
+			Arguments:            []string{gitPullSubcommandConstant, gitPullRebaseFlagConstant},
+			WorkingDirectory:     trimmedRepositoryPath,
+			EnvironmentVariables: environment,
+		}); err != nil {
+			return Result{}, fmt.Errorf(gitPullFailureTemplateConstant, err)
+		}
 	}
 
 	return Result{RepositoryPath: trimmedRepositoryPath, BranchName: trimmedBranchName, BranchCreated: branchCreated}, nil
@@ -161,24 +170,31 @@ func (service *Service) trySwitch(executionContext context.Context, repositoryPa
 	return err
 }
 
-func (service *Service) remoteExists(executionContext context.Context, repositoryPath string, remoteName string, environment map[string]string) (bool, error) {
-	if len(strings.TrimSpace(remoteName)) == 0 {
-		return false, nil
-	}
+type remoteEnumeration struct {
+	hasRemotes      bool
+	requestedExists bool
+}
 
+func (service *Service) enumerateRemotes(executionContext context.Context, repositoryPath string, remoteName string, environment map[string]string) (remoteEnumeration, error) {
 	result, err := service.executor.ExecuteGit(executionContext, execshell.CommandDetails{
 		Arguments:            []string{gitRemoteSubcommandConstant},
 		WorkingDirectory:     repositoryPath,
 		EnvironmentVariables: environment,
 	})
 	if err != nil {
-		return false, err
+		return remoteEnumeration{}, err
 	}
 
+	enumeration := remoteEnumeration{}
 	for _, candidate := range strings.Split(result.StandardOutput, "\n") {
-		if strings.TrimSpace(candidate) == remoteName {
-			return true, nil
+		trimmedCandidate := strings.TrimSpace(candidate)
+		if len(trimmedCandidate) == 0 {
+			continue
+		}
+		enumeration.hasRemotes = true
+		if trimmedCandidate == remoteName {
+			enumeration.requestedExists = true
 		}
 	}
-	return false, nil
+	return enumeration, nil
 }
