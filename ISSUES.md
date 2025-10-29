@@ -37,10 +37,8 @@ If a repository doesnt have a remote, there is nothing to fetch, but we can stil
   - Resolution: Added smart constructors in `internal/repos/shared` for repository paths, owners, repositories, remotes, branches, and protocols, refactored repos/workflow options to require these types, updated CLI/workflow edges to construct them once, and expanded tests to cover the new constructors.
 - [x] [GX-404] Establish contextual error strategy for repository executors
   - Resolution: Added `internal/repos/errors` sentinel catalog, refactored remotes/protocol/rename/history executors to wrap failures with operation-specific codes, taught workflow operations to log the contextual errors, and extended unit/integration tests to assert on the new propagation semantics.
-- [ ] [GX-405] Consolidate shared helpers and eliminate duplicated validation
-  - Extract owner/repository parsing into a single reusable helper and share prompt/output formatting via a reporter interface.
-  - Remove repeated `strings.TrimSpace` and similar defensive code paths, trusting normalized domain types introduced in GX-403.
-  - Review boolean flags such as `AssumeYes` and `RequireCleanWorktree`; convert to clearer enums or document retained semantics when multiple behaviors are conflated.
+- [x] [GX-405] Consolidate shared helpers and eliminate duplicated validation
+  - Resolution: Added shared reporter/policy helpers for repository executors, refactored protocol/remotes/rename workflows to reuse optional owner parsing and structured confirmation policies, and updated tests/CLI bridges to exercise the new abstractions without redundant trimming or boolean flags.
 - [ ] [GX-406] Expand regression coverage for policy compliance
   - Add table-driven tests for the new domain constructors and protocol conversion edge cases (current vs. target protocol mismatches, missing owner slugs, unknown protocols).
   - Test dependency resolvers in `internal/repos/dependencies` to ensure logger wiring and error propagation.

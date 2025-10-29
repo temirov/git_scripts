@@ -188,7 +188,7 @@ func TestExecutorBehaviors(t *testing.T) {
 				CanonicalOwnerRepository: cloneOwnerRepository(canonicalOwnerRepository),
 				CurrentProtocol:          shared.RemoteProtocolHTTPS,
 				TargetProtocol:           shared.RemoteProtocolSSH,
-				AssumeYes:                true,
+				ConfirmationPolicy:       shared.ConfirmationAssumeYes,
 			},
 			gitManager:      &stubGitManager{currentURL: protocolTestOriginURL},
 			expectedOutput:  fmt.Sprintf(protocolTestSuccessMessage, protocolTestRepositoryPath, protocolTestTargetURL),
@@ -203,7 +203,7 @@ func TestExecutorBehaviors(t *testing.T) {
 			executor := protocol.NewExecutor(protocol.Dependencies{
 				GitManager: testCase.gitManager,
 				Prompter:   testCase.prompter,
-				Output:     outputBuffer,
+				Reporter:   shared.NewWriterReporter(outputBuffer),
 			})
 
 			executionError := executor.Execute(context.Background(), testCase.options)
@@ -244,7 +244,7 @@ func TestExecutorPromptsAdvertiseApplyAll(t *testing.T) {
 	dependencies := protocol.Dependencies{
 		GitManager: gitManager,
 		Prompter:   commandPrompter,
-		Output:     outputBuffer,
+		Reporter:   shared.NewWriterReporter(outputBuffer),
 	}
 	repositoryPath, repositoryPathError := shared.NewRepositoryPath(protocolTestRepositoryPath)
 	require.NoError(t, repositoryPathError)

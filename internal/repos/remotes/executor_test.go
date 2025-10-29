@@ -99,7 +99,7 @@ func TestExecutorBehaviors(t *testing.T) {
 				RemoteProtocol:           shared.RemoteProtocolHTTPS,
 			},
 			gitManager:      &stubGitManager{},
-			expectedOutput:  "",
+			expectedOutput:  fmt.Sprintf("UPDATE-REMOTE-SKIP: %s (error: could not parse origin owner/repo)\n", remotesTestRepositoryPath),
 			expectedError:   repoerrors.ErrOriginOwnerMissing,
 			expectedUpdates: 0,
 		},
@@ -111,8 +111,9 @@ func TestExecutorBehaviors(t *testing.T) {
 				CanonicalOwnerRepository: nil,
 				RemoteProtocol:           shared.RemoteProtocolHTTPS,
 			},
-			gitManager:    &stubGitManager{},
-			expectedError: repoerrors.ErrCanonicalOwnerMissing,
+			gitManager:     &stubGitManager{},
+			expectedOutput: fmt.Sprintf("UPDATE-REMOTE-SKIP: %s (no upstream: no canonical redirect found)\n", remotesTestRepositoryPath),
+			expectedError:  repoerrors.ErrCanonicalOwnerMissing,
 		},
 		{
 			name: "dry_run_plan",
@@ -187,6 +188,7 @@ func TestExecutorBehaviors(t *testing.T) {
 			},
 			gitManager:       &stubGitManager{},
 			prompter:         &stubPrompter{callError: fmt.Errorf("prompt failed")},
+			expectedOutput:   fmt.Sprintf("UPDATE-REMOTE-SKIP: %s (error: could not construct target URL)\n", remotesTestRepositoryPath),
 			expectedError:    repoerrors.ErrUserConfirmationFailed,
 			expectPromptCall: true,
 		},
@@ -198,7 +200,7 @@ func TestExecutorBehaviors(t *testing.T) {
 				OriginOwnerRepository:    cloneOwnerRepository(originOwnerRepository),
 				CanonicalOwnerRepository: cloneOwnerRepository(canonicalOwnerRepository),
 				RemoteProtocol:           shared.RemoteProtocolHTTPS,
-				AssumeYes:                true,
+				ConfirmationPolicy:       shared.ConfirmationAssumeYes,
 			},
 			gitManager:      &stubGitManager{},
 			expectedOutput:  fmt.Sprintf(remotesTestSuccessMessage, remotesTestRepositoryPath, remotesTestCanonicalURL),
@@ -213,8 +215,9 @@ func TestExecutorBehaviors(t *testing.T) {
 				CanonicalOwnerRepository: cloneOwnerRepository(canonicalOwnerRepository),
 				RemoteProtocol:           shared.RemoteProtocolHTTPS,
 			},
-			gitManager:    &stubGitManager{setError: fmt.Errorf("update failed")},
-			expectedError: repoerrors.ErrRemoteUpdateFailed,
+			gitManager:     &stubGitManager{setError: fmt.Errorf("update failed")},
+			expectedOutput: fmt.Sprintf("UPDATE-REMOTE-SKIP: %s (error: failed to set origin URL)\n", remotesTestRepositoryPath),
+			expectedError:  repoerrors.ErrRemoteUpdateFailed,
 		},
 	}
 
@@ -225,7 +228,7 @@ func TestExecutorBehaviors(t *testing.T) {
 			executor := remotes.NewExecutor(remotes.Dependencies{
 				GitManager: testCase.gitManager,
 				Prompter:   testCase.prompter,
-				Output:     outputBuffer,
+				Reporter:   shared.NewWriterReporter(outputBuffer),
 			})
 
 			executionError := executor.Execute(context.Background(), testCase.options)

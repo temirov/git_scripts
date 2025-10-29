@@ -3,7 +3,6 @@ package rename
 import (
 	"context"
 	"fmt"
-	"io"
 	"io/fs"
 	"path/filepath"
 	"strings"
@@ -38,8 +37,8 @@ type Options struct {
 	RepositoryPath          shared.RepositoryPath
 	DesiredFolderName       string
 	DryRun                  bool
-	RequireCleanWorktree    bool
-	AssumeYes               bool
+	CleanPolicy             shared.CleanWorktreePolicy
+	ConfirmationPolicy      shared.ConfirmationPolicy
 	IncludeOwner            bool
 	EnsureParentDirectories bool
 }
@@ -50,7 +49,7 @@ type Dependencies struct {
 	GitManager shared.GitRepositoryManager
 	Prompter   shared.ConfirmationPrompter
 	Clock      shared.Clock
-	Output     io.Writer
+	Reporter   shared.Reporter
 }
 
 // Executor orchestrates rename planning and execution for repositories.
@@ -98,11 +97,11 @@ func (executor *Executor) Execute(executionContext context.Context, options Opti
 	newAbsolutePath := filepath.Join(parentDirectory, desiredName)
 
 	if options.DryRun {
-		executor.printPlan(executionContext, oldAbsolutePath, newAbsolutePath, options.RequireCleanWorktree, options.EnsureParentDirectories)
+		executor.printPlan(executionContext, oldAbsolutePath, newAbsolutePath, options.CleanPolicy.RequireClean(), options.EnsureParentDirectories)
 		return nil
 	}
 
-	skip, prerequisiteError := executor.evaluatePrerequisites(executionContext, oldAbsolutePath, newAbsolutePath, options.RequireCleanWorktree, options.EnsureParentDirectories)
+	skip, prerequisiteError := executor.evaluatePrerequisites(executionContext, oldAbsolutePath, newAbsolutePath, options.CleanPolicy.RequireClean(), options.EnsureParentDirectories)
 	if prerequisiteError != nil {
 		return prerequisiteError
 	}
@@ -110,10 +109,11 @@ func (executor *Executor) Execute(executionContext context.Context, options Opti
 		return nil
 	}
 
-	if !options.AssumeYes && executor.dependencies.Prompter != nil {
+	if options.ConfirmationPolicy.ShouldPrompt() && executor.dependencies.Prompter != nil {
 		prompt := fmt.Sprintf(promptTemplate, oldAbsolutePath, newAbsolutePath)
 		confirmationResult, promptError := executor.dependencies.Prompter.Confirm(prompt)
 		if promptError != nil {
+			executor.printfOutput(failureMessage, oldAbsolutePath, newAbsolutePath)
 			return repoerrors.Wrap(
 				repoerrors.OperationRenameDirectories,
 				oldAbsolutePath,
@@ -189,6 +189,7 @@ func (executor *Executor) evaluatePrerequisites(executionContext context.Context
 	}
 
 	if parentDetails.exists && !parentDetails.isDirectory {
+		executor.printfOutput(errorParentNotDirectoryMessage, parentDetails.path)
 		return true, repoerrors.WrapMessage(
 			repoerrors.OperationRenameDirectories,
 			parentDetails.path,
@@ -198,6 +199,7 @@ func (executor *Executor) evaluatePrerequisites(executionContext context.Context
 	}
 
 	if !ensureParentDirectories && !parentDetails.exists {
+		executor.printfOutput(errorParentMissingMessage, parentDetails.path)
 		return true, repoerrors.WrapMessage(
 			repoerrors.OperationRenameDirectories,
 			parentDetails.path,
@@ -207,6 +209,7 @@ func (executor *Executor) evaluatePrerequisites(executionContext context.Context
 	}
 
 	if executor.targetExists(newAbsolutePath) && !caseOnlyRename {
+		executor.printfOutput(errorTargetExistsMessage, newAbsolutePath)
 		return true, repoerrors.WrapMessage(
 			repoerrors.OperationRenameDirectories,
 			newAbsolutePath,
@@ -266,6 +269,7 @@ func (executor *Executor) ensureParentDirectory(newAbsolutePath string, ensurePa
 		if parentDetails.isDirectory {
 			return nil
 		}
+		executor.printfOutput(errorParentNotDirectoryMessage, parentDetails.path)
 		return repoerrors.WrapMessage(
 			repoerrors.OperationRenameDirectories,
 			parentDetails.path,
@@ -275,6 +279,7 @@ func (executor *Executor) ensureParentDirectory(newAbsolutePath string, ensurePa
 	}
 
 	if executor.dependencies.FileSystem == nil {
+		executor.printfOutput(errorParentMissingMessage, parentDetails.path)
 		return repoerrors.WrapMessage(
 			repoerrors.OperationRenameDirectories,
 			parentDetails.path,
@@ -284,6 +289,7 @@ func (executor *Executor) ensureParentDirectory(newAbsolutePath string, ensurePa
 	}
 
 	if creationError := executor.dependencies.FileSystem.MkdirAll(parentDetails.path, parentDirectoryPermissionConstant); creationError != nil {
+		executor.printfOutput(errorParentMissingMessage, parentDetails.path)
 		return repoerrors.WrapMessage(
 			repoerrors.OperationRenameDirectories,
 			parentDetails.path,
@@ -341,6 +347,7 @@ func (executor *Executor) performRename(oldAbsolutePath string, newAbsolutePath 
 		trimmed := strings.TrimSuffix(message, "\n")
 		message = fmt.Sprintf("%s: %v\n", trimmed, lastError)
 	}
+	executor.printfOutput("%s", message)
 
 	return repoerrors.WrapMessage(
 		repoerrors.OperationRenameDirectories,
@@ -351,10 +358,10 @@ func (executor *Executor) performRename(oldAbsolutePath string, newAbsolutePath 
 }
 
 func (executor *Executor) printfOutput(format string, arguments ...any) {
-	if executor.dependencies.Output == nil {
+	if executor.dependencies.Reporter == nil {
 		return
 	}
-	fmt.Fprintf(executor.dependencies.Output, format, arguments...)
+	executor.dependencies.Reporter.Printf(format, arguments...)
 }
 
 func isCaseOnlyRename(oldPath string, newPath string) bool {

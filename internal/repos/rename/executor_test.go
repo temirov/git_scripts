@@ -173,10 +173,10 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 		{
 			name: "dry_run_plan_ready",
 			options: rename.Options{
-				RepositoryPath:       legacyPath,
-				DesiredFolderName:    renameTestDesiredFolderName,
-				DryRun:               true,
-				RequireCleanWorktree: true,
+				RepositoryPath:    legacyPath,
+				DesiredFolderName: renameTestDesiredFolderName,
+				DryRun:            true,
+				CleanPolicy:       shared.CleanWorktreeRequired,
 			},
 			fileSystem: &stubFileSystem{
 				existingPaths: map[string]bool{
@@ -194,7 +194,7 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 				RepositoryPath:          legacyPath,
 				DesiredFolderName:       renameTestOwnerDesiredFolderName,
 				DryRun:                  true,
-				RequireCleanWorktree:    true,
+				CleanPolicy:             shared.CleanWorktreeRequired,
 				EnsureParentDirectories: false,
 			},
 			fileSystem: &stubFileSystem{
@@ -212,7 +212,7 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 				RepositoryPath:          legacyPath,
 				DesiredFolderName:       renameTestOwnerDesiredFolderName,
 				DryRun:                  true,
-				RequireCleanWorktree:    true,
+				CleanPolicy:             shared.CleanWorktreeRequired,
 				EnsureParentDirectories: true,
 			},
 			fileSystem: &stubFileSystem{
@@ -290,16 +290,16 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 			},
 			gitManager:      stubGitManager{clean: true},
 			prompter:        &stubPrompter{callError: errors.New("read failure")},
-			expectedOutput:  "",
+			expectedOutput:  fmt.Sprintf("ERROR: rename failed for %s → %s\n", renameTestProjectFolderPath, renameTestTargetFolderPath),
 			expectedError:   repoerrors.ErrUserConfirmationFailed,
 			expectedRenames: 0,
 		},
 		{
 			name: "assume_yes_skips_prompt",
 			options: rename.Options{
-				RepositoryPath:    projectPath,
-				DesiredFolderName: renameTestDesiredFolderName,
-				AssumeYes:         true,
+				RepositoryPath:     projectPath,
+				DesiredFolderName:  renameTestDesiredFolderName,
+				ConfirmationPolicy: shared.ConfirmationAssumeYes,
 			},
 			fileSystem: &stubFileSystem{
 				existingPaths: map[string]bool{
@@ -314,10 +314,10 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 		{
 			name: "skip_dirty_worktree",
 			options: rename.Options{
-				RepositoryPath:       projectPath,
-				DesiredFolderName:    renameTestDesiredFolderName,
-				RequireCleanWorktree: true,
-				AssumeYes:            true,
+				RepositoryPath:     projectPath,
+				DesiredFolderName:  renameTestDesiredFolderName,
+				CleanPolicy:        shared.CleanWorktreeRequired,
+				ConfirmationPolicy: shared.ConfirmationAssumeYes,
 			},
 			fileSystem: &stubFileSystem{
 				existingPaths: map[string]bool{
@@ -332,9 +332,9 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 		{
 			name: "already_normalized_skip",
 			options: rename.Options{
-				RepositoryPath:    projectPath,
-				DesiredFolderName: filepath.Base(renameTestProjectFolderPath),
-				AssumeYes:         true,
+				RepositoryPath:     projectPath,
+				DesiredFolderName:  filepath.Base(renameTestProjectFolderPath),
+				ConfirmationPolicy: shared.ConfirmationAssumeYes,
 			},
 			fileSystem: &stubFileSystem{
 				existingPaths: map[string]bool{
@@ -351,7 +351,7 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 			options: rename.Options{
 				RepositoryPath:          projectPath,
 				DesiredFolderName:       renameTestOwnerDesiredFolderName,
-				AssumeYes:               true,
+				ConfirmationPolicy:      shared.ConfirmationAssumeYes,
 				EnsureParentDirectories: false,
 			},
 			fileSystem: &stubFileSystem{
@@ -361,7 +361,7 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 				},
 			},
 			gitManager:      stubGitManager{clean: true},
-			expectedOutput:  "",
+			expectedOutput:  fmt.Sprintf("ERROR: target parent missing: %s\n", renameTestOwnerDirectoryPath),
 			expectedError:   repoerrors.ErrParentMissing,
 			expectedRenames: 0,
 		},
@@ -370,7 +370,7 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 			options: rename.Options{
 				RepositoryPath:          projectPath,
 				DesiredFolderName:       renameTestOwnerDesiredFolderName,
-				AssumeYes:               true,
+				ConfirmationPolicy:      shared.ConfirmationAssumeYes,
 				EnsureParentDirectories: true,
 			},
 			fileSystem: &stubFileSystem{
@@ -394,7 +394,7 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 				GitManager: testCase.gitManager,
 				Prompter:   testCase.prompter,
 				Clock:      stubClock{},
-				Output:     outputBuffer,
+				Reporter:   shared.NewWriterReporter(outputBuffer),
 			})
 
 			executionError := executor.Execute(context.Background(), testCase.options)
@@ -423,7 +423,7 @@ func TestExecutorPromptsAdvertiseApplyAll(testInstance *testing.T) {
 		FileSystem: fileSystem,
 		GitManager: stubGitManager{clean: true},
 		Prompter:   commandPrompter,
-		Output:     &bytes.Buffer{},
+		Reporter:   shared.NewWriterReporter(&bytes.Buffer{}),
 	}
 	projectPath := mustRepositoryPath(testInstance, renameTestProjectFolderPath)
 	renamer := rename.NewExecutor(dependencies)
