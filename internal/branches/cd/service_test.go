@@ -63,7 +63,7 @@ func TestChangeCreatesBranchWhenMissing(t *testing.T) {
 	executor := &stubGitExecutor{responses: []stubGitResponse{
 		{result: execshell.ExecutionResult{StandardOutput: "upstream\n"}},
 		{},
-		{err: errors.New("missing")},
+		{err: commandFailedError("error: pathspec 'feature' did not match any file(s) known to git")},
 	}}
 	service, err := NewService(ServiceDependencies{GitExecutor: executor})
 	require.NoError(t, err)
@@ -173,6 +173,48 @@ func TestChangeFailsWhenRemoteEnumerationFails(t *testing.T) {
 
 	_, changeError := service.Change(context.Background(), Options{RepositoryPath: "/tmp/repo", BranchName: "main"})
 	require.ErrorContains(t, changeError, "fetch updates")
+}
+
+func TestChangeDoesNotCreateBranchWhenSwitchFailsForOtherReasons(t *testing.T) {
+	executor := &stubGitExecutor{responses: []stubGitResponse{
+		{result: execshell.ExecutionResult{StandardOutput: "origin\n"}},
+		{result: execshell.ExecutionResult{}},
+		{err: commandFailedError("error: Your local changes to the following files would be overwritten by checkout:\nREADME.md")},
+	}}
+	service, err := NewService(ServiceDependencies{GitExecutor: executor})
+	require.NoError(t, err)
+
+	_, changeError := service.Change(context.Background(), Options{
+		RepositoryPath:  "/tmp/repo",
+		BranchName:      "feature",
+		CreateIfMissing: true,
+	})
+	require.Error(t, changeError)
+	require.Contains(t, changeError.Error(), "failed to switch to branch \"feature\"")
+	require.Contains(t, changeError.Error(), "Your local changes to the following files would be overwritten by checkout")
+	require.Len(t, executor.recorded, 3)
+}
+
+func TestChangeIncludesDetailsWhenBranchCreationFails(t *testing.T) {
+	executor := &stubGitExecutor{responses: []stubGitResponse{
+		{result: execshell.ExecutionResult{StandardOutput: "origin\n"}},
+		{result: execshell.ExecutionResult{}},
+		{err: commandFailedError("error: pathspec 'feature' did not match any file(s) known to git")},
+		{err: commandFailedError("fatal: a branch named 'feature' already exists")},
+	}}
+	service, err := NewService(ServiceDependencies{GitExecutor: executor})
+	require.NoError(t, err)
+
+	_, changeError := service.Change(context.Background(), Options{
+		RepositoryPath:  "/tmp/repo",
+		BranchName:      "feature",
+		CreateIfMissing: true,
+		RemoteName:      "origin",
+	})
+	require.Error(t, changeError)
+	require.Contains(t, changeError.Error(), "failed to create branch \"feature\" from origin")
+	require.Contains(t, changeError.Error(), "a branch named 'feature' already exists")
+	require.Len(t, executor.recorded, 4)
 }
 
 func commandFailedError(message string) error {

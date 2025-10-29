@@ -18,8 +18,9 @@ const (
 	gitExecutorMissingMessageConstant        = "git executor not configured"
 	gitFetchFailureTemplateConstant          = "failed to fetch updates: %w"
 	gitRemoteListFailureTemplateConstant     = "failed to list remotes: %w"
-	gitSwitchFailureTemplateConstant         = "failed to switch to branch %q: %w"
-	gitCreateBranchFailureTemplateConstant   = "failed to create branch %q from %s: %w"
+	gitSwitchFailureTemplateConstant         = "failed to switch to branch %q: %s: %w"
+	gitCreateBranchFromRemoteFailureTemplate = "failed to create branch %q from %s: %s: %w"
+	gitCreateBranchLocalFailureTemplate      = "failed to create branch %q: %s: %w"
 	gitPullFailureTemplateConstant           = "failed to pull latest changes: %w"
 	defaultRemoteNameConstant                = shared.OriginRemoteNameConstant
 	logFieldRemoteNameConstant               = "remote"
@@ -153,9 +154,12 @@ func (service *Service) Change(executionContext context.Context, options Options
 
 	branchCreated := false
 	switchResultErr := service.trySwitch(executionContext, trimmedRepositoryPath, trimmedBranchName, environment)
+	branchMissing := isBranchMissingError(switchResultErr)
+	switchSummary := summarizeCommandError(switchResultErr)
+
 	if switchResultErr != nil {
-		if !options.CreateIfMissing {
-			return Result{}, fmt.Errorf(gitSwitchFailureTemplateConstant, trimmedBranchName, switchResultErr)
+		if !options.CreateIfMissing || !branchMissing {
+			return Result{}, fmt.Errorf(gitSwitchFailureTemplateConstant, trimmedBranchName, switchSummary, switchResultErr)
 		}
 		switchArguments := []string{gitSwitchSubcommandConstant, gitCreateBranchFlagConstant, trimmedBranchName}
 		if shouldTrackRemote {
@@ -167,7 +171,11 @@ func (service *Service) Change(executionContext context.Context, options Options
 			WorkingDirectory:     trimmedRepositoryPath,
 			EnvironmentVariables: environment,
 		}); err != nil {
-			return Result{}, fmt.Errorf(gitCreateBranchFailureTemplateConstant, trimmedBranchName, remoteName, err)
+			createSummary := summarizeCommandError(err)
+			if shouldTrackRemote {
+				return Result{}, fmt.Errorf(gitCreateBranchFromRemoteFailureTemplate, trimmedBranchName, remoteName, createSummary, err)
+			}
+			return Result{}, fmt.Errorf(gitCreateBranchLocalFailureTemplate, trimmedBranchName, createSummary, err)
 		}
 		branchCreated = true
 	}
@@ -234,7 +242,35 @@ func (service *Service) enumerateRemotes(executionContext context.Context, repos
 	return enumeration, nil
 }
 
+var missingBranchIndicators = []string{
+	"did not match any file(s) known to git",
+	"unknown revision or path not in the working tree",
+	"not a valid reference",
+	"invalid reference",
+	"no such ref was found",
+	"matches none of the refs",
+}
+
+func isBranchMissingError(err error) bool {
+	if err == nil {
+		return false
+	}
+	summary := strings.ToLower(summarizeCommandError(err))
+	if len(summary) == 0 {
+		return false
+	}
+	for _, indicator := range missingBranchIndicators {
+		if strings.Contains(summary, indicator) {
+			return true
+		}
+	}
+	return false
+}
+
 func summarizeCommandError(err error) string {
+	if err == nil {
+		return ""
+	}
 	var commandFailure execshell.CommandFailedError
 	if errors.As(err, &commandFailure) {
 		trimmed := strings.TrimSpace(commandFailure.Result.StandardError)
