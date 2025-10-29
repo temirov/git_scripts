@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Improvements ⚙️
+- Introduced validated domain types for repository paths, owner/repo tuples, remotes, and branch names, refactoring repository executors and workflow options to consume the new constructors.
+
 ### Docs 📚
 - Re-centered the README on user workflows and added `ARCHITECTURE.md` to document command wiring, package layout, and configuration internals.
 - Expanded `ARCHITECTURE.md` with current package responsibilities, dependency resolution, and workflow step registration details.

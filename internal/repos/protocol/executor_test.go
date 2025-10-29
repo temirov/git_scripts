@@ -73,6 +73,15 @@ const (
 )
 
 func TestExecutorBehaviors(testInstance *testing.T) {
+	repositoryPath, repositoryPathError := shared.NewRepositoryPath(protocolTestRepositoryPath)
+	require.NoError(testInstance, repositoryPathError)
+
+	originOwnerRepository, originOwnerRepositoryError := shared.NewOwnerRepository(protocolTestOriginOwnerRepo)
+	require.NoError(testInstance, originOwnerRepositoryError)
+
+	canonicalOwnerRepository, canonicalOwnerRepositoryError := shared.NewOwnerRepository(protocolTestCanonicalOwnerRepo)
+	require.NoError(testInstance, canonicalOwnerRepositoryError)
+
 	testCases := []struct {
 		name            string
 		options         protocol.Options
@@ -85,9 +94,9 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 		{
 			name: "owner_repo_missing",
 			options: protocol.Options{
-				RepositoryPath:           protocolTestRepositoryPath,
-				OriginOwnerRepository:    "",
-				CanonicalOwnerRepository: "",
+				RepositoryPath:           repositoryPath,
+				OriginOwnerRepository:    nil,
+				CanonicalOwnerRepository: nil,
 				CurrentProtocol:          shared.RemoteProtocolHTTPS,
 				TargetProtocol:           shared.RemoteProtocolSSH,
 			},
@@ -97,9 +106,9 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 		{
 			name: "dry_run_plan",
 			options: protocol.Options{
-				RepositoryPath:           protocolTestRepositoryPath,
-				OriginOwnerRepository:    protocolTestOriginOwnerRepo,
-				CanonicalOwnerRepository: protocolTestCanonicalOwnerRepo,
+				RepositoryPath:           repositoryPath,
+				OriginOwnerRepository:    cloneOwnerRepository(originOwnerRepository),
+				CanonicalOwnerRepository: cloneOwnerRepository(canonicalOwnerRepository),
 				CurrentProtocol:          shared.RemoteProtocolHTTPS,
 				TargetProtocol:           shared.RemoteProtocolSSH,
 				DryRun:                   true,
@@ -110,9 +119,9 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 		{
 			name: "prompter_declines",
 			options: protocol.Options{
-				RepositoryPath:           protocolTestRepositoryPath,
-				OriginOwnerRepository:    protocolTestOriginOwnerRepo,
-				CanonicalOwnerRepository: protocolTestCanonicalOwnerRepo,
+				RepositoryPath:           repositoryPath,
+				OriginOwnerRepository:    cloneOwnerRepository(originOwnerRepository),
+				CanonicalOwnerRepository: cloneOwnerRepository(canonicalOwnerRepository),
 				CurrentProtocol:          shared.RemoteProtocolHTTPS,
 				TargetProtocol:           shared.RemoteProtocolSSH,
 			},
@@ -123,9 +132,9 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 		{
 			name: "prompter_accepts_once",
 			options: protocol.Options{
-				RepositoryPath:           protocolTestRepositoryPath,
-				OriginOwnerRepository:    protocolTestOriginOwnerRepo,
-				CanonicalOwnerRepository: protocolTestCanonicalOwnerRepo,
+				RepositoryPath:           repositoryPath,
+				OriginOwnerRepository:    cloneOwnerRepository(originOwnerRepository),
+				CanonicalOwnerRepository: cloneOwnerRepository(canonicalOwnerRepository),
 				CurrentProtocol:          shared.RemoteProtocolHTTPS,
 				TargetProtocol:           shared.RemoteProtocolSSH,
 			},
@@ -137,9 +146,9 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 		{
 			name: "prompter_accepts_all",
 			options: protocol.Options{
-				RepositoryPath:           protocolTestRepositoryPath,
-				OriginOwnerRepository:    protocolTestOriginOwnerRepo,
-				CanonicalOwnerRepository: protocolTestCanonicalOwnerRepo,
+				RepositoryPath:           repositoryPath,
+				OriginOwnerRepository:    cloneOwnerRepository(originOwnerRepository),
+				CanonicalOwnerRepository: cloneOwnerRepository(canonicalOwnerRepository),
 				CurrentProtocol:          shared.RemoteProtocolHTTPS,
 				TargetProtocol:           shared.RemoteProtocolSSH,
 			},
@@ -151,9 +160,9 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 		{
 			name: "prompter_error",
 			options: protocol.Options{
-				RepositoryPath:           protocolTestRepositoryPath,
-				OriginOwnerRepository:    protocolTestOriginOwnerRepo,
-				CanonicalOwnerRepository: protocolTestCanonicalOwnerRepo,
+				RepositoryPath:           repositoryPath,
+				OriginOwnerRepository:    cloneOwnerRepository(originOwnerRepository),
+				CanonicalOwnerRepository: cloneOwnerRepository(canonicalOwnerRepository),
 				CurrentProtocol:          shared.RemoteProtocolHTTPS,
 				TargetProtocol:           shared.RemoteProtocolSSH,
 			},
@@ -165,9 +174,9 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 		{
 			name: "assume_yes_updates_without_prompt",
 			options: protocol.Options{
-				RepositoryPath:           protocolTestRepositoryPath,
-				OriginOwnerRepository:    protocolTestOriginOwnerRepo,
-				CanonicalOwnerRepository: protocolTestCanonicalOwnerRepo,
+				RepositoryPath:           repositoryPath,
+				OriginOwnerRepository:    cloneOwnerRepository(originOwnerRepository),
+				CanonicalOwnerRepository: cloneOwnerRepository(canonicalOwnerRepository),
 				CurrentProtocol:          shared.RemoteProtocolHTTPS,
 				TargetProtocol:           shared.RemoteProtocolSSH,
 				AssumeYes:                true,
@@ -204,14 +213,27 @@ func TestExecutorPromptsAdvertiseApplyAll(testInstance *testing.T) {
 	outputBuffer := &bytes.Buffer{}
 	errorBuffer := &bytes.Buffer{}
 	dependencies := protocol.Dependencies{GitManager: gitManager, Prompter: commandPrompter, Output: outputBuffer, Errors: errorBuffer}
+	repositoryPath, repositoryPathError := shared.NewRepositoryPath(protocolTestRepositoryPath)
+	require.NoError(testInstance, repositoryPathError)
+
+	originOwnerRepository, originOwnerRepositoryError := shared.NewOwnerRepository(protocolTestOriginOwnerRepo)
+	require.NoError(testInstance, originOwnerRepositoryError)
+
+	canonicalOwnerRepository, canonicalOwnerRepositoryError := shared.NewOwnerRepository(protocolTestCanonicalOwnerRepo)
+	require.NoError(testInstance, canonicalOwnerRepositoryError)
 	options := protocol.Options{
-		RepositoryPath:           protocolTestRepositoryPath,
-		OriginOwnerRepository:    protocolTestOriginOwnerRepo,
-		CanonicalOwnerRepository: protocolTestCanonicalOwnerRepo,
+		RepositoryPath:           repositoryPath,
+		OriginOwnerRepository:    cloneOwnerRepository(originOwnerRepository),
+		CanonicalOwnerRepository: cloneOwnerRepository(canonicalOwnerRepository),
 		CurrentProtocol:          shared.RemoteProtocolHTTPS,
 		TargetProtocol:           shared.RemoteProtocolSSH,
 	}
 	executor := protocol.NewExecutor(dependencies)
 	executor.Execute(context.Background(), options)
 	require.Equal(testInstance, []string{fmt.Sprintf("Convert 'origin' in '%s' (%s → %s)? [a/N/y] ", protocolTestRepositoryPath, shared.RemoteProtocolHTTPS, shared.RemoteProtocolSSH)}, commandPrompter.recordedPrompts)
+}
+
+func cloneOwnerRepository(value shared.OwnerRepository) *shared.OwnerRepository {
+	clone := value
+	return &clone
 }

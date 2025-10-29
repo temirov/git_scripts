@@ -31,10 +31,8 @@ If aa repository doesnt have a remote, there is nothing to fetch, but we can sti
   - Resolution: `ARCHITECTURE.md` now documents the current Cobra command flow, workflow step registry, and per-package responsibilities so the guide mirrors the Go CLI.
 - [x] [GX-402] Review @POLICY.md and verify what code areas need improvements and refactoring. Prepare a detailed plan of refactoring. Check for bugs, missing tests, poor coding practices, uplication and slop. Ensure strong encapsulation and following the principles og @AGENTS.md and policies of @POLICY.md
   - Resolution: Authored `docs/policy_refactor_plan.md` detailing domain-model introductions, error strategy, shared helper cleanup, and new test coverage aligned with the confident-programming policy.
-- [ ] [GX-403] Introduce domain types for repository metadata and enforce edge validation
-  - Add smart constructors for repository paths, owner/repository slugs, remote URLs, remote names, branch names, and protocols under `internal/repos/domain` (or `shared`), rejecting invalid input with sentinel errors.
-  - Replace raw string fields across `internal/repos` option structs and `internal/workflow` task definitions with the new domain types.
-  - Update CLI builders (`cmd/cli/repos/*`, `cmd/cli/workflow/*`) to validate inputs once and construct domain values before invoking services.
+- [x] [GX-403] Introduce domain types for repository metadata and enforce edge validation
+  - Resolution: Added smart constructors in `internal/repos/shared` for repository paths, owners, repositories, remotes, branches, and protocols, refactored repos/workflow options to require these types, updated CLI/workflow edges to construct them once, and expanded tests to cover the new constructors.
 - [ ] [GX-404] Establish contextual error strategy for repository executors
   - Define typed sentinel errors (for example, `ErrUnknownProtocol`, `ErrCanonicalOwnerMissing`) with helpers that wrap them using operation + subject + stable code identifiers.
   - Refactor `internal/repos/remotes`, `internal/repos/protocol`, `internal/repos/rename`, and `internal/repos/history` executors to return contextual errors instead of printing failure strings, leaving user messaging to CLI/reporters.

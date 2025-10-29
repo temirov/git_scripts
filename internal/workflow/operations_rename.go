@@ -45,6 +45,10 @@ func (operation *RenameOperation) Execute(executionContext context.Context, envi
 
 	for repositoryIndex := range state.Repositories {
 		repository := state.Repositories[repositoryIndex]
+		repositoryPath, repositoryPathError := shared.NewRepositoryPath(repository.Path)
+		if repositoryPathError != nil {
+			return fmt.Errorf("rename directories: %w", repositoryPathError)
+		}
 		plan := directoryPlanner.Plan(operation.IncludeOwner, repository.Inspection.FinalOwnerRepo, repository.Inspection.DesiredFolderName)
 		desiredFolderName := plan.FolderName
 		if plan.IsNoop(repository.Path, repository.Inspection.FolderName) {
@@ -60,10 +64,10 @@ func (operation *RenameOperation) Execute(executionContext context.Context, envi
 			assumeYes = environment.PromptState.IsAssumeYesEnabled()
 		}
 
-		originalPath := repository.Path
+		originalPath := repositoryPath.String()
 
 		options := rename.Options{
-			RepositoryPath:          originalPath,
+			RepositoryPath:          repositoryPath,
 			DesiredFolderName:       trimmedFolderName,
 			DryRun:                  environment.DryRun,
 			RequireCleanWorktree:    operation.RequireCleanWorktree,
