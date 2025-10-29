@@ -67,9 +67,9 @@ type Dependencies struct {
 
 // Options configures the history purge workflow.
 type Options struct {
-	RepositoryPath string
+	RepositoryPath shared.RepositoryPath
 	Paths          []string
-	RemoteName     string
+	RemoteName     *shared.RemoteName
 	Push           bool
 	Restore        bool
 	PushMissing    bool
@@ -92,17 +92,18 @@ func (executor Executor) Execute(ctx context.Context, options Options) error {
 		return errors.New("history purge requires git executor, repository manager, and filesystem")
 	}
 
-	repositoryPath := strings.TrimSpace(options.RepositoryPath)
-	if len(repositoryPath) == 0 {
-		return errors.New("repository path required")
-	}
+	repositoryPath := options.RepositoryPath.String()
 
 	paths := normalizePaths(options.Paths)
 	if len(paths) == 0 {
 		return errors.New(pathsRequiredErrorMessage)
 	}
 
-	remoteName, savedRemoteURL := executor.prepareRemote(ctx, repositoryPath, strings.TrimSpace(options.RemoteName))
+	requestedRemote := ""
+	if options.RemoteName != nil {
+		requestedRemote = options.RemoteName.String()
+	}
+	remoteName, savedRemoteURL := executor.prepareRemote(ctx, repositoryPath, requestedRemote)
 	joinedPaths := strings.Join(paths, ",")
 
 	if options.DryRun {

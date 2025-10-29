@@ -10,6 +10,7 @@ import (
 	"github.com/temirov/gix/internal/execshell"
 	"github.com/temirov/gix/internal/repos/filesystem"
 	"github.com/temirov/gix/internal/repos/history"
+	"github.com/temirov/gix/internal/repos/shared"
 )
 
 type scriptedGitExecutor struct {
@@ -88,10 +89,13 @@ func TestExecutorDryRunProducesPlan(testInstance *testing.T) {
 	})
 
 	repoPath := testInstance.TempDir()
+	repositoryPath, repositoryPathError := shared.NewRepositoryPath(repoPath)
+	require.NoError(testInstance, repositoryPathError)
+
 	options := history.Options{
-		RepositoryPath: repoPath,
+		RepositoryPath: repositoryPath,
 		Paths:          []string{"secrets.txt"},
-		RemoteName:     "",
+		RemoteName:     nil,
 		Push:           true,
 		Restore:        true,
 		PushMissing:    false,
@@ -121,10 +125,14 @@ func TestExecutorSkipsWhenPathsMissing(testInstance *testing.T) {
 	})
 
 	repoPath := testInstance.TempDir()
+	repositoryPath, repositoryPathError := shared.NewRepositoryPath(repoPath)
+	require.NoError(testInstance, repositoryPathError)
+	remoteNameValue, remoteNameError := shared.NewRemoteName("origin")
+	require.NoError(testInstance, remoteNameError)
 	options := history.Options{
-		RepositoryPath: repoPath,
+		RepositoryPath: repositoryPath,
 		Paths:          []string{"secrets.txt"},
-		RemoteName:     "origin",
+		RemoteName:     &remoteNameValue,
 		Push:           false,
 		Restore:        false,
 		PushMissing:    false,
@@ -167,10 +175,12 @@ func TestExecutorRunsFilterRepoAndPush(testInstance *testing.T) {
 	})
 
 	repoPath := testInstance.TempDir()
+	repositoryPath, repositoryPathError := shared.NewRepositoryPath(repoPath)
+	require.NoError(testInstance, repositoryPathError)
 	options := history.Options{
-		RepositoryPath: repoPath,
+		RepositoryPath: repositoryPath,
 		Paths:          []string{"missing.txt", "secrets.txt"},
-		RemoteName:     "",
+		RemoteName:     nil,
 		Push:           true,
 		Restore:        true,
 		PushMissing:    false,
@@ -210,10 +220,14 @@ func TestExecutorFailsWhenFetchingRemoteRefsFails(testInstance *testing.T) {
 	})
 
 	repoPath := testInstance.TempDir()
+	repositoryPath, repositoryPathError := shared.NewRepositoryPath(repoPath)
+	require.NoError(testInstance, repositoryPathError)
+	remoteNameValue, remoteNameError := shared.NewRemoteName("origin")
+	require.NoError(testInstance, remoteNameError)
 	options := history.Options{
-		RepositoryPath: repoPath,
+		RepositoryPath: repositoryPath,
 		Paths:          []string{"secrets.txt"},
-		RemoteName:     "origin",
+		RemoteName:     &remoteNameValue,
 		Push:           false,
 		Restore:        false,
 		PushMissing:    false,

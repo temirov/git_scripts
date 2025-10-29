@@ -156,6 +156,8 @@ const (
 )
 
 func TestExecutorBehaviors(testInstance *testing.T) {
+	legacyPath := mustRepositoryPath(testInstance, renameTestLegacyFolderPath)
+	projectPath := mustRepositoryPath(testInstance, renameTestProjectFolderPath)
 	testCases := []struct {
 		name                       string
 		options                    rename.Options
@@ -170,7 +172,7 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 		{
 			name: "dry_run_plan_ready",
 			options: rename.Options{
-				RepositoryPath:       renameTestLegacyFolderPath,
+				RepositoryPath:       legacyPath,
 				DesiredFolderName:    renameTestDesiredFolderName,
 				DryRun:               true,
 				RequireCleanWorktree: true,
@@ -189,7 +191,7 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 		{
 			name: "dry_run_missing_parent_without_creation",
 			options: rename.Options{
-				RepositoryPath:          renameTestLegacyFolderPath,
+				RepositoryPath:          legacyPath,
 				DesiredFolderName:       renameTestOwnerDesiredFolderName,
 				DryRun:                  true,
 				RequireCleanWorktree:    true,
@@ -208,7 +210,7 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 		{
 			name: "dry_run_missing_parent_with_creation",
 			options: rename.Options{
-				RepositoryPath:          renameTestLegacyFolderPath,
+				RepositoryPath:          legacyPath,
 				DesiredFolderName:       renameTestOwnerDesiredFolderName,
 				DryRun:                  true,
 				RequireCleanWorktree:    true,
@@ -227,7 +229,7 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 		{
 			name: "prompter_declines",
 			options: rename.Options{
-				RepositoryPath:    renameTestProjectFolderPath,
+				RepositoryPath:    projectPath,
 				DesiredFolderName: renameTestDesiredFolderName,
 			},
 			fileSystem: &stubFileSystem{
@@ -246,7 +248,7 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 		{
 			name: "prompter_accepts_once",
 			options: rename.Options{
-				RepositoryPath:    renameTestProjectFolderPath,
+				RepositoryPath:    projectPath,
 				DesiredFolderName: renameTestDesiredFolderName,
 			},
 			fileSystem: &stubFileSystem{
@@ -264,7 +266,7 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 		{
 			name: "prompter_accepts_all",
 			options: rename.Options{
-				RepositoryPath:    renameTestProjectFolderPath,
+				RepositoryPath:    projectPath,
 				DesiredFolderName: renameTestDesiredFolderName,
 			},
 			fileSystem: &stubFileSystem{
@@ -282,7 +284,7 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 		{
 			name: "prompter_error",
 			options: rename.Options{
-				RepositoryPath:    renameTestProjectFolderPath,
+				RepositoryPath:    projectPath,
 				DesiredFolderName: renameTestDesiredFolderName,
 			},
 			fileSystem: &stubFileSystem{
@@ -300,7 +302,7 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 		{
 			name: "assume_yes_skips_prompt",
 			options: rename.Options{
-				RepositoryPath:    renameTestProjectFolderPath,
+				RepositoryPath:    projectPath,
 				DesiredFolderName: renameTestDesiredFolderName,
 				AssumeYes:         true,
 			},
@@ -318,7 +320,7 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 		{
 			name: "skip_dirty_worktree",
 			options: rename.Options{
-				RepositoryPath:       renameTestProjectFolderPath,
+				RepositoryPath:       projectPath,
 				DesiredFolderName:    renameTestDesiredFolderName,
 				RequireCleanWorktree: true,
 				AssumeYes:            true,
@@ -337,7 +339,7 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 		{
 			name: "already_normalized_skip",
 			options: rename.Options{
-				RepositoryPath:    renameTestProjectFolderPath,
+				RepositoryPath:    projectPath,
 				DesiredFolderName: filepath.Base(renameTestProjectFolderPath),
 				AssumeYes:         true,
 			},
@@ -355,7 +357,7 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 		{
 			name: "execute_missing_parent_without_creation",
 			options: rename.Options{
-				RepositoryPath:          renameTestProjectFolderPath,
+				RepositoryPath:          projectPath,
 				DesiredFolderName:       renameTestOwnerDesiredFolderName,
 				AssumeYes:               true,
 				EnsureParentDirectories: false,
@@ -374,7 +376,7 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 		{
 			name: "execute_missing_parent_with_creation",
 			options: rename.Options{
-				RepositoryPath:          renameTestProjectFolderPath,
+				RepositoryPath:          projectPath,
 				DesiredFolderName:       renameTestOwnerDesiredFolderName,
 				AssumeYes:               true,
 				EnsureParentDirectories: true,
@@ -429,7 +431,14 @@ func TestExecutorPromptsAdvertiseApplyAll(testInstance *testing.T) {
 		Output:     &bytes.Buffer{},
 		Errors:     &bytes.Buffer{},
 	}
+	projectPath := mustRepositoryPath(testInstance, renameTestProjectFolderPath)
 	renamer := rename.NewExecutor(dependencies)
-	renamer.Execute(context.Background(), rename.Options{RepositoryPath: renameTestProjectFolderPath, DesiredFolderName: renameTestDesiredFolderName})
+	renamer.Execute(context.Background(), rename.Options{RepositoryPath: projectPath, DesiredFolderName: renameTestDesiredFolderName})
 	require.Equal(testInstance, []string{fmt.Sprintf("Rename '%s' → '%s'? [a/N/y] ", renameTestProjectFolderPath, renameTestTargetFolderPath)}, commandPrompter.recordedPrompts)
+}
+
+func mustRepositoryPath(testingInstance *testing.T, path string) shared.RepositoryPath {
+	result, err := shared.NewRepositoryPath(path)
+	require.NoError(testingInstance, err)
+	return result
 }

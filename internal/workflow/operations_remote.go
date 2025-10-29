@@ -48,15 +48,61 @@ func (operation *CanonicalRemoteOperation) Execute(executionContext context.Cont
 			assumeYes = environment.PromptState.IsAssumeYesEnabled()
 		}
 
+		repositoryPath, repositoryPathError := shared.NewRepositoryPath(repository.Path)
+		if repositoryPathError != nil {
+			return fmt.Errorf("canonical remote update: %w", repositoryPathError)
+		}
+
+		var currentRemoteURL *shared.RemoteURL
+		if trimmedURL := strings.TrimSpace(repository.Inspection.OriginURL); len(trimmedURL) > 0 {
+			remoteURL, remoteURLError := shared.NewRemoteURL(trimmedURL)
+			if remoteURLError != nil {
+				return fmt.Errorf("canonical remote update: %w", remoteURLError)
+			}
+			currentRemoteURL = &remoteURL
+		}
+
+		var originOwnerRepository *shared.OwnerRepository
+		if len(originOwner) > 0 {
+			ownerRepository, ownerRepositoryError := shared.NewOwnerRepository(originOwner)
+			if ownerRepositoryError != nil {
+				return fmt.Errorf("canonical remote update: %w", ownerRepositoryError)
+			}
+			originOwnerRepository = &ownerRepository
+		}
+
+		var canonicalOwnerRepository *shared.OwnerRepository
+		if len(canonicalOwner) > 0 {
+			canonicalRepository, canonicalRepositoryError := shared.NewOwnerRepository(canonicalOwner)
+			if canonicalRepositoryError != nil {
+				return fmt.Errorf("canonical remote update: %w", canonicalRepositoryError)
+			}
+			canonicalOwnerRepository = &canonicalRepository
+		}
+
+		remoteProtocol, remoteProtocolError := shared.ParseRemoteProtocol(string(repository.Inspection.RemoteProtocol))
+		if remoteProtocolError != nil {
+			return fmt.Errorf("canonical remote update: %w", remoteProtocolError)
+		}
+
+		var ownerConstraint *shared.OwnerSlug
+		if trimmedConstraint := strings.TrimSpace(operation.OwnerConstraint); len(trimmedConstraint) > 0 {
+			constraint, constraintError := shared.NewOwnerSlug(trimmedConstraint)
+			if constraintError != nil {
+				return fmt.Errorf("canonical remote update: %w", constraintError)
+			}
+			ownerConstraint = &constraint
+		}
+
 		options := remotes.Options{
-			RepositoryPath:           repository.Path,
-			CurrentOriginURL:         repository.Inspection.OriginURL,
-			OriginOwnerRepository:    repository.Inspection.OriginOwnerRepo,
-			CanonicalOwnerRepository: repository.Inspection.CanonicalOwnerRepo,
-			RemoteProtocol:           shared.RemoteProtocol(repository.Inspection.RemoteProtocol),
+			RepositoryPath:           repositoryPath,
+			CurrentOriginURL:         currentRemoteURL,
+			OriginOwnerRepository:    originOwnerRepository,
+			CanonicalOwnerRepository: canonicalOwnerRepository,
+			RemoteProtocol:           remoteProtocol,
 			DryRun:                   environment.DryRun,
 			AssumeYes:                assumeYes,
-			OwnerConstraint:          strings.TrimSpace(operation.OwnerConstraint),
+			OwnerConstraint:          ownerConstraint,
 		}
 
 		remotes.Execute(executionContext, dependencies, options)

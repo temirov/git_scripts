@@ -29,14 +29,14 @@ const (
 
 // Options configures the remote update workflow.
 type Options struct {
-	RepositoryPath           string
-	CurrentOriginURL         string
-	OriginOwnerRepository    string
-	CanonicalOwnerRepository string
+	RepositoryPath           shared.RepositoryPath
+	CurrentOriginURL         *shared.RemoteURL
+	OriginOwnerRepository    *shared.OwnerRepository
+	CanonicalOwnerRepository *shared.OwnerRepository
 	RemoteProtocol           shared.RemoteProtocol
 	DryRun                   bool
 	AssumeYes                bool
-	OwnerConstraint          string
+	OwnerConstraint          *shared.OwnerSlug
 }
 
 // Dependencies captures collaborators required to update remotes.
@@ -58,59 +58,67 @@ func NewExecutor(dependencies Dependencies) *Executor {
 
 // Execute performs the remote update according to the provided options.
 func (executor *Executor) Execute(executionContext context.Context, options Options) {
-	trimmedOrigin := strings.TrimSpace(options.OriginOwnerRepository)
-	if len(trimmedOrigin) == 0 {
-		executor.printfOutput(skipParseMessage, options.RepositoryPath)
+	repositoryPath := options.RepositoryPath.String()
+
+	if options.OriginOwnerRepository == nil {
+		executor.printfOutput(skipParseMessage, repositoryPath)
 		return
 	}
 
-	trimmedCanonical := strings.TrimSpace(options.CanonicalOwnerRepository)
-	if len(trimmedCanonical) == 0 {
-		executor.printfOutput(skipCanonicalMessage, options.RepositoryPath)
+	if options.CanonicalOwnerRepository == nil {
+		executor.printfOutput(skipCanonicalMessage, repositoryPath)
 		return
 	}
 
-	if strings.EqualFold(trimmedOrigin, trimmedCanonical) {
-		executor.printfOutput(skipSameMessage, options.RepositoryPath)
+	originOwner := options.OriginOwnerRepository.String()
+	canonicalOwner := options.CanonicalOwnerRepository.String()
+
+	if strings.EqualFold(originOwner, canonicalOwner) {
+		executor.printfOutput(skipSameMessage, repositoryPath)
 		return
 	}
 
-	targetURL, targetError := BuildRemoteURL(options.RemoteProtocol, trimmedCanonical)
+	targetURL, targetError := BuildRemoteURL(options.RemoteProtocol, canonicalOwner)
 	if targetError != nil {
-		executor.printfOutput(skipTargetMessage, options.RepositoryPath)
+		executor.printfOutput(skipTargetMessage, repositoryPath)
 		return
+	}
+
+	currentOriginURL := ""
+	if options.CurrentOriginURL != nil {
+		currentOriginURL = options.CurrentOriginURL.String()
 	}
 
 	if options.DryRun {
-		executor.printfOutput(planMessage, options.RepositoryPath, options.CurrentOriginURL, targetURL)
+		executor.printfOutput(planMessage, repositoryPath, currentOriginURL, targetURL)
 		return
 	}
 
 	if !options.AssumeYes && executor.dependencies.Prompter != nil {
-		prompt := fmt.Sprintf(promptTemplate, options.RepositoryPath, trimmedOrigin, trimmedCanonical)
+		prompt := fmt.Sprintf(promptTemplate, repositoryPath, originOwner, canonicalOwner)
 		confirmationResult, promptError := executor.dependencies.Prompter.Confirm(prompt)
 		if promptError != nil {
-			executor.printfOutput(skipTargetMessage, options.RepositoryPath)
+			executor.printfOutput(skipTargetMessage, repositoryPath)
 			return
 		}
 		if !confirmationResult.Confirmed {
-			executor.printfOutput(declinedMessage, options.RepositoryPath)
+			executor.printfOutput(declinedMessage, repositoryPath)
 			return
 		}
 	}
 
 	if executor.dependencies.GitManager == nil {
-		executor.printfOutput(failureMessage, options.RepositoryPath)
+		executor.printfOutput(failureMessage, repositoryPath)
 		return
 	}
 
-	updateError := executor.dependencies.GitManager.SetRemoteURL(executionContext, options.RepositoryPath, shared.OriginRemoteNameConstant, targetURL)
+	updateError := executor.dependencies.GitManager.SetRemoteURL(executionContext, repositoryPath, shared.OriginRemoteNameConstant, targetURL)
 	if updateError != nil {
-		executor.printfOutput(failureMessage, options.RepositoryPath)
+		executor.printfOutput(failureMessage, repositoryPath)
 		return
 	}
 
-	executor.printfOutput(successMessage, options.RepositoryPath, targetURL)
+	executor.printfOutput(successMessage, repositoryPath, targetURL)
 }
 
 // Execute performs the remote update workflow using transient executor state.

@@ -69,6 +69,18 @@ const (
 )
 
 func TestExecutorBehaviors(testInstance *testing.T) {
+	repositoryPath, repositoryPathError := shared.NewRepositoryPath(remotesTestRepositoryPath)
+	require.NoError(testInstance, repositoryPathError)
+
+	currentOriginURL, currentOriginURLError := shared.NewRemoteURL(remotesTestCurrentOriginURL)
+	require.NoError(testInstance, currentOriginURLError)
+
+	originOwnerRepository, originOwnerRepositoryError := shared.NewOwnerRepository(remotesTestOriginOwnerRepository)
+	require.NoError(testInstance, originOwnerRepositoryError)
+
+	canonicalOwnerRepository, canonicalOwnerRepositoryError := shared.NewOwnerRepository(remotesTestCanonicalOwnerRepo)
+	require.NoError(testInstance, canonicalOwnerRepositoryError)
+
 	testCases := []struct {
 		name            string
 		options         remotes.Options
@@ -80,9 +92,9 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 		{
 			name: "skip_missing_origin",
 			options: remotes.Options{
-				RepositoryPath:           remotesTestRepositoryPath,
-				OriginOwnerRepository:    "",
-				CanonicalOwnerRepository: remotesTestCanonicalOwnerRepo,
+				RepositoryPath:           repositoryPath,
+				OriginOwnerRepository:    nil,
+				CanonicalOwnerRepository: cloneOwnerRepository(canonicalOwnerRepository),
 				RemoteProtocol:           shared.RemoteProtocolHTTPS,
 			},
 			gitManager:      &stubGitManager{},
@@ -92,9 +104,9 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 		{
 			name: "skip_canonical_missing",
 			options: remotes.Options{
-				RepositoryPath:           remotesTestRepositoryPath,
-				OriginOwnerRepository:    remotesTestOriginOwnerRepository,
-				CanonicalOwnerRepository: "",
+				RepositoryPath:           repositoryPath,
+				OriginOwnerRepository:    cloneOwnerRepository(originOwnerRepository),
+				CanonicalOwnerRepository: nil,
 				RemoteProtocol:           shared.RemoteProtocolHTTPS,
 			},
 			gitManager:      &stubGitManager{},
@@ -104,10 +116,10 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 		{
 			name: "dry_run_plan",
 			options: remotes.Options{
-				RepositoryPath:           remotesTestRepositoryPath,
-				CurrentOriginURL:         remotesTestCurrentOriginURL,
-				OriginOwnerRepository:    remotesTestOriginOwnerRepository,
-				CanonicalOwnerRepository: remotesTestCanonicalOwnerRepo,
+				RepositoryPath:           repositoryPath,
+				CurrentOriginURL:         cloneRemoteURL(currentOriginURL),
+				OriginOwnerRepository:    cloneOwnerRepository(originOwnerRepository),
+				CanonicalOwnerRepository: cloneOwnerRepository(canonicalOwnerRepository),
 				RemoteProtocol:           shared.RemoteProtocolHTTPS,
 				DryRun:                   true,
 			},
@@ -118,10 +130,10 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 		{
 			name: "prompter_declines",
 			options: remotes.Options{
-				RepositoryPath:           remotesTestRepositoryPath,
-				CurrentOriginURL:         remotesTestCurrentOriginURL,
-				OriginOwnerRepository:    remotesTestOriginOwnerRepository,
-				CanonicalOwnerRepository: remotesTestCanonicalOwnerRepo,
+				RepositoryPath:           repositoryPath,
+				CurrentOriginURL:         cloneRemoteURL(currentOriginURL),
+				OriginOwnerRepository:    cloneOwnerRepository(originOwnerRepository),
+				CanonicalOwnerRepository: cloneOwnerRepository(canonicalOwnerRepository),
 				RemoteProtocol:           shared.RemoteProtocolHTTPS,
 			},
 			gitManager:      &stubGitManager{},
@@ -132,10 +144,10 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 		{
 			name: "prompter_accepts_once",
 			options: remotes.Options{
-				RepositoryPath:           remotesTestRepositoryPath,
-				CurrentOriginURL:         remotesTestCurrentOriginURL,
-				OriginOwnerRepository:    remotesTestOriginOwnerRepository,
-				CanonicalOwnerRepository: remotesTestCanonicalOwnerRepo,
+				RepositoryPath:           repositoryPath,
+				CurrentOriginURL:         cloneRemoteURL(currentOriginURL),
+				OriginOwnerRepository:    cloneOwnerRepository(originOwnerRepository),
+				CanonicalOwnerRepository: cloneOwnerRepository(canonicalOwnerRepository),
 				RemoteProtocol:           shared.RemoteProtocolHTTPS,
 			},
 			gitManager:      &stubGitManager{},
@@ -146,10 +158,10 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 		{
 			name: "prompter_accepts_all",
 			options: remotes.Options{
-				RepositoryPath:           remotesTestRepositoryPath,
-				CurrentOriginURL:         remotesTestCurrentOriginURL,
-				OriginOwnerRepository:    remotesTestOriginOwnerRepository,
-				CanonicalOwnerRepository: remotesTestCanonicalOwnerRepo,
+				RepositoryPath:           repositoryPath,
+				CurrentOriginURL:         cloneRemoteURL(currentOriginURL),
+				OriginOwnerRepository:    cloneOwnerRepository(originOwnerRepository),
+				CanonicalOwnerRepository: cloneOwnerRepository(canonicalOwnerRepository),
 				RemoteProtocol:           shared.RemoteProtocolHTTPS,
 			},
 			gitManager:      &stubGitManager{},
@@ -160,10 +172,10 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 		{
 			name: "prompter_error",
 			options: remotes.Options{
-				RepositoryPath:           remotesTestRepositoryPath,
-				CurrentOriginURL:         remotesTestCurrentOriginURL,
-				OriginOwnerRepository:    remotesTestOriginOwnerRepository,
-				CanonicalOwnerRepository: remotesTestCanonicalOwnerRepo,
+				RepositoryPath:           repositoryPath,
+				CurrentOriginURL:         cloneRemoteURL(currentOriginURL),
+				OriginOwnerRepository:    cloneOwnerRepository(originOwnerRepository),
+				CanonicalOwnerRepository: cloneOwnerRepository(canonicalOwnerRepository),
 				RemoteProtocol:           shared.RemoteProtocolHTTPS,
 			},
 			gitManager:      &stubGitManager{},
@@ -174,10 +186,10 @@ func TestExecutorBehaviors(testInstance *testing.T) {
 		{
 			name: "assume_yes_updates_without_prompt",
 			options: remotes.Options{
-				RepositoryPath:           remotesTestRepositoryPath,
-				CurrentOriginURL:         remotesTestCurrentOriginURL,
-				OriginOwnerRepository:    remotesTestOriginOwnerRepository,
-				CanonicalOwnerRepository: remotesTestCanonicalOwnerRepo,
+				RepositoryPath:           repositoryPath,
+				CurrentOriginURL:         cloneRemoteURL(currentOriginURL),
+				OriginOwnerRepository:    cloneOwnerRepository(originOwnerRepository),
+				CanonicalOwnerRepository: cloneOwnerRepository(canonicalOwnerRepository),
 				RemoteProtocol:           shared.RemoteProtocolHTTPS,
 				AssumeYes:                true,
 			},
@@ -208,14 +220,35 @@ func TestExecutorPromptsAdvertiseApplyAll(testInstance *testing.T) {
 	gitManager := &stubGitManager{}
 	outputBuffer := &bytes.Buffer{}
 	dependencies := remotes.Dependencies{GitManager: gitManager, Prompter: commandPrompter, Output: outputBuffer}
+	repositoryPath, repositoryPathError := shared.NewRepositoryPath(remotesTestRepositoryPath)
+	require.NoError(testInstance, repositoryPathError)
+
+	currentOriginURL, currentOriginURLError := shared.NewRemoteURL(remotesTestCurrentOriginURL)
+	require.NoError(testInstance, currentOriginURLError)
+
+	originOwnerRepository, originOwnerRepositoryError := shared.NewOwnerRepository(remotesTestOriginOwnerRepository)
+	require.NoError(testInstance, originOwnerRepositoryError)
+
+	canonicalOwnerRepository, canonicalOwnerRepositoryError := shared.NewOwnerRepository(remotesTestCanonicalOwnerRepo)
+	require.NoError(testInstance, canonicalOwnerRepositoryError)
 	options := remotes.Options{
-		RepositoryPath:           remotesTestRepositoryPath,
-		CurrentOriginURL:         remotesTestCurrentOriginURL,
-		OriginOwnerRepository:    remotesTestOriginOwnerRepository,
-		CanonicalOwnerRepository: remotesTestCanonicalOwnerRepo,
+		RepositoryPath:           repositoryPath,
+		CurrentOriginURL:         cloneRemoteURL(currentOriginURL),
+		OriginOwnerRepository:    cloneOwnerRepository(originOwnerRepository),
+		CanonicalOwnerRepository: cloneOwnerRepository(canonicalOwnerRepository),
 		RemoteProtocol:           shared.RemoteProtocolHTTPS,
 	}
 	executor := remotes.NewExecutor(dependencies)
 	executor.Execute(context.Background(), options)
 	require.Equal(testInstance, []string{fmt.Sprintf("Update 'origin' in '%s' to canonical (%s → %s)? [a/N/y] ", remotesTestRepositoryPath, remotesTestOriginOwnerRepository, remotesTestCanonicalOwnerRepo)}, commandPrompter.recordedPrompts)
+}
+
+func cloneRemoteURL(value shared.RemoteURL) *shared.RemoteURL {
+	clone := value
+	return &clone
+}
+
+func cloneOwnerRepository(value shared.OwnerRepository) *shared.OwnerRepository {
+	clone := value
+	return &clone
 }

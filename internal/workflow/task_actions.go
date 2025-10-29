@@ -444,6 +444,20 @@ func handleHistoryPurgeAction(ctx context.Context, environment *Environment, rep
 		pushMissing = value
 	}
 
+	repositoryPath, repositoryPathError := shared.NewRepositoryPath(repository.Path)
+	if repositoryPathError != nil {
+		return fmt.Errorf("history purge action: %w", repositoryPathError)
+	}
+
+	var remoteNameValue *shared.RemoteName
+	if trimmedRemote := strings.TrimSpace(remoteName); len(trimmedRemote) > 0 {
+		parsedRemoteName, remoteNameError := shared.NewRemoteName(trimmedRemote)
+		if remoteNameError != nil {
+			return fmt.Errorf("history purge action: %w", remoteNameError)
+		}
+		remoteNameValue = &parsedRemoteName
+	}
+
 	executor := history.NewExecutor(history.Dependencies{
 		GitExecutor:       environment.GitExecutor,
 		RepositoryManager: environment.RepositoryManager,
@@ -452,9 +466,9 @@ func handleHistoryPurgeAction(ctx context.Context, environment *Environment, rep
 	})
 
 	options := history.Options{
-		RepositoryPath: repository.Path,
+		RepositoryPath: repositoryPath,
 		Paths:          paths,
-		RemoteName:     remoteName,
+		RemoteName:     remoteNameValue,
 		Push:           pushEnabled,
 		Restore:        restoreEnabled,
 		PushMissing:    pushMissing,

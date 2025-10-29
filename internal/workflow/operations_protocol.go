@@ -3,6 +3,7 @@ package workflow
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	conversion "github.com/temirov/gix/internal/repos/protocol"
 	"github.com/temirov/gix/internal/repos/shared"
@@ -38,7 +39,13 @@ func (operation *ProtocolConversionOperation) Execute(executionContext context.C
 
 	for repositoryIndex := range state.Repositories {
 		repository := state.Repositories[repositoryIndex]
-		if shared.RemoteProtocol(repository.Inspection.RemoteProtocol) != operation.FromProtocol {
+
+		actualProtocol, actualProtocolError := shared.ParseRemoteProtocol(string(repository.Inspection.RemoteProtocol))
+		if actualProtocolError != nil {
+			return fmt.Errorf("protocol conversion: %w", actualProtocolError)
+		}
+
+		if actualProtocol != operation.FromProtocol {
 			continue
 		}
 
@@ -47,10 +54,33 @@ func (operation *ProtocolConversionOperation) Execute(executionContext context.C
 			assumeYes = environment.PromptState.IsAssumeYesEnabled()
 		}
 
+		repositoryPath, repositoryPathError := shared.NewRepositoryPath(repository.Path)
+		if repositoryPathError != nil {
+			return fmt.Errorf("protocol conversion: %w", repositoryPathError)
+		}
+
+		var originOwnerRepository *shared.OwnerRepository
+		if trimmed := strings.TrimSpace(repository.Inspection.OriginOwnerRepo); len(trimmed) > 0 {
+			ownerRepository, ownerRepositoryError := shared.NewOwnerRepository(trimmed)
+			if ownerRepositoryError != nil {
+				return fmt.Errorf("protocol conversion: %w", ownerRepositoryError)
+			}
+			originOwnerRepository = &ownerRepository
+		}
+
+		var canonicalOwnerRepository *shared.OwnerRepository
+		if trimmed := strings.TrimSpace(repository.Inspection.CanonicalOwnerRepo); len(trimmed) > 0 {
+			canonicalRepository, canonicalRepositoryError := shared.NewOwnerRepository(trimmed)
+			if canonicalRepositoryError != nil {
+				return fmt.Errorf("protocol conversion: %w", canonicalRepositoryError)
+			}
+			canonicalOwnerRepository = &canonicalRepository
+		}
+
 		options := conversion.Options{
-			RepositoryPath:           repository.Path,
-			OriginOwnerRepository:    repository.Inspection.OriginOwnerRepo,
-			CanonicalOwnerRepository: repository.Inspection.CanonicalOwnerRepo,
+			RepositoryPath:           repositoryPath,
+			OriginOwnerRepository:    originOwnerRepository,
+			CanonicalOwnerRepository: canonicalOwnerRepository,
 			CurrentProtocol:          operation.FromProtocol,
 			TargetProtocol:           operation.ToProtocol,
 			DryRun:                   environment.DryRun,

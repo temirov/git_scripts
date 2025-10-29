@@ -34,7 +34,7 @@ const (
 
 // Options configures a rename execution.
 type Options struct {
-	RepositoryPath          string
+	RepositoryPath          shared.RepositoryPath
 	DesiredFolderName       string
 	DryRun                  bool
 	RequireCleanWorktree    bool
@@ -73,14 +73,16 @@ func (executor *Executor) Execute(executionContext context.Context, options Opti
 		return
 	}
 
+	repositoryPath := options.RepositoryPath.String()
+
 	if executor.dependencies.FileSystem == nil {
-		executor.printfError(failureMessage, options.RepositoryPath, desiredName)
+		executor.printfError(failureMessage, repositoryPath, desiredName)
 		return
 	}
 
-	oldAbsolutePath, absError := executor.dependencies.FileSystem.Abs(options.RepositoryPath)
+	oldAbsolutePath, absError := executor.dependencies.FileSystem.Abs(repositoryPath)
 	if absError != nil {
-		executor.printfError(failureMessage, options.RepositoryPath, desiredName)
+		executor.printfError(failureMessage, repositoryPath, desiredName)
 		return
 	}
 
