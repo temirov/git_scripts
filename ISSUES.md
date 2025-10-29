@@ -28,7 +28,8 @@ If a repository doesnt have a remote, there is nothing to fetch, but we can stil
 
 - [x] [GX-300] `gix b default` aborts for repositories without remotes; it treats the `git fetch` failure as fatal instead of warning and skipping the fetch, so the branch switch never executes.
   - Resolution: The branch change service now enumerates remotes once, skips fetch/pull when none exist, and creates branches without tracking nonexistent remotes. Added regression coverage for the zero-remote case.
-- [ ] [GX-301] The message is repetitive, it's enough to say -- unable to update default branch. But it's absolutely unclear why or where it has happened. The error message shall be actionable, not informative. We must specify what folder/branch/etc we were at, and what command has failed, and why. That is an error/warning criteria for all commands.
+- [x] [GX-301] The message is repetitive, it's enough to say -- unable to update default branch. But it's absolutely unclear why or where it has happened. The error message shall be actionable, not informative. We must specify what folder/branch/etc we were at, and what command has failed, and why. That is an error/warning criteria for all commands.
+  - Resolution: Default branch update failures now raise `DefaultBranchUpdateError`, which includes repository path, identifier, source/target branches, and the GitHub CLI failure summary; the workflow operation forwards this error without extra wrapping, and new tests assert the actionable messaging.
 ```
 01:06:39 tyemirov@computercat:~/Development/Poodle $ gix --roots . b default master
 WORKFLOW-DEFAULT-SKIP: /home/tyemirov/Development/Poodle/ProductScanner already defaults to master
