@@ -19,7 +19,7 @@ The Pages may be not configured and that's ok
 14:56:43 tyemirov@computercat:~/Development/Poodle $ gix --roots . b cd master
 failed to fetch updates: git command exited with code 128
 ```
-If aa repository doesnt have a remote, there is nothing to fetch, but we can still change the default branch, methinks
+If a repository doesnt have a remote, there is nothing to fetch, but we can still change the default branch, methinks. Identify non-critical steps and ensure they produce warnings but are non-blocking. Encode this semntics into tasks and workflows.
 
 ## BugFixes (300–399)
 
