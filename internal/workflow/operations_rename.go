@@ -39,7 +39,7 @@ func (operation *RenameOperation) Execute(executionContext context.Context, envi
 		GitManager: environment.RepositoryManager,
 		Prompter:   environment.Prompter,
 		Clock:      shared.SystemClock{},
-		Output:     environment.Output,
+		Reporter:   shared.NewWriterReporter(environment.Output),
 	}
 
 	for repositoryIndex := range state.Repositories {
@@ -69,8 +69,8 @@ func (operation *RenameOperation) Execute(executionContext context.Context, envi
 			RepositoryPath:          repositoryPath,
 			DesiredFolderName:       trimmedFolderName,
 			DryRun:                  environment.DryRun,
-			RequireCleanWorktree:    operation.RequireCleanWorktree,
-			AssumeYes:               assumeYes,
+			CleanPolicy:             shared.CleanWorktreePolicyFromBool(operation.RequireCleanWorktree),
+			ConfirmationPolicy:      shared.ConfirmationPolicyFromBool(assumeYes),
 			IncludeOwner:            plan.IncludeOwner,
 			EnsureParentDirectories: plan.IncludeOwner,
 		}

@@ -3,7 +3,6 @@ package workflow
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	conversion "github.com/temirov/gix/internal/repos/protocol"
 	"github.com/temirov/gix/internal/repos/shared"
@@ -33,7 +32,7 @@ func (operation *ProtocolConversionOperation) Execute(executionContext context.C
 	dependencies := conversion.Dependencies{
 		GitManager: environment.RepositoryManager,
 		Prompter:   environment.Prompter,
-		Output:     environment.Output,
+		Reporter:   shared.NewWriterReporter(environment.Output),
 	}
 
 	for repositoryIndex := range state.Repositories {
@@ -58,22 +57,14 @@ func (operation *ProtocolConversionOperation) Execute(executionContext context.C
 			return fmt.Errorf("protocol conversion: %w", repositoryPathError)
 		}
 
-		var originOwnerRepository *shared.OwnerRepository
-		if trimmed := strings.TrimSpace(repository.Inspection.OriginOwnerRepo); len(trimmed) > 0 {
-			ownerRepository, ownerRepositoryError := shared.NewOwnerRepository(trimmed)
-			if ownerRepositoryError != nil {
-				return fmt.Errorf("protocol conversion: %w", ownerRepositoryError)
-			}
-			originOwnerRepository = &ownerRepository
+		originOwnerRepository, originOwnerError := shared.ParseOwnerRepositoryOptional(repository.Inspection.OriginOwnerRepo)
+		if originOwnerError != nil {
+			return fmt.Errorf("protocol conversion: %w", originOwnerError)
 		}
 
-		var canonicalOwnerRepository *shared.OwnerRepository
-		if trimmed := strings.TrimSpace(repository.Inspection.CanonicalOwnerRepo); len(trimmed) > 0 {
-			canonicalRepository, canonicalRepositoryError := shared.NewOwnerRepository(trimmed)
-			if canonicalRepositoryError != nil {
-				return fmt.Errorf("protocol conversion: %w", canonicalRepositoryError)
-			}
-			canonicalOwnerRepository = &canonicalRepository
+		canonicalOwnerRepository, canonicalOwnerError := shared.ParseOwnerRepositoryOptional(repository.Inspection.CanonicalOwnerRepo)
+		if canonicalOwnerError != nil {
+			return fmt.Errorf("protocol conversion: %w", canonicalOwnerError)
 		}
 
 		options := conversion.Options{
@@ -83,7 +74,7 @@ func (operation *ProtocolConversionOperation) Execute(executionContext context.C
 			CurrentProtocol:          operation.FromProtocol,
 			TargetProtocol:           operation.ToProtocol,
 			DryRun:                   environment.DryRun,
-			AssumeYes:                assumeYes,
+			ConfirmationPolicy:       shared.ConfirmationPolicyFromBool(assumeYes),
 		}
 
 		if executionError := conversion.Execute(executionContext, dependencies, options); executionError != nil {

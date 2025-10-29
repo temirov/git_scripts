@@ -3,7 +3,6 @@ package remotes
 import (
 	"context"
 	"fmt"
-	"io"
 	"strings"
 
 	repoerrors "github.com/temirov/gix/internal/repos/errors"
@@ -36,7 +35,7 @@ type Options struct {
 	CanonicalOwnerRepository *shared.OwnerRepository
 	RemoteProtocol           shared.RemoteProtocol
 	DryRun                   bool
-	AssumeYes                bool
+	ConfirmationPolicy       shared.ConfirmationPolicy
 	OwnerConstraint          *shared.OwnerSlug
 }
 
@@ -44,7 +43,7 @@ type Options struct {
 type Dependencies struct {
 	GitManager shared.GitRepositoryManager
 	Prompter   shared.ConfirmationPrompter
-	Output     io.Writer
+	Reporter   shared.Reporter
 }
 
 // Executor orchestrates canonical remote updates.
@@ -62,6 +61,7 @@ func (executor *Executor) Execute(executionContext context.Context, options Opti
 	repositoryPath := options.RepositoryPath.String()
 
 	if options.OriginOwnerRepository == nil {
+		executor.printfOutput(skipParseMessage, repositoryPath)
 		return repoerrors.WrapMessage(
 			repoerrors.OperationCanonicalRemote,
 			repositoryPath,
@@ -71,6 +71,7 @@ func (executor *Executor) Execute(executionContext context.Context, options Opti
 	}
 
 	if options.CanonicalOwnerRepository == nil {
+		executor.printfOutput(skipCanonicalMessage, repositoryPath)
 		return repoerrors.WrapMessage(
 			repoerrors.OperationCanonicalRemote,
 			repositoryPath,
@@ -89,6 +90,7 @@ func (executor *Executor) Execute(executionContext context.Context, options Opti
 
 	targetURL, targetError := BuildRemoteURL(options.RemoteProtocol, canonicalOwner)
 	if targetError != nil {
+		executor.printfOutput(skipTargetMessage, repositoryPath)
 		return repoerrors.WrapMessage(
 			repoerrors.OperationCanonicalRemote,
 			repositoryPath,
@@ -107,10 +109,11 @@ func (executor *Executor) Execute(executionContext context.Context, options Opti
 		return nil
 	}
 
-	if !options.AssumeYes && executor.dependencies.Prompter != nil {
+	if options.ConfirmationPolicy.ShouldPrompt() && executor.dependencies.Prompter != nil {
 		prompt := fmt.Sprintf(promptTemplate, repositoryPath, originOwner, canonicalOwner)
 		confirmationResult, promptError := executor.dependencies.Prompter.Confirm(prompt)
 		if promptError != nil {
+			executor.printfOutput(skipTargetMessage, repositoryPath)
 			return repoerrors.WrapMessage(
 				repoerrors.OperationCanonicalRemote,
 				repositoryPath,
@@ -125,6 +128,7 @@ func (executor *Executor) Execute(executionContext context.Context, options Opti
 	}
 
 	if executor.dependencies.GitManager == nil {
+		executor.printfOutput(failureMessage, repositoryPath)
 		return repoerrors.WrapMessage(
 			repoerrors.OperationCanonicalRemote,
 			repositoryPath,
@@ -135,6 +139,7 @@ func (executor *Executor) Execute(executionContext context.Context, options Opti
 
 	updateError := executor.dependencies.GitManager.SetRemoteURL(executionContext, repositoryPath, shared.OriginRemoteNameConstant, targetURL)
 	if updateError != nil {
+		executor.printfOutput(failureMessage, repositoryPath)
 		return repoerrors.WrapMessage(
 			repoerrors.OperationCanonicalRemote,
 			repositoryPath,
@@ -153,10 +158,10 @@ func Execute(executionContext context.Context, dependencies Dependencies, option
 }
 
 func (executor *Executor) printfOutput(format string, arguments ...any) {
-	if executor.dependencies.Output == nil {
+	if executor.dependencies.Reporter == nil {
 		return
 	}
-	fmt.Fprintf(executor.dependencies.Output, format, arguments...)
+	executor.dependencies.Reporter.Printf(format, arguments...)
 }
 
 func canonicalOwner(ownerRepository string) string {

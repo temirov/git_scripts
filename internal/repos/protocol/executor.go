@@ -3,7 +3,6 @@ package protocol
 import (
 	"context"
 	"fmt"
-	"io"
 	"strings"
 
 	repoerrors "github.com/temirov/gix/internal/repos/errors"
@@ -29,14 +28,14 @@ type Options struct {
 	CurrentProtocol          shared.RemoteProtocol
 	TargetProtocol           shared.RemoteProtocol
 	DryRun                   bool
-	AssumeYes                bool
+	ConfirmationPolicy       shared.ConfirmationPolicy
 }
 
 // Dependencies supplies collaborators required for protocol conversion.
 type Dependencies struct {
 	GitManager shared.GitRepositoryManager
 	Prompter   shared.ConfirmationPrompter
-	Output     io.Writer
+	Reporter   shared.Reporter
 }
 
 // Executor orchestrates protocol conversions for repository remotes.
@@ -110,7 +109,7 @@ func (executor *Executor) Execute(executionContext context.Context, options Opti
 		return nil
 	}
 
-	if !options.AssumeYes && executor.dependencies.Prompter != nil {
+	if options.ConfirmationPolicy.ShouldPrompt() && executor.dependencies.Prompter != nil {
 		prompt := fmt.Sprintf(promptTemplate, repositoryPath, currentProtocol, options.TargetProtocol)
 		confirmationResult, promptError := executor.dependencies.Prompter.Confirm(prompt)
 		if promptError != nil {
@@ -147,10 +146,10 @@ func Execute(executionContext context.Context, dependencies Dependencies, option
 }
 
 func (executor *Executor) printfOutput(format string, arguments ...any) {
-	if executor.dependencies.Output == nil {
+	if executor.dependencies.Reporter == nil {
 		return
 	}
-	fmt.Fprintf(executor.dependencies.Output, format, arguments...)
+	executor.dependencies.Reporter.Printf(format, arguments...)
 }
 
 func detectProtocol(remoteURL string) shared.RemoteProtocol {

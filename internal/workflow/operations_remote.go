@@ -3,7 +3,6 @@ package workflow
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/temirov/gix/internal/repos/remotes"
 	"github.com/temirov/gix/internal/repos/shared"
@@ -32,17 +31,22 @@ func (operation *CanonicalRemoteOperation) Execute(executionContext context.Cont
 	dependencies := remotes.Dependencies{
 		GitManager: environment.RepositoryManager,
 		Prompter:   environment.Prompter,
-		Output:     environment.Output,
+		Reporter:   shared.NewWriterReporter(environment.Output),
 	}
 
 	for repositoryIndex := range state.Repositories {
 		repository := state.Repositories[repositoryIndex]
-		originOwner := strings.TrimSpace(repository.Inspection.OriginOwnerRepo)
-		canonicalOwner := strings.TrimSpace(repository.Inspection.CanonicalOwnerRepo)
-		if len(originOwner) == 0 && len(canonicalOwner) == 0 {
+		originOwnerRepository, originOwnerError := shared.ParseOwnerRepositoryOptional(repository.Inspection.OriginOwnerRepo)
+		if originOwnerError != nil {
+			return fmt.Errorf("canonical remote update: %w", originOwnerError)
+		}
+		canonicalOwnerRepository, canonicalOwnerError := shared.ParseOwnerRepositoryOptional(repository.Inspection.CanonicalOwnerRepo)
+		if canonicalOwnerError != nil {
+			return fmt.Errorf("canonical remote update: %w", canonicalOwnerError)
+		}
+		if originOwnerRepository == nil && canonicalOwnerRepository == nil {
 			continue
 		}
-
 		assumeYes := false
 		if environment.PromptState != nil {
 			assumeYes = environment.PromptState.IsAssumeYesEnabled()
@@ -53,31 +57,9 @@ func (operation *CanonicalRemoteOperation) Execute(executionContext context.Cont
 			return fmt.Errorf("canonical remote update: %w", repositoryPathError)
 		}
 
-		var currentRemoteURL *shared.RemoteURL
-		if trimmedURL := strings.TrimSpace(repository.Inspection.OriginURL); len(trimmedURL) > 0 {
-			remoteURL, remoteURLError := shared.NewRemoteURL(trimmedURL)
-			if remoteURLError != nil {
-				return fmt.Errorf("canonical remote update: %w", remoteURLError)
-			}
-			currentRemoteURL = &remoteURL
-		}
-
-		var originOwnerRepository *shared.OwnerRepository
-		if len(originOwner) > 0 {
-			ownerRepository, ownerRepositoryError := shared.NewOwnerRepository(originOwner)
-			if ownerRepositoryError != nil {
-				return fmt.Errorf("canonical remote update: %w", ownerRepositoryError)
-			}
-			originOwnerRepository = &ownerRepository
-		}
-
-		var canonicalOwnerRepository *shared.OwnerRepository
-		if len(canonicalOwner) > 0 {
-			canonicalRepository, canonicalRepositoryError := shared.NewOwnerRepository(canonicalOwner)
-			if canonicalRepositoryError != nil {
-				return fmt.Errorf("canonical remote update: %w", canonicalRepositoryError)
-			}
-			canonicalOwnerRepository = &canonicalRepository
+		currentRemoteURL, currentRemoteURLError := shared.ParseRemoteURLOptional(repository.Inspection.OriginURL)
+		if currentRemoteURLError != nil {
+			return fmt.Errorf("canonical remote update: %w", currentRemoteURLError)
 		}
 
 		remoteProtocol, remoteProtocolError := shared.ParseRemoteProtocol(string(repository.Inspection.RemoteProtocol))
@@ -85,13 +67,9 @@ func (operation *CanonicalRemoteOperation) Execute(executionContext context.Cont
 			return fmt.Errorf("canonical remote update: %w", remoteProtocolError)
 		}
 
-		var ownerConstraint *shared.OwnerSlug
-		if trimmedConstraint := strings.TrimSpace(operation.OwnerConstraint); len(trimmedConstraint) > 0 {
-			constraint, constraintError := shared.NewOwnerSlug(trimmedConstraint)
-			if constraintError != nil {
-				return fmt.Errorf("canonical remote update: %w", constraintError)
-			}
-			ownerConstraint = &constraint
+		ownerConstraint, ownerConstraintError := shared.ParseOwnerSlugOptional(operation.OwnerConstraint)
+		if ownerConstraintError != nil {
+			return fmt.Errorf("canonical remote update: %w", ownerConstraintError)
 		}
 
 		options := remotes.Options{
@@ -101,7 +79,7 @@ func (operation *CanonicalRemoteOperation) Execute(executionContext context.Cont
 			CanonicalOwnerRepository: canonicalOwnerRepository,
 			RemoteProtocol:           remoteProtocol,
 			DryRun:                   environment.DryRun,
-			AssumeYes:                assumeYes,
+			ConfirmationPolicy:       shared.ConfirmationPolicyFromBool(assumeYes),
 			OwnerConstraint:          ownerConstraint,
 		}
 
