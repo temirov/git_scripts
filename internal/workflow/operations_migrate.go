@@ -133,6 +133,10 @@ func (operation *BranchMigrationOperation) Execute(executionContext context.Cont
 
 		result, executionError := migrationService.Execute(executionContext, options)
 		if executionError != nil {
+			var updateError migrate.DefaultBranchUpdateError
+			if errors.As(executionError, &updateError) {
+				return executionError
+			}
 			return fmt.Errorf(migrationExecutionErrorTemplateConstant, executionError)
 		}
 

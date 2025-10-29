@@ -31,13 +31,14 @@ func (stubGitCommandExecutor) ExecuteGit(context.Context, execshell.CommandDetai
 }
 
 type recordingGitHubOperations struct {
-	pagesError        error
-	listError         error
-	retargetErrors    map[int]error
-	protectionError   error
-	defaultBranchSet  bool
-	pullRequests      []githubcli.PullRequest
-	retargetedNumbers []int
+	pagesError         error
+	listError          error
+	retargetErrors     map[int]error
+	protectionError    error
+	defaultBranchError error
+	defaultBranchSet   bool
+	pullRequests       []githubcli.PullRequest
+	retargetedNumbers  []int
 }
 
 func (operations *recordingGitHubOperations) ResolveRepoMetadata(context.Context, string) (githubcli.RepositoryMetadata, error) {
@@ -73,6 +74,9 @@ func (operations *recordingGitHubOperations) UpdatePullRequestBase(_ context.Con
 }
 
 func (operations *recordingGitHubOperations) SetDefaultBranch(context.Context, string, string) error {
+	if operations.defaultBranchError != nil {
+		return operations.defaultBranchError
+	}
 	operations.defaultBranchSet = true
 	return nil
 }
@@ -208,4 +212,68 @@ func TestServiceExecuteWarnsWhenBranchProtectionFails(testInstance *testing.T) {
 	require.NoError(testInstance, executionError)
 	require.Contains(testInstance, strings.Join(result.Warnings, " "), "PROTECTION-SKIP")
 	require.False(testInstance, result.SafetyStatus.SafeToDelete)
+}
+
+func TestServiceExecuteReturnsActionableDefaultBranchError(testInstance *testing.T) {
+	testInstance.Parallel()
+
+	repositoryExecutor := stubGitCommandExecutor{}
+	repositoryManager, managerError := gitrepo.NewRepositoryManager(repositoryExecutor)
+	require.NoError(testInstance, managerError)
+
+	commandFailure := execshell.CommandFailedError{
+		Command: execshell.ShellCommand{Name: execshell.CommandGitHub},
+		Result: execshell.ExecutionResult{
+			ExitCode:      1,
+			StandardError: "GraphQL: branch not found",
+		},
+	}
+
+	defaultBranchError := githubcli.OperationError{
+		Operation: githubcli.OperationName("UpdateDefaultBranch"),
+		Cause:     commandFailure,
+	}
+
+	githubOperations := &recordingGitHubOperations{
+		defaultBranchError: defaultBranchError,
+	}
+
+	service, serviceError := NewService(ServiceDependencies{
+		Logger:            zap.NewNop(),
+		RepositoryManager: repositoryManager,
+		GitHubClient:      githubOperations,
+		GitExecutor:       stubCommandExecutor{},
+	})
+	require.NoError(testInstance, serviceError)
+
+	repositoryPath := testInstance.TempDir()
+
+	options := MigrationOptions{
+		RepositoryPath:       repositoryPath,
+		RepositoryRemoteName: "origin",
+		RepositoryIdentifier: "owner/example",
+		WorkflowsDirectory:   ".github/workflows",
+		SourceBranch:         BranchMain,
+		TargetBranch:         BranchMaster,
+		PushUpdates:          false,
+		DeleteSourceBranch:   false,
+	}
+
+	_, executionError := service.Execute(context.Background(), options)
+	require.Error(testInstance, executionError)
+
+	var updateError DefaultBranchUpdateError
+	require.ErrorAs(testInstance, executionError, &updateError)
+	require.Equal(testInstance, repositoryPath, updateError.RepositoryPath)
+	require.Equal(testInstance, options.RepositoryIdentifier, updateError.RepositoryIdentifier)
+	require.Equal(testInstance, options.SourceBranch, updateError.SourceBranch)
+	require.Equal(testInstance, options.TargetBranch, updateError.TargetBranch)
+
+	errorMessage := executionError.Error()
+	require.Contains(testInstance, errorMessage, "DEFAULT-BRANCH-UPDATE")
+	require.Contains(testInstance, errorMessage, repositoryPath)
+	require.Contains(testInstance, errorMessage, options.RepositoryIdentifier)
+	require.Contains(testInstance, errorMessage, "source=main")
+	require.Contains(testInstance, errorMessage, "target=master")
+	require.Contains(testInstance, errorMessage, "GraphQL: branch not found")
 }

@@ -15,43 +15,43 @@ import (
 )
 
 const (
-	repositoryPathFieldNameConstant            = "repository_path"
-	remoteNameFieldNameConstant                = "remote_name"
-	repositoryIdentifierFieldNameConstant      = "repository_identifier"
-	workflowsDirectoryFieldNameConstant        = "workflows_directory"
-	sourceBranchFieldNameConstant              = "source_branch"
-	targetBranchFieldNameConstant              = "target_branch"
-	gitAddCommandNameConstant                  = "add"
-	gitAllFlagConstant                         = "-A"
-	gitCommitCommandNameConstant               = "commit"
-	gitMessageFlagConstant                     = "-m"
-	gitPushCommandNameConstant                 = "push"
-	gitBranchCommandNameConstant               = "branch"
-	gitDeleteForceFlagConstant                 = "-D"
-	gitPushDeleteFlagConstant                  = "--delete"
-	workflowCommitMessageTemplateConstant      = "CI: switch workflow branch filters to %s"
-	cleanWorktreeRequiredMessageConstant       = "repository worktree must be clean before migration"
-	repositoryManagerMissingMessageConstant    = "repository manager not configured"
-	githubClientMissingMessageConstant         = "GitHub client not configured"
-	gitExecutorMissingMessageConstant          = "git executor not configured"
-	workflowRewriteErrorTemplateConstant       = "workflow rewrite failed: %w"
-	workflowStageErrorTemplateConstant         = "unable to stage workflow updates: %w"
-	workflowCommitErrorTemplateConstant        = "unable to commit workflow updates: %w"
-	workflowPushErrorTemplateConstant          = "unable to push workflow updates: %w"
-	pagesUpdateErrorTemplateConstant           = "GitHub Pages update failed: %w"
-	pagesUpdateWarningMessageConstant          = "GitHub Pages update skipped"
-	pagesUpdateWarningTemplateConstant         = "PAGES-SKIP: %s (%s)"
-	defaultBranchUpdateErrorTemplateConstant   = "unable to update default branch: %w"
-	pullRequestListErrorTemplateConstant       = "unable to list pull requests: %w"
-	pullRequestListWarningTemplateConstant     = "PR-LIST-SKIP: %s (%s)"
-	pullRequestRetargetErrorTemplateConstant   = "unable to retarget pull request #%d: %w"
-	pullRequestRetargetWarningTemplateConstant = "PR-RETARGET-SKIP: #%d (%s)"
-	branchProtectionCheckErrorTemplateConstant = "unable to determine branch protection: %w"
-	branchProtectionWarningTemplateConstant    = "PROTECTION-SKIP: %s"
-	localBranchDeleteErrorTemplateConstant     = "unable to delete local source branch: %w"
-	remoteBranchDeleteErrorTemplateConstant    = "unable to delete remote source branch: %w"
-	branchDeletionWarningTemplateConstant      = "DELETE-SKIP: %s"
-	branchDeletionSkippedMessageConstant       = "Skipping source branch deletion because safety gates blocked deletion"
+	repositoryPathFieldNameConstant                 = "repository_path"
+	remoteNameFieldNameConstant                     = "remote_name"
+	repositoryIdentifierFieldNameConstant           = "repository_identifier"
+	workflowsDirectoryFieldNameConstant             = "workflows_directory"
+	sourceBranchFieldNameConstant                   = "source_branch"
+	targetBranchFieldNameConstant                   = "target_branch"
+	gitAddCommandNameConstant                       = "add"
+	gitAllFlagConstant                              = "-A"
+	gitCommitCommandNameConstant                    = "commit"
+	gitMessageFlagConstant                          = "-m"
+	gitPushCommandNameConstant                      = "push"
+	gitBranchCommandNameConstant                    = "branch"
+	gitDeleteForceFlagConstant                      = "-D"
+	gitPushDeleteFlagConstant                       = "--delete"
+	workflowCommitMessageTemplateConstant           = "CI: switch workflow branch filters to %s"
+	cleanWorktreeRequiredMessageConstant            = "repository worktree must be clean before migration"
+	repositoryManagerMissingMessageConstant         = "repository manager not configured"
+	githubClientMissingMessageConstant              = "GitHub client not configured"
+	gitExecutorMissingMessageConstant               = "git executor not configured"
+	workflowRewriteErrorTemplateConstant            = "workflow rewrite failed: %w"
+	workflowStageErrorTemplateConstant              = "unable to stage workflow updates: %w"
+	workflowCommitErrorTemplateConstant             = "unable to commit workflow updates: %w"
+	workflowPushErrorTemplateConstant               = "unable to push workflow updates: %w"
+	pagesUpdateErrorTemplateConstant                = "GitHub Pages update failed: %w"
+	pagesUpdateWarningMessageConstant               = "GitHub Pages update skipped"
+	pagesUpdateWarningTemplateConstant              = "PAGES-SKIP: %s (%s)"
+	defaultBranchUpdateErrorMessageTemplateConstant = "DEFAULT-BRANCH-UPDATE repository=%s path=%s source=%s target=%s"
+	pullRequestListErrorTemplateConstant            = "unable to list pull requests: %w"
+	pullRequestListWarningTemplateConstant          = "PR-LIST-SKIP: %s (%s)"
+	pullRequestRetargetErrorTemplateConstant        = "unable to retarget pull request #%d: %w"
+	pullRequestRetargetWarningTemplateConstant      = "PR-RETARGET-SKIP: #%d (%s)"
+	branchProtectionCheckErrorTemplateConstant      = "unable to determine branch protection: %w"
+	branchProtectionWarningTemplateConstant         = "PROTECTION-SKIP: %s"
+	localBranchDeleteErrorTemplateConstant          = "unable to delete local source branch: %w"
+	remoteBranchDeleteErrorTemplateConstant         = "unable to delete remote source branch: %w"
+	branchDeletionWarningTemplateConstant           = "DELETE-SKIP: %s"
+	branchDeletionSkippedMessageConstant            = "Skipping source branch deletion because safety gates blocked deletion"
 )
 
 // InvalidInputError describes migration option validation failures.
@@ -100,6 +100,39 @@ type MigrationResult struct {
 	RetargetedPullRequests    []int
 	SafetyStatus              SafetyStatus
 	Warnings                  []string
+}
+
+// DefaultBranchUpdateError describes default-branch update failures with context.
+type DefaultBranchUpdateError struct {
+	RepositoryPath       string
+	RepositoryIdentifier string
+	SourceBranch         BranchName
+	TargetBranch         BranchName
+	Cause                error
+}
+
+// Error describes the contextual failure.
+func (updateError DefaultBranchUpdateError) Error() string {
+	context := fmt.Sprintf(
+		defaultBranchUpdateErrorMessageTemplateConstant,
+		updateError.RepositoryIdentifier,
+		updateError.RepositoryPath,
+		string(updateError.SourceBranch),
+		string(updateError.TargetBranch),
+	)
+	if updateError.Cause == nil {
+		return context
+	}
+	summary := summarizeCommandError(updateError.Cause)
+	if len(summary) == 0 {
+		summary = updateError.Cause.Error()
+	}
+	return fmt.Sprintf("%s: %s", context, summary)
+}
+
+// Unwrap exposes the underlying cause.
+func (updateError DefaultBranchUpdateError) Unwrap() error {
+	return updateError.Cause
 }
 
 // Service orchestrates the branch migration workflow.
@@ -222,7 +255,13 @@ func (service *Service) Execute(executionContext context.Context, options Migrat
 	}
 
 	if err := service.gitHubClient.SetDefaultBranch(executionContext, options.RepositoryIdentifier, string(options.TargetBranch)); err != nil {
-		return MigrationResult{}, fmt.Errorf(defaultBranchUpdateErrorTemplateConstant, err)
+		return MigrationResult{}, DefaultBranchUpdateError{
+			RepositoryPath:       options.RepositoryPath,
+			RepositoryIdentifier: options.RepositoryIdentifier,
+			SourceBranch:         options.SourceBranch,
+			TargetBranch:         options.TargetBranch,
+			Cause:                err,
+		}
 	}
 
 	pullRequests, listError := service.gitHubClient.ListPullRequests(executionContext, options.RepositoryIdentifier, githubcli.PullRequestListOptions{
