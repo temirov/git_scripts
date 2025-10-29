@@ -35,6 +35,12 @@ If a repository doesnt have a remote, there is nothing to fetch, but we can stil
 WORKFLOW-DEFAULT-SKIP: /home/tyemirov/Development/Poodle/ProductScanner already defaults to master
 workflow operation apply-tasks failed: default branch update failed: unable to update default branch: UpdateDefaultBranch operation failed: gh command exited with code 1
 ```
+- [ ] [GX-302] Produces non-sensical messages about failures. It's not clear what exactly has failed and what shall be the user's action item. Why would it need to create a master branch here, if it already exists ?
+```
+14:17:45 tyemirov@computercat:~/Development/loopaware [improvement/LA-201-theme-switch-footer] $ gix b cd master
+SWITCHED: /home/tyemirov/Development/loopaware -> master
+workflow operation apply-tasks failed: failed to create branch "master" from origin: git command exited with code 128
+```
 
 ## Maintenance (400–499)
 
