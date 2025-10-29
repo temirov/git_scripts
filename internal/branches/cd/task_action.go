@@ -45,7 +45,10 @@ func handleBranchChangeAction(ctx context.Context, environment *workflow.Environ
 		}
 	}
 
-	service, serviceError := NewService(ServiceDependencies{GitExecutor: environment.GitExecutor})
+	service, serviceError := NewService(ServiceDependencies{
+		GitExecutor: environment.GitExecutor,
+		Logger:      environment.Logger,
+	})
 	if serviceError != nil {
 		return serviceError
 	}
@@ -59,6 +62,12 @@ func handleBranchChangeAction(ctx context.Context, environment *workflow.Environ
 	})
 	if changeError != nil {
 		return changeError
+	}
+
+	if environment.Output != nil {
+		for _, warning := range result.Warnings {
+			fmt.Fprintln(environment.Output, warning)
+		}
 	}
 
 	if environment.Output != nil {

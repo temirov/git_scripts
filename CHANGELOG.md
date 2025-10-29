@@ -8,6 +8,7 @@
 - Consolidated repository helper utilities (optional owner parsing, confirmation policies, shared reporter) and removed duplicated string normalization across protocol, remotes, and rename workflows.
 - `branch default` now accepts the target branch as a positional argument (`gix b default master`), retaining configuration fallbacks while removing the legacy `--to` flag.
 - GitHub Pages configuration failures encountered during `branch default` are downgraded to warnings so branch promotion can proceed when Pages is not configured.
+- `branch cd` now reports network issues as `FETCH-SKIP`/`PULL-SKIP` warnings instead of aborting when remotes are missing or offline.
 
 ### Bug Fixes 🐛
 - Prevented `branch cd` from aborting when repositories lack remotes by skipping fetch/pull operations and creating untracked branches when necessary.

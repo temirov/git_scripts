@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 
+	"go.uber.org/zap"
+
 	"github.com/temirov/gix/internal/execshell"
 	"github.com/temirov/gix/internal/repos/shared"
 )
@@ -20,6 +22,12 @@ const (
 	gitCreateBranchFailureTemplateConstant   = "failed to create branch %q from %s: %w"
 	gitPullFailureTemplateConstant           = "failed to pull latest changes: %w"
 	defaultRemoteNameConstant                = shared.OriginRemoteNameConstant
+	logFieldRemoteNameConstant               = "remote"
+	logFieldRepositoryPathConstant           = "repository_path"
+	fetchWarningLogMessageConstant           = "Fetch skipped due to error"
+	pullWarningLogMessageConstant            = "Pull skipped due to error"
+	fetchWarningTemplateConstant             = "FETCH-SKIP: %s (%s)"
+	pullWarningTemplateConstant              = "PULL-SKIP: %s"
 	gitFetchSubcommandConstant               = "fetch"
 	gitFetchAllFlagConstant                  = "--all"
 	gitFetchPruneFlagConstant                = "--prune"
@@ -45,6 +53,7 @@ var ErrGitExecutorNotConfigured = errors.New(gitExecutorMissingMessageConstant)
 // ServiceDependencies enumerates collaborators required by the service.
 type ServiceDependencies struct {
 	GitExecutor shared.GitExecutor
+	Logger      *zap.Logger
 }
 
 // Options configure a branch change operation.
@@ -61,11 +70,13 @@ type Result struct {
 	RepositoryPath string
 	BranchName     string
 	BranchCreated  bool
+	Warnings       []string
 }
 
 // Service coordinates branch switching across repositories.
 type Service struct {
 	executor shared.GitExecutor
+	logger   *zap.Logger
 }
 
 // NewService constructs a Service from the provided dependencies.
@@ -73,7 +84,11 @@ func NewService(dependencies ServiceDependencies) (*Service, error) {
 	if dependencies.GitExecutor == nil {
 		return nil, ErrGitExecutorNotConfigured
 	}
-	return &Service{executor: dependencies.GitExecutor}, nil
+	logger := dependencies.Logger
+	if logger == nil {
+		logger = zap.NewNop()
+	}
+	return &Service{executor: dependencies.GitExecutor, logger: logger}, nil
 }
 
 // Change switches the repository to the requested branch, creating it from the remote if needed.
@@ -109,6 +124,7 @@ func (service *Service) Change(executionContext context.Context, options Options
 	shouldFetch := remoteEnumeration.hasRemotes && (!remoteExplicitlyProvided || remoteEnumeration.requestedExists)
 	shouldPull := shouldFetch
 	shouldTrackRemote := remoteEnumeration.requestedExists && shouldFetch
+	warnings := make([]string, 0)
 
 	if shouldFetch {
 		fetchArguments := []string{gitFetchSubcommandConstant}
@@ -123,7 +139,15 @@ func (service *Service) Change(executionContext context.Context, options Options
 			WorkingDirectory:     trimmedRepositoryPath,
 			EnvironmentVariables: environment,
 		}); err != nil {
-			return Result{}, fmt.Errorf(gitFetchFailureTemplateConstant, err)
+			warningMessage := fmt.Sprintf(fetchWarningTemplateConstant, remoteName, summarizeCommandError(err))
+			service.logger.Warn(
+				fetchWarningLogMessageConstant,
+				zap.String(logFieldRepositoryPathConstant, trimmedRepositoryPath),
+				zap.String(logFieldRemoteNameConstant, remoteName),
+				zap.Error(err),
+			)
+			shouldPull = false
+			warnings = append(warnings, warningMessage)
 		}
 	}
 
@@ -154,11 +178,22 @@ func (service *Service) Change(executionContext context.Context, options Options
 			WorkingDirectory:     trimmedRepositoryPath,
 			EnvironmentVariables: environment,
 		}); err != nil {
-			return Result{}, fmt.Errorf(gitPullFailureTemplateConstant, err)
+			warningMessage := fmt.Sprintf(pullWarningTemplateConstant, summarizeCommandError(err))
+			service.logger.Warn(
+				pullWarningLogMessageConstant,
+				zap.String(logFieldRepositoryPathConstant, trimmedRepositoryPath),
+				zap.Error(err),
+			)
+			warnings = append(warnings, warningMessage)
 		}
 	}
 
-	return Result{RepositoryPath: trimmedRepositoryPath, BranchName: trimmedBranchName, BranchCreated: branchCreated}, nil
+	return Result{
+		RepositoryPath: trimmedRepositoryPath,
+		BranchName:     trimmedBranchName,
+		BranchCreated:  branchCreated,
+		Warnings:       warnings,
+	}, nil
 }
 
 func (service *Service) trySwitch(executionContext context.Context, repositoryPath string, branchName string, environment map[string]string) error {
@@ -197,4 +232,16 @@ func (service *Service) enumerateRemotes(executionContext context.Context, repos
 		}
 	}
 	return enumeration, nil
+}
+
+func summarizeCommandError(err error) string {
+	var commandFailure execshell.CommandFailedError
+	if errors.As(err, &commandFailure) {
+		trimmed := strings.TrimSpace(commandFailure.Result.StandardError)
+		if len(trimmed) > 0 {
+			return trimmed
+		}
+		return commandFailure.Error()
+	}
+	return strings.TrimSpace(err.Error())
 }

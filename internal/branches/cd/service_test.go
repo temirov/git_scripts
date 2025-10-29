@@ -47,7 +47,10 @@ func TestChangeExecutesExpectedCommands(t *testing.T) {
 
 	result, changeError := service.Change(context.Background(), Options{RepositoryPath: "/tmp/repo", BranchName: "feature", RemoteName: "origin"})
 	require.NoError(t, changeError)
-	require.Equal(t, Result{RepositoryPath: "/tmp/repo", BranchName: "feature", BranchCreated: false}, result)
+	require.Equal(t, "/tmp/repo", result.RepositoryPath)
+	require.Equal(t, "feature", result.BranchName)
+	require.False(t, result.BranchCreated)
+	require.Empty(t, result.Warnings)
 	require.Len(t, executor.recorded, 4)
 
 	require.Equal(t, []string{"remote"}, executor.recorded[0].Arguments)
@@ -68,6 +71,7 @@ func TestChangeCreatesBranchWhenMissing(t *testing.T) {
 	result, changeError := service.Change(context.Background(), Options{RepositoryPath: "/tmp/repo", BranchName: "feature", RemoteName: "upstream", CreateIfMissing: true})
 	require.NoError(t, changeError)
 	require.True(t, result.BranchCreated)
+	require.Empty(t, result.Warnings)
 
 	require.Len(t, executor.recorded, 5)
 	require.Equal(t, []string{"switch", "-c", "feature", "--track", "upstream/feature"}, executor.recorded[3].Arguments)
@@ -84,16 +88,41 @@ func TestChangeValidatesInputs(t *testing.T) {
 	require.Error(t, changeError)
 }
 
-func TestChangeSurfaceGitErrors(t *testing.T) {
+func TestChangeWarnsWhenFetchFails(t *testing.T) {
 	executor := &stubGitExecutor{responses: []stubGitResponse{
 		{result: execshell.ExecutionResult{StandardOutput: "origin\n"}},
-		{err: errors.New("fetch failed")},
+		{err: commandFailedError("fatal: No remote configured")},
 	}}
 	service, err := NewService(ServiceDependencies{GitExecutor: executor})
 	require.NoError(t, err)
 
-	_, changeError := service.Change(context.Background(), Options{RepositoryPath: "/tmp/repo", BranchName: "main"})
-	require.ErrorContains(t, changeError, "fetch updates")
+	result, changeError := service.Change(context.Background(), Options{RepositoryPath: "/tmp/repo", BranchName: "main"})
+	require.NoError(t, changeError)
+	require.Len(t, result.Warnings, 1)
+	require.Contains(t, result.Warnings[0], "FETCH-SKIP")
+	require.Contains(t, result.Warnings[0], "origin")
+	require.Len(t, executor.recorded, 3)
+	require.Equal(t, []string{"remote"}, executor.recorded[0].Arguments)
+	require.Equal(t, []string{"fetch", "--prune", "origin"}, executor.recorded[1].Arguments)
+	require.Equal(t, []string{"switch", "main"}, executor.recorded[2].Arguments)
+}
+
+func TestChangeWarnsWhenPullFails(t *testing.T) {
+	executor := &stubGitExecutor{responses: []stubGitResponse{
+		{result: execshell.ExecutionResult{StandardOutput: "origin\n"}},
+		{result: execshell.ExecutionResult{}},
+		{},
+		{err: commandFailedError("fatal: Could not read from remote repository")},
+	}}
+	service, err := NewService(ServiceDependencies{GitExecutor: executor})
+	require.NoError(t, err)
+
+	result, changeError := service.Change(context.Background(), Options{RepositoryPath: "/tmp/repo", BranchName: "main"})
+	require.NoError(t, changeError)
+	require.Len(t, result.Warnings, 1)
+	require.Contains(t, result.Warnings[0], "PULL-SKIP")
+	require.Len(t, executor.recorded, 4)
+	require.Equal(t, []string{"pull", "--rebase"}, executor.recorded[3].Arguments)
 }
 
 func TestChangeFetchesAllWhenDefaultRemoteMissing(t *testing.T) {
@@ -106,6 +135,7 @@ func TestChangeFetchesAllWhenDefaultRemoteMissing(t *testing.T) {
 	result, changeError := service.Change(context.Background(), Options{RepositoryPath: "/tmp/repo", BranchName: "feature"})
 	require.NoError(t, changeError)
 	require.False(t, result.BranchCreated)
+	require.Empty(t, result.Warnings)
 
 	require.Len(t, executor.recorded, 4)
 	require.Equal(t, []string{"remote"}, executor.recorded[0].Arguments)
@@ -122,6 +152,7 @@ func TestChangeSkipsNetworkWhenNoRemotesDetected(t *testing.T) {
 	result, changeError := service.Change(context.Background(), Options{RepositoryPath: "/tmp/repo", BranchName: "stable"})
 	require.NoError(t, changeError)
 	require.False(t, result.BranchCreated)
+	require.Empty(t, result.Warnings)
 
 	require.Len(t, executor.recorded, 2)
 	require.Equal(t, []string{"remote"}, executor.recorded[0].Arguments)
@@ -142,4 +173,17 @@ func TestChangeFailsWhenRemoteEnumerationFails(t *testing.T) {
 
 	_, changeError := service.Change(context.Background(), Options{RepositoryPath: "/tmp/repo", BranchName: "main"})
 	require.ErrorContains(t, changeError, "fetch updates")
+}
+
+func commandFailedError(message string) error {
+	return execshell.CommandFailedError{
+		Command: execshell.ShellCommand{
+			Name:    execshell.CommandGit,
+			Details: execshell.CommandDetails{},
+		},
+		Result: execshell.ExecutionResult{
+			ExitCode:      128,
+			StandardError: message,
+		},
+	}
 }
