@@ -73,6 +73,6 @@ func TestWithExecutionFlagsStoresValues(t *testing.T) {
 func TestWithExecutionFlagsHandlesMissingContext(t *testing.T) {
 	accessor := NewCommandContextAccessor()
 
-	_, exists := accessor.ExecutionFlags(nil)
+	_, exists := accessor.ExecutionFlags(context.Background())
 	require.False(t, exists)
 }

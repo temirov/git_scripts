@@ -3,7 +3,6 @@ package audit
 import (
 	"errors"
 	"fmt"
-	"io/fs"
 	"strings"
 
 	"github.com/temirov/gix/internal/repos/shared"
@@ -137,8 +136,4 @@ func lsRemoteHeadArguments() []string {
 		shared.OriginRemoteNameConstant,
 		gitHeadReferenceConstant,
 	}
-}
-
-func isNotExistError(err error) bool {
-	return errors.Is(err, fs.ErrNotExist)
 }

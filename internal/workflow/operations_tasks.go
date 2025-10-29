@@ -509,17 +509,16 @@ func splitOwnerAndName(fullName string) (string, string) {
 
 // taskPlan captures the actions required for a repository/task pair.
 type taskPlan struct {
-	task              TaskDefinition
-	repository        *RepositoryState
-	branchName        string
-	startPoint        string
-	commitMessage     string
-	pullRequest       *taskPlanPullRequest
-	fileChanges       []taskFileChange
-	actions           []taskAction
-	skipReason        string
-	skipped           bool
-	cleanedBranchName string
+	task          TaskDefinition
+	repository    *RepositoryState
+	branchName    string
+	startPoint    string
+	commitMessage string
+	pullRequest   *taskPlanPullRequest
+	fileChanges   []taskFileChange
+	actions       []taskAction
+	skipReason    string
+	skipped       bool
 }
 
 type taskPlanPullRequest struct {

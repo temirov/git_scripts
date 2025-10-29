@@ -3,6 +3,7 @@ package tests
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -80,7 +81,7 @@ func (operations *recordingGitHubOperations) SetDefaultBranch(_ context.Context,
 	operations.defaultBranchTarget = branchName
 	operations.currentDefaultBranch = branchName
 	if len(operations.remoteGitDirectoryPath) == 0 {
-		return fmt.Errorf(symbolicRefMissingRemotePathErrorConstant)
+		return errors.New(symbolicRefMissingRemotePathErrorConstant)
 	}
 
 	branchReference := fmt.Sprintf("%s/%s", gitReferenceHeadsPrefixConstant, branchName)

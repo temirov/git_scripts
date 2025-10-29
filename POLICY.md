@@ -8,6 +8,7 @@
 - **Narrow interfaces**: accept domain types, not loose primitives, when a domain type exists.
 - **No duplicate checks** in core; once validated, don’t re-validate.
 - Tests target **contracts/invariants**, not defensive branches.
+- Reference domain model and executor contracts: [docs/cli_design.md §8](docs/cli_design.md#8-repository-domain-model-and-executor-contracts-gx-403--gx-406).
 
 ---
 

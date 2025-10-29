@@ -44,10 +44,11 @@ If a repository doesnt have a remote, there is nothing to fetch, but we can stil
   - Test dependency resolvers in `internal/repos/dependencies` to ensure logger wiring and error propagation.
   - Extend workflow integration tests to confirm domain types propagate correctly through task execution.
 - Resolution: Added shared constructor/optional parser tables, expanded protocol executor edge cases, introduced resolver unit tests, and enforced canonical messaging in workflow integration output; suites now cover policy boundaries.
-- [ ] [GX-407] Update documentation and CI tooling for the refactor
+- [x] [GX-407] Update documentation and CI tooling for the refactor
   - Document newly introduced domain types, error codes, and edge-validation flow in `docs/cli_design.md` (or a dedicated `docs/refactor_status.md`) and cross-link from `POLICY.md`.
   - Update developer docs describing prompt/output handling after GX-405 cleanup.
   - Extend CI to run `staticcheck` and `ineffassign` alongside the existing `go test ./...` gate.
+  - Resolution: Added domain model section and prompt guidance to `docs/cli_design.md`, cross-linked from `POLICY.md`, refreshed README developer notes, wired `staticcheck`/`ineffassign` into `make ci`, and resolved all new lint findings.
 
 ## Planning 
 do not work on the issues below, not ready
