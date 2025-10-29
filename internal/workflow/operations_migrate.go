@@ -138,6 +138,9 @@ func (operation *BranchMigrationOperation) Execute(executionContext context.Cont
 
 		if environment.Output != nil {
 			fmt.Fprintf(environment.Output, migrationSuccessMessageTemplateConstant, repositoryState.Path, sourceBranchValue, targetBranchValue, result.SafetyStatus.SafeToDelete)
+			for _, warning := range result.Warnings {
+				fmt.Fprintln(environment.Output, warning)
+			}
 		}
 
 		if refreshError := repositoryState.Refresh(executionContext, environment.AuditService); refreshError != nil {
