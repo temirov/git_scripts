@@ -262,7 +262,7 @@ var missingBranchIndicators = []string{
 var missingRemoteErrorIndicators = []string{
 	"repository not found",
 	"could not read from remote repository",
-	"could not fetch",
+	"no such remote",
 }
 
 func isBranchMissingError(err error) bool {

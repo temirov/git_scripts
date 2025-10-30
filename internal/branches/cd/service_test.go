@@ -120,6 +120,20 @@ func TestChangeWarnsWithGenericFetchError(t *testing.T) {
 	require.Equal(t, "FETCH-SKIP: origin (fatal: unexpected network failure)", result.Warnings[0])
 }
 
+func TestChangePreservesFetchMessageWhenGitReportsCouldNotFetch(t *testing.T) {
+	executor := &stubGitExecutor{responses: []stubGitResponse{
+		{result: execshell.ExecutionResult{StandardOutput: "origin\n"}},
+		{err: commandFailedError("fatal: Could not fetch origin")},
+	}}
+	service, err := NewService(ServiceDependencies{GitExecutor: executor})
+	require.NoError(t, err)
+
+	result, changeError := service.Change(context.Background(), Options{RepositoryPath: "/tmp/repo", BranchName: "main"})
+	require.NoError(t, changeError)
+	require.Len(t, result.Warnings, 1)
+	require.Equal(t, "FETCH-SKIP: origin (fatal: Could not fetch origin)", result.Warnings[0])
+}
+
 func TestChangeWarnsWhenPullFails(t *testing.T) {
 	executor := &stubGitExecutor{responses: []stubGitResponse{
 		{result: execshell.ExecutionResult{StandardOutput: "origin\n"}},
