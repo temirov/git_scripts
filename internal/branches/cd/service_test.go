@@ -99,8 +99,7 @@ func TestChangeWarnsWhenFetchFails(t *testing.T) {
 	result, changeError := service.Change(context.Background(), Options{RepositoryPath: "/tmp/repo", BranchName: "main"})
 	require.NoError(t, changeError)
 	require.Len(t, result.Warnings, 1)
-	require.Contains(t, result.Warnings[0], "FETCH-SKIP")
-	require.Contains(t, result.Warnings[0], "origin")
+	require.Equal(t, "FETCH-SKIP: /tmp/repo -> origin (fatal: No remote configured)", result.Warnings[0])
 	require.Len(t, executor.recorded, 3)
 	require.Equal(t, []string{"remote"}, executor.recorded[0].Arguments)
 	require.Equal(t, []string{"fetch", "--prune", "origin"}, executor.recorded[1].Arguments)
@@ -120,7 +119,7 @@ func TestChangeWarnsWhenPullFails(t *testing.T) {
 	result, changeError := service.Change(context.Background(), Options{RepositoryPath: "/tmp/repo", BranchName: "main"})
 	require.NoError(t, changeError)
 	require.Len(t, result.Warnings, 1)
-	require.Contains(t, result.Warnings[0], "PULL-SKIP")
+	require.Equal(t, "PULL-SKIP: /tmp/repo (fatal: Could not read from remote repository)", result.Warnings[0])
 	require.Len(t, executor.recorded, 4)
 	require.Equal(t, []string{"pull", "--rebase"}, executor.recorded[3].Arguments)
 }
