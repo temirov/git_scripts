@@ -497,6 +497,10 @@ func TestReposCommandIntegration(testInstance *testing.T) {
 
 	for testCaseIndex, testCase := range testCases {
 		testInstance.Run(fmt.Sprintf(reposIntegrationSubtestNameTemplate, testCaseIndex, testCase.name), func(subtest *testing.T) {
+			subtest.Setenv("GIT_CONFIG_SYSTEM", "/dev/null")
+			subtest.Setenv("GIT_CONFIG_GLOBAL", "/dev/null")
+			subtest.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+
 			repositoryPath, extendedPath := testCase.setup(subtest)
 
 			commandArguments := append([]string{}, testCase.arguments...)

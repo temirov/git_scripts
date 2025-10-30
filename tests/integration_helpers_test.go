@@ -72,6 +72,10 @@ func buildCommandEnvironment(options integrationCommandOptions) []string {
 		environmentValues[pathEnvironmentVariableNameConstant] = options.PathVariable
 	}
 
+	environmentValues["GIT_CONFIG_SYSTEM"] = "/dev/null"
+	environmentValues["GIT_CONFIG_GLOBAL"] = "/dev/null"
+	environmentValues["GIT_CONFIG_NOSYSTEM"] = "1"
+
 	for variableName, variableValue := range options.EnvironmentOverrides {
 		environmentValues[variableName] = variableValue
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"go.uber.org/zap"
@@ -27,8 +28,9 @@ const (
 	logFieldRepositoryPathConstant           = "repository_path"
 	fetchWarningLogMessageConstant           = "Fetch skipped due to error"
 	pullWarningLogMessageConstant            = "Pull skipped due to error"
-	fetchWarningTemplateConstant             = "FETCH-SKIP: %s -> %s (%s)"
-	pullWarningTemplateConstant              = "PULL-SKIP: %s (%s)"
+	fetchWarningTemplateConstant             = "FETCH-SKIP: %s (%s)"
+	pullWarningTemplateConstant              = "PULL-SKIP: %s"
+	missingRemoteWarningTemplateConstant     = "WARNING: no remote counterpart for %s"
 	gitFetchSubcommandConstant               = "fetch"
 	gitFetchAllFlagConstant                  = "--all"
 	gitFetchPruneFlagConstant                = "--prune"
@@ -140,7 +142,13 @@ func (service *Service) Change(executionContext context.Context, options Options
 			WorkingDirectory:     trimmedRepositoryPath,
 			EnvironmentVariables: environment,
 		}); err != nil {
-			warningMessage := fmt.Sprintf(fetchWarningTemplateConstant, trimmedRepositoryPath, remoteName, summarizeCommandError(err))
+			summary := summarizeCommandError(err)
+			var warningMessage string
+			if shouldReportMissingRemote(summary) {
+				warningMessage = fmt.Sprintf(missingRemoteWarningTemplateConstant, formatMissingRemoteRepositoryName(trimmedRepositoryPath))
+			} else {
+				warningMessage = fmt.Sprintf(fetchWarningTemplateConstant, remoteName, summary)
+			}
 			service.logger.Warn(
 				fetchWarningLogMessageConstant,
 				zap.String(logFieldRepositoryPathConstant, trimmedRepositoryPath),
@@ -186,7 +194,7 @@ func (service *Service) Change(executionContext context.Context, options Options
 			WorkingDirectory:     trimmedRepositoryPath,
 			EnvironmentVariables: environment,
 		}); err != nil {
-			warningMessage := fmt.Sprintf(pullWarningTemplateConstant, trimmedRepositoryPath, summarizeCommandError(err))
+			warningMessage := fmt.Sprintf(pullWarningTemplateConstant, summarizeCommandError(err))
 			service.logger.Warn(
 				pullWarningLogMessageConstant,
 				zap.String(logFieldRepositoryPathConstant, trimmedRepositoryPath),
@@ -251,6 +259,12 @@ var missingBranchIndicators = []string{
 	"matches none of the refs",
 }
 
+var missingRemoteErrorIndicators = []string{
+	"repository not found",
+	"could not read from remote repository",
+	"could not fetch",
+}
+
 func isBranchMissingError(err error) bool {
 	if err == nil {
 		return false
@@ -275,9 +289,47 @@ func summarizeCommandError(err error) string {
 	if errors.As(err, &commandFailure) {
 		trimmed := strings.TrimSpace(commandFailure.Result.StandardError)
 		if len(trimmed) > 0 {
+			return firstLine(trimmed)
+		}
+		return firstLine(commandFailure.Error())
+	}
+	return firstLine(strings.TrimSpace(err.Error()))
+}
+
+func firstLine(message string) string {
+	if len(message) == 0 {
+		return ""
+	}
+	for _, line := range strings.Split(message, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if len(trimmed) > 0 {
 			return trimmed
 		}
-		return commandFailure.Error()
 	}
-	return strings.TrimSpace(err.Error())
+	return ""
+}
+
+func shouldReportMissingRemote(summary string) bool {
+	if len(summary) == 0 {
+		return false
+	}
+	normalized := strings.ToLower(summary)
+	for _, indicator := range missingRemoteErrorIndicators {
+		if strings.Contains(normalized, indicator) {
+			return true
+		}
+	}
+	return false
+}
+
+func formatMissingRemoteRepositoryName(repositoryPath string) string {
+	base := strings.TrimSpace(filepath.Base(repositoryPath))
+	if base == "" || base == "." || base == string(filepath.Separator) {
+		return "this repository"
+	}
+	lower := strings.ToLower(base)
+	if strings.HasSuffix(lower, "repo") || strings.HasSuffix(lower, "repository") {
+		return base
+	}
+	return fmt.Sprintf("%s repo", base)
 }
