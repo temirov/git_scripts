@@ -91,7 +91,25 @@ func TestChangeValidatesInputs(t *testing.T) {
 func TestChangeWarnsWhenFetchFails(t *testing.T) {
 	executor := &stubGitExecutor{responses: []stubGitResponse{
 		{result: execshell.ExecutionResult{StandardOutput: "origin\n"}},
-		{err: commandFailedError("fatal: No remote configured")},
+		{err: commandFailedError("ERROR: Repository not found.\nfatal: Could not read from remote repository.\nPlease make sure you have the correct access rights\nand the repository exists.")},
+	}}
+	service, err := NewService(ServiceDependencies{GitExecutor: executor})
+	require.NoError(t, err)
+
+	result, changeError := service.Change(context.Background(), Options{RepositoryPath: "/tmp/ns-rewrite", BranchName: "main"})
+	require.NoError(t, changeError)
+	require.Len(t, result.Warnings, 1)
+	require.Equal(t, "WARNING: no remote counterpart for ns-rewrite repo", result.Warnings[0])
+	require.Len(t, executor.recorded, 3)
+	require.Equal(t, []string{"remote"}, executor.recorded[0].Arguments)
+	require.Equal(t, []string{"fetch", "--prune", "origin"}, executor.recorded[1].Arguments)
+	require.Equal(t, []string{"switch", "main"}, executor.recorded[2].Arguments)
+}
+
+func TestChangeWarnsWithGenericFetchError(t *testing.T) {
+	executor := &stubGitExecutor{responses: []stubGitResponse{
+		{result: execshell.ExecutionResult{StandardOutput: "origin\n"}},
+		{err: commandFailedError("fatal: unexpected network failure")},
 	}}
 	service, err := NewService(ServiceDependencies{GitExecutor: executor})
 	require.NoError(t, err)
@@ -99,11 +117,21 @@ func TestChangeWarnsWhenFetchFails(t *testing.T) {
 	result, changeError := service.Change(context.Background(), Options{RepositoryPath: "/tmp/repo", BranchName: "main"})
 	require.NoError(t, changeError)
 	require.Len(t, result.Warnings, 1)
-	require.Equal(t, "FETCH-SKIP: /tmp/repo -> origin (fatal: No remote configured)", result.Warnings[0])
-	require.Len(t, executor.recorded, 3)
-	require.Equal(t, []string{"remote"}, executor.recorded[0].Arguments)
-	require.Equal(t, []string{"fetch", "--prune", "origin"}, executor.recorded[1].Arguments)
-	require.Equal(t, []string{"switch", "main"}, executor.recorded[2].Arguments)
+	require.Equal(t, "FETCH-SKIP: origin (fatal: unexpected network failure)", result.Warnings[0])
+}
+
+func TestChangePreservesFetchMessageWhenGitReportsCouldNotFetch(t *testing.T) {
+	executor := &stubGitExecutor{responses: []stubGitResponse{
+		{result: execshell.ExecutionResult{StandardOutput: "origin\n"}},
+		{err: commandFailedError("fatal: Could not fetch origin")},
+	}}
+	service, err := NewService(ServiceDependencies{GitExecutor: executor})
+	require.NoError(t, err)
+
+	result, changeError := service.Change(context.Background(), Options{RepositoryPath: "/tmp/repo", BranchName: "main"})
+	require.NoError(t, changeError)
+	require.Len(t, result.Warnings, 1)
+	require.Equal(t, "FETCH-SKIP: origin (fatal: Could not fetch origin)", result.Warnings[0])
 }
 
 func TestChangeWarnsWhenPullFails(t *testing.T) {
@@ -119,7 +147,7 @@ func TestChangeWarnsWhenPullFails(t *testing.T) {
 	result, changeError := service.Change(context.Background(), Options{RepositoryPath: "/tmp/repo", BranchName: "main"})
 	require.NoError(t, changeError)
 	require.Len(t, result.Warnings, 1)
-	require.Equal(t, "PULL-SKIP: /tmp/repo (fatal: Could not read from remote repository)", result.Warnings[0])
+	require.Equal(t, "PULL-SKIP: fatal: Could not read from remote repository", result.Warnings[0])
 	require.Len(t, executor.recorded, 4)
 	require.Equal(t, []string{"pull", "--rebase"}, executor.recorded[3].Arguments)
 }

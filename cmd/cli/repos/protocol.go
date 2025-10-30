@@ -3,6 +3,8 @@ package repos
 import (
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -58,6 +60,15 @@ func (builder *ProtocolCommandBuilder) Build() (*cobra.Command, error) {
 }
 
 func (builder *ProtocolCommandBuilder) run(command *cobra.Command, arguments []string) error {
+	if command != nil {
+		if command.OutOrStdout() == io.Discard {
+			command.SetOut(os.Stdout)
+		}
+		if command.ErrOrStderr() == io.Discard {
+			command.SetErr(os.Stderr)
+		}
+	}
+
 	configuration := builder.resolveConfiguration()
 	executionFlags, executionFlagsAvailable := flagutils.ResolveExecutionFlags(command)
 
@@ -142,6 +153,16 @@ func (builder *ProtocolCommandBuilder) run(command *cobra.Command, arguments []s
 		return githubClientError
 	}
 
+	outputWriter := command.OutOrStdout()
+	if outputWriter == nil || outputWriter == io.Discard {
+		outputWriter = os.Stdout
+	}
+
+	errorWriter := command.ErrOrStderr()
+	if errorWriter == nil || errorWriter == io.Discard {
+		errorWriter = os.Stderr
+	}
+
 	taskDependencies := workflow.Dependencies{
 		Logger:               logger,
 		RepositoryDiscoverer: repositoryDiscoverer,
@@ -150,8 +171,8 @@ func (builder *ProtocolCommandBuilder) run(command *cobra.Command, arguments []s
 		GitHubClient:         githubClient,
 		FileSystem:           dependencies.ResolveFileSystem(nil),
 		Prompter:             trackingPrompter,
-		Output:               command.OutOrStdout(),
-		Errors:               command.ErrOrStderr(),
+		Output:               outputWriter,
+		Errors:               errorWriter,
 	}
 
 	taskRunner := ResolveTaskRunner(builder.TaskRunnerFactory, taskDependencies)
