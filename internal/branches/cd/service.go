@@ -273,11 +273,24 @@ func summarizeCommandError(err error) string {
 	}
 	var commandFailure execshell.CommandFailedError
 	if errors.As(err, &commandFailure) {
-		trimmed := strings.TrimSpace(commandFailure.Result.StandardError)
+		trimmedStandardError := strings.TrimSpace(commandFailure.Result.StandardError)
+		if len(trimmedStandardError) > 0 {
+			return firstLine(trimmedStandardError)
+		}
+		return firstLine(commandFailure.Error())
+	}
+	return firstLine(strings.TrimSpace(err.Error()))
+}
+
+func firstLine(message string) string {
+	if len(message) == 0 {
+		return ""
+	}
+	for _, line := range strings.Split(message, "\n") {
+		trimmed := strings.TrimSpace(line)
 		if len(trimmed) > 0 {
 			return trimmed
 		}
-		return commandFailure.Error()
 	}
-	return strings.TrimSpace(err.Error())
+	return ""
 }
