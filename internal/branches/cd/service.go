@@ -27,8 +27,8 @@ const (
 	logFieldRepositoryPathConstant           = "repository_path"
 	fetchWarningLogMessageConstant           = "Fetch skipped due to error"
 	pullWarningLogMessageConstant            = "Pull skipped due to error"
-	fetchWarningTemplateConstant             = "FETCH-SKIP: %s (%s)"
-	pullWarningTemplateConstant              = "PULL-SKIP: %s"
+	fetchWarningTemplateConstant             = "FETCH-SKIP: %s -> %s (%s)"
+	pullWarningTemplateConstant              = "PULL-SKIP: %s (%s)"
 	gitFetchSubcommandConstant               = "fetch"
 	gitFetchAllFlagConstant                  = "--all"
 	gitFetchPruneFlagConstant                = "--prune"
@@ -140,7 +140,7 @@ func (service *Service) Change(executionContext context.Context, options Options
 			WorkingDirectory:     trimmedRepositoryPath,
 			EnvironmentVariables: environment,
 		}); err != nil {
-			warningMessage := fmt.Sprintf(fetchWarningTemplateConstant, remoteName, summarizeCommandError(err))
+			warningMessage := fmt.Sprintf(fetchWarningTemplateConstant, trimmedRepositoryPath, remoteName, summarizeCommandError(err))
 			service.logger.Warn(
 				fetchWarningLogMessageConstant,
 				zap.String(logFieldRepositoryPathConstant, trimmedRepositoryPath),
@@ -186,7 +186,7 @@ func (service *Service) Change(executionContext context.Context, options Options
 			WorkingDirectory:     trimmedRepositoryPath,
 			EnvironmentVariables: environment,
 		}); err != nil {
-			warningMessage := fmt.Sprintf(pullWarningTemplateConstant, summarizeCommandError(err))
+			warningMessage := fmt.Sprintf(pullWarningTemplateConstant, trimmedRepositoryPath, summarizeCommandError(err))
 			service.logger.Warn(
 				pullWarningLogMessageConstant,
 				zap.String(logFieldRepositoryPathConstant, trimmedRepositoryPath),

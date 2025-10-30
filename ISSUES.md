@@ -42,6 +42,7 @@ SWITCHED: /home/tyemirov/Development/loopaware -> master
 workflow operation apply-tasks failed: failed to create branch "master" from origin: git command exited with code 128
 ```
   - Resolution: Branch change service now distinguishes missing-branch failures from dirty working tree errors, surfaces the Git diagnostics in returned messages, and adds regression coverage for both scenarios so the CLI reports actionable guidance instead of redundant branch creation attempts.
+  - Update: Fetch and pull skip warnings now include repository paths so operators can see which repository triggered the Git error.
 
 ## Maintenance (400–499)
 
