@@ -46,7 +46,51 @@ workflow operation apply-tasks failed: failed to create branch "master" from ori
   - Resolution: Branch change service now distinguishes missing-branch failures from dirty working tree errors, surfaces the Git diagnostics in returned messages, and adds regression coverage for both scenarios so the CLI reports actionable guidance instead of redundant branch creation attempts.
   - Update: Fetch and pull skip warnings now include repository paths so operators can see which repository triggered the Git error.
   - Update: Missing or inaccessible remotes now raise `WARNING: no remote counterpart for <repo>` so branch-cd skips fetches without dumping Git internals while still pointing to the affected repository.
-- [ ] [GX-303] the command hangs: `gix r prs delete --yes`
+- [x] [GX-303] the command hangs: `gix r prs delete --yes`
+  - Resolution: Branch cleanup now skips GitHub metadata lookups by default, preventing `gh repo view` from blocking the run; runtime options and audits tolerate missing GitHub clients, and new tests cover the metadata-free path.
+
+- [ ] [GX-303] The command `gix b default master` fails despite having a valid token in the environment. Ensure we are reading the default GH token GITHUB_API_TOKEN, or, if the env variable is absent or empty and the remote exists, fail fast with an appropriate error message about missing token
+```shell
+12:40:01 tyemirov@computercat:~/Development/Poodle/ProductScanner/tools/mpr-ui [main] $ gix b default master
+workflow operation apply-tasks failed: DEFAULT-BRANCH-UPDATE repository=MarcoPoloResearchLab/mpr-ui path=/home/tyemirov/Development/Poodle/ProductScanner/tools/mpr-ui source=main target=master: gh: Validation Failed (HTTP 422)
+12:40:07 tyemirov@computercat:~/Development/Poodle/ProductScanner/tools/mpr-ui [main] $ curl -H "Authorization: Bearer $GITHUB_API_TOKEN" https://api.github.com/user
+{
+  "login": "tyemirov",
+  "id": 1078274,
+  "node_id": "MDQ6VXNlcjEwNzgyNzQ=",
+  "avatar_url": "https://avatars.githubusercontent.com/u/1078274?v=4",
+  "gravatar_id": "",
+  "url": "https://api.github.com/users/tyemirov",
+  "html_url": "https://github.com/tyemirov",
+  "followers_url": "https://api.github.com/users/tyemirov/followers",
+  "following_url": "https://api.github.com/users/tyemirov/following{/other_user}",
+  "gists_url": "https://api.github.com/users/tyemirov/gists{/gist_id}",
+  "starred_url": "https://api.github.com/users/tyemirov/starred{/owner}{/repo}",
+  "subscriptions_url": "https://api.github.com/users/tyemirov/subscriptions",
+  "organizations_url": "https://api.github.com/users/tyemirov/orgs",
+  "repos_url": "https://api.github.com/users/tyemirov/repos",
+  "events_url": "https://api.github.com/users/tyemirov/events{/privacy}",
+  "received_events_url": "https://api.github.com/users/tyemirov/received_events",
+  "type": "User",
+  "user_view_type": "public",
+  "site_admin": false,
+  "name": "Vadym Tyemirov",
+  "company": "Marco Polo Research Lab",
+  "blog": "https://mprlab.com",
+  "location": "Los Angeles, CA",
+  "email": null,
+  "hireable": null,
+  "bio": "Father. Husband. Friend.\r\n\r\nAipreneurer. Sus engineer. Founder.",
+  "twitter_username": null,
+  "notification_email": null,
+  "public_repos": 68,
+  "public_gists": 11,
+  "followers": 4,
+  "following": 4,
+  "created_at": "2011-09-25T14:17:14Z",
+  "updated_at": "2025-10-25T04:56:38Z"
+}
+```
 
 ## Maintenance (400–499)
 

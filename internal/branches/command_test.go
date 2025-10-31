@@ -132,6 +132,7 @@ func TestCommandConfigurationPrecedence(t *testing.T) {
 	require.Equal(t, strconv.Itoa(configuration.PullRequestLimit), action.Options["limit"])
 	require.False(t, runner.runtimeOptions.DryRun)
 	require.False(t, runner.runtimeOptions.AssumeYes)
+	require.True(t, runner.runtimeOptions.SkipRepositoryMetadata)
 }
 
 func TestCommandFlagsOverrideConfiguration(t *testing.T) {
@@ -174,6 +175,7 @@ func TestCommandFlagsOverrideConfiguration(t *testing.T) {
 	require.Equal(t, "7", action.Options["limit"])
 	require.True(t, runner.runtimeOptions.DryRun)
 	require.True(t, runner.runtimeOptions.AssumeYes)
+	require.True(t, runner.runtimeOptions.SkipRepositoryMetadata)
 }
 
 func TestCommandErrorsWhenRemoteInvalid(t *testing.T) {

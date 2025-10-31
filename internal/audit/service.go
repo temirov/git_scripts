@@ -232,10 +232,12 @@ func (service *Service) inspectRepository(executionContext context.Context, repo
 
 	canonicalOwnerRepo := ""
 	remoteDefaultBranch := ""
-	metadata, metadataError := service.githubClient.ResolveRepoMetadata(executionContext, originOwnerRepo)
-	if metadataError == nil {
-		canonicalOwnerRepo = strings.TrimSpace(metadata.NameWithOwner)
-		remoteDefaultBranch = strings.TrimSpace(metadata.DefaultBranch)
+	if service.githubClient != nil {
+		metadata, metadataError := service.githubClient.ResolveRepoMetadata(executionContext, originOwnerRepo)
+		if metadataError == nil {
+			canonicalOwnerRepo = strings.TrimSpace(metadata.NameWithOwner)
+			remoteDefaultBranch = strings.TrimSpace(metadata.DefaultBranch)
+		}
 	}
 
 	if len(remoteDefaultBranch) == 0 {
