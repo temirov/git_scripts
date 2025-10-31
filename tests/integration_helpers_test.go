@@ -16,6 +16,11 @@ const (
 	integrationUnexpectedSuccessFormatConstant  = "%s\n%s"
 	integrationCommandFailureFormatConstant     = "command failed: %v\n%s"
 	pathEnvironmentVariableNameConstant         = "PATH"
+	gitConfigSystemEnvironmentNameConstant      = "GIT_CONFIG_SYSTEM"
+	gitConfigGlobalEnvironmentNameConstant      = "GIT_CONFIG_GLOBAL"
+	gitConfigNoSystemEnvironmentNameConstant    = "GIT_CONFIG_NOSYSTEM"
+	gitTerminalPromptEnvironmentNameConstant    = "GIT_TERMINAL_PROMPT"
+	gitTerminalPromptDisableValueConstant       = "0"
 	environmentAssignmentSeparatorConstant      = "="
 	integrationBinaryFileNameConstant           = "gix-integration"
 )
@@ -72,6 +77,10 @@ func buildCommandEnvironment(options integrationCommandOptions) []string {
 		environmentValues[pathEnvironmentVariableNameConstant] = options.PathVariable
 	}
 
+	environmentValues[gitConfigSystemEnvironmentNameConstant] = "/dev/null"
+	environmentValues[gitConfigGlobalEnvironmentNameConstant] = "/dev/null"
+	environmentValues[gitConfigNoSystemEnvironmentNameConstant] = "1"
+
 	for variableName, variableValue := range options.EnvironmentOverrides {
 		environmentValues[variableName] = variableValue
 	}
@@ -92,6 +101,16 @@ func buildCommandEnvironment(options integrationCommandOptions) []string {
 	}
 
 	return mergedEnvironment
+}
+
+func buildGitCommandEnvironment(overrides map[string]string) []string {
+	mergedOverrides := map[string]string{
+		gitTerminalPromptEnvironmentNameConstant: gitTerminalPromptDisableValueConstant,
+	}
+	for key, value := range overrides {
+		mergedOverrides[key] = value
+	}
+	return buildCommandEnvironment(integrationCommandOptions{EnvironmentOverrides: mergedOverrides})
 }
 
 func filterStructuredOutput(rawOutput string) string {

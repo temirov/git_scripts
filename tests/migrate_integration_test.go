@@ -35,7 +35,6 @@ const (
 	gitSymbolicRefCommandConstant             = "symbolic-ref"
 	gitHeadReferenceNameConstant              = "HEAD"
 	gitReferenceHeadsPrefixConstant           = "refs/heads"
-	gitTerminalPromptEnvironmentConstant      = "GIT_TERMINAL_PROMPT=0"
 	symbolicRefMissingRemotePathErrorConstant = "remote git directory path must be configured for symbolic-ref operation"
 	symbolicRefFailureErrorTemplateConstant   = "failed to update remote HEAD symbolic reference: %w"
 	wrappedErrorWithOutputTemplateConstant    = "%w: %s"
@@ -93,7 +92,7 @@ func (operations *recordingGitHubOperations) SetDefaultBranch(_ context.Context,
 		gitHeadReferenceNameConstant,
 		branchReference,
 	)
-	symbolicRefCommand.Env = append(os.Environ(), gitTerminalPromptEnvironmentConstant)
+	symbolicRefCommand.Env = buildGitCommandEnvironment(nil)
 	symbolicRefOutput, symbolicRefError := symbolicRefCommand.CombinedOutput()
 	if symbolicRefError != nil {
 		trimmedOutput := strings.TrimSpace(string(symbolicRefOutput))
@@ -283,7 +282,7 @@ func runMigrationGitCommand(testInstance *testing.T, repositoryPath string, argu
 	testInstance.Helper()
 	command := exec.Command(gitExecutableNameConstant, arguments...)
 	command.Dir = repositoryPath
-	command.Env = append(os.Environ(), gitTerminalPromptEnvironmentConstant)
+	command.Env = buildGitCommandEnvironment(nil)
 	outputBytes, commandError := command.CombinedOutput()
 	require.NoError(testInstance, commandError, string(outputBytes))
 	return string(bytes.TrimSpace(outputBytes))
@@ -298,7 +297,7 @@ func branchExists(testInstance *testing.T, repositoryPath string, branchName str
 func remoteBranchExists(testInstance *testing.T, remoteGitDirectory string, branchName string) bool {
 	testInstance.Helper()
 	command := exec.Command(gitExecutableNameConstant, gitDirOptionConstant, remoteGitDirectory, "branch", "--list", branchName)
-	command.Env = append(os.Environ(), gitTerminalPromptEnvironmentConstant)
+	command.Env = buildGitCommandEnvironment(nil)
 	outputBytes, commandError := command.CombinedOutput()
 	require.NoError(testInstance, commandError, string(outputBytes))
 	return len(strings.TrimSpace(string(bytes.TrimSpace(outputBytes)))) > 0
@@ -307,7 +306,7 @@ func remoteBranchExists(testInstance *testing.T, remoteGitDirectory string, bran
 func initializeBareGitRepository(testInstance *testing.T, repositoryPath string) {
 	testInstance.Helper()
 	command := exec.Command(gitExecutableNameConstant, "init", "--bare", repositoryPath)
-	command.Env = append(os.Environ(), gitTerminalPromptEnvironmentConstant)
+	command.Env = buildGitCommandEnvironment(nil)
 	outputBytes, commandError := command.CombinedOutput()
 	require.NoError(testInstance, commandError, string(outputBytes))
 }

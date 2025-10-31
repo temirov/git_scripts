@@ -43,6 +43,7 @@ workflow operation apply-tasks failed: failed to create branch "master" from ori
 ```
   - Resolution: Branch change service now distinguishes missing-branch failures from dirty working tree errors, surfaces the Git diagnostics in returned messages, and adds regression coverage for both scenarios so the CLI reports actionable guidance instead of redundant branch creation attempts.
   - Update: Fetch and pull skip warnings now include repository paths so operators can see which repository triggered the Git error.
+  - Update: Missing or inaccessible remotes now raise `WARNING: no remote counterpart for <repo>` so branch-cd skips fetches without dumping Git internals while still pointing to the affected repository.
 
 ## Maintenance (400–499)
 

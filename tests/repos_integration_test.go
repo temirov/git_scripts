@@ -186,27 +186,27 @@ func TestReposCommandIntegration(testInstance *testing.T) {
 			setup: func(testInstance *testing.T) (string, string) {
 				repositoryPath, extendedPath := initializeRepositoryWithStub(testInstance)
 				configNameCommand := exec.Command(reposIntegrationGitExecutable, "-C", repositoryPath, "config", "user.name", reposIntegrationGitUserName)
-				configNameCommand.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+				configNameCommand.Env = buildGitCommandEnvironment(nil)
 				require.NoError(testInstance, configNameCommand.Run())
 				configEmailCommand := exec.Command(reposIntegrationGitExecutable, "-C", repositoryPath, "config", "user.email", reposIntegrationGitUserEmail)
-				configEmailCommand.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+				configEmailCommand.Env = buildGitCommandEnvironment(nil)
 				require.NoError(testInstance, configEmailCommand.Run())
 				ignorePath := filepath.Join(repositoryPath, ".gitignore")
 				require.NoError(testInstance, os.WriteFile(ignorePath, []byte(reposIntegrationNestedIgnoreEntry+"\n"), 0o644))
 				addIgnoreCommand := exec.Command(reposIntegrationGitExecutable, "-C", repositoryPath, "add", ".gitignore")
-				addIgnoreCommand.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+				addIgnoreCommand.Env = buildGitCommandEnvironment(nil)
 				require.NoError(testInstance, addIgnoreCommand.Run())
 				commitIgnoreCommand := exec.Command(reposIntegrationGitExecutable, "-C", repositoryPath, "commit", "-m", reposIntegrationNestedIgnoreCommitMessage)
-				commitIgnoreCommand.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+				commitIgnoreCommand.Env = buildGitCommandEnvironment(nil)
 				require.NoError(testInstance, commitIgnoreCommand.Run())
 				nestedParentPath := filepath.Join(repositoryPath, reposIntegrationNestedToolsDirectoryName)
 				require.NoError(testInstance, os.MkdirAll(nestedParentPath, 0o755))
 				nestedRepositoryPath := filepath.Join(nestedParentPath, reposIntegrationNestedRepositoryName)
 				initCommand := exec.Command(reposIntegrationGitExecutable, reposIntegrationInitFlag, reposIntegrationInitialBranchFlag, nestedRepositoryPath)
-				initCommand.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+				initCommand.Env = buildGitCommandEnvironment(nil)
 				require.NoError(testInstance, initCommand.Run())
 				remoteCommand := exec.Command(reposIntegrationGitExecutable, "-C", nestedRepositoryPath, reposIntegrationRemoteSubcommand, reposIntegrationAddSubcommand, reposIntegrationOriginRemoteName, reposIntegrationNestedOriginURL)
-				remoteCommand.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+				remoteCommand.Env = buildGitCommandEnvironment(nil)
 				require.NoError(testInstance, remoteCommand.Run())
 				return repositoryPath, extendedPath
 			},
@@ -265,7 +265,7 @@ func TestReposCommandIntegration(testInstance *testing.T) {
 			},
 			verify: func(testInstance *testing.T, repositoryPath string) {
 				remoteCommand := exec.Command(reposIntegrationGitExecutable, "-C", repositoryPath, reposIntegrationRemoteSubcommand, reposIntegrationGetURLSubcommand, reposIntegrationOriginRemoteName)
-				remoteCommand.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+				remoteCommand.Env = buildGitCommandEnvironment(nil)
 				outputBytes, remoteError := remoteCommand.CombinedOutput()
 				require.NoError(testInstance, remoteError, string(outputBytes))
 				require.Equal(testInstance, "https://github.com/canonical/example.git\n", string(outputBytes))
@@ -290,7 +290,7 @@ func TestReposCommandIntegration(testInstance *testing.T) {
 			},
 			verify: func(testInstance *testing.T, repositoryPath string) {
 				remoteCommand := exec.Command(reposIntegrationGitExecutable, "-C", repositoryPath, reposIntegrationRemoteSubcommand, reposIntegrationGetURLSubcommand, reposIntegrationOriginRemoteName)
-				remoteCommand.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+				remoteCommand.Env = buildGitCommandEnvironment(nil)
 				outputBytes, remoteError := remoteCommand.CombinedOutput()
 				require.NoError(testInstance, remoteError, string(outputBytes))
 				require.Equal(testInstance, "https://github.com/canonical/example.git\n", string(outputBytes))
@@ -336,7 +336,7 @@ func TestReposCommandIntegration(testInstance *testing.T) {
 			},
 			verify: func(testInstance *testing.T, repositoryPath string) {
 				remoteCommand := exec.Command(reposIntegrationGitExecutable, "-C", repositoryPath, reposIntegrationRemoteSubcommand, reposIntegrationGetURLSubcommand, reposIntegrationOriginRemoteName)
-				remoteCommand.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+				remoteCommand.Env = buildGitCommandEnvironment(nil)
 				outputBytes, remoteError := remoteCommand.CombinedOutput()
 				require.NoError(testInstance, remoteError, string(outputBytes))
 				require.Equal(testInstance, "https://github.com/canonical/example.git\n", string(outputBytes))
@@ -375,7 +375,7 @@ func TestReposCommandIntegration(testInstance *testing.T) {
 			},
 			verify: func(testInstance *testing.T, repositoryPath string) {
 				remoteCommand := exec.Command(reposIntegrationGitExecutable, "-C", repositoryPath, reposIntegrationRemoteSubcommand, reposIntegrationGetURLSubcommand, reposIntegrationOriginRemoteName)
-				remoteCommand.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+				remoteCommand.Env = buildGitCommandEnvironment(nil)
 				outputBytes, remoteError := remoteCommand.CombinedOutput()
 				require.NoError(testInstance, remoteError, string(outputBytes))
 				require.Equal(testInstance, "ssh://git@github.com/canonical/example.git\n", string(outputBytes))
@@ -400,7 +400,7 @@ func TestReposCommandIntegration(testInstance *testing.T) {
 			},
 			verify: func(testInstance *testing.T, repositoryPath string) {
 				remoteCommand := exec.Command(reposIntegrationGitExecutable, "-C", repositoryPath, reposIntegrationRemoteSubcommand, reposIntegrationGetURLSubcommand, reposIntegrationOriginRemoteName)
-				remoteCommand.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+				remoteCommand.Env = buildGitCommandEnvironment(nil)
 				outputBytes, remoteError := remoteCommand.CombinedOutput()
 				require.NoError(testInstance, remoteError, string(outputBytes))
 				require.Equal(testInstance, "ssh://git@github.com/canonical/example.git\n", string(outputBytes))
@@ -435,7 +435,7 @@ func TestReposCommandIntegration(testInstance *testing.T) {
 			},
 			verify: func(testInstance *testing.T, repositoryPath string) {
 				remoteCommand := exec.Command(reposIntegrationGitExecutable, "-C", repositoryPath, reposIntegrationRemoteSubcommand, reposIntegrationGetURLSubcommand, reposIntegrationOriginRemoteName)
-				remoteCommand.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+				remoteCommand.Env = buildGitCommandEnvironment(nil)
 				outputBytes, remoteError := remoteCommand.CombinedOutput()
 				require.NoError(testInstance, remoteError, string(outputBytes))
 				require.Equal(testInstance, "https://github.com/origin/example.git\n", string(outputBytes))
@@ -458,19 +458,19 @@ func TestReposCommandIntegration(testInstance *testing.T) {
 				require.NoError(testInstance, os.WriteFile(secretFilePath, []byte("classified\n"), 0o644))
 
 				nameConfig := exec.Command(reposIntegrationGitExecutable, "-C", repositoryPath, "config", "user.name", reposIntegrationGitUserName)
-				nameConfig.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+				nameConfig.Env = buildGitCommandEnvironment(nil)
 				require.NoError(testInstance, nameConfig.Run())
 
 				emailConfig := exec.Command(reposIntegrationGitExecutable, "-C", repositoryPath, "config", "user.email", reposIntegrationGitUserEmail)
-				emailConfig.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+				emailConfig.Env = buildGitCommandEnvironment(nil)
 				require.NoError(testInstance, emailConfig.Run())
 
 				addCommand := exec.Command(reposIntegrationGitExecutable, "-C", repositoryPath, "add", "secrets.txt")
-				addCommand.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+				addCommand.Env = buildGitCommandEnvironment(nil)
 				require.NoError(testInstance, addCommand.Run())
 
 				commitCommand := exec.Command(reposIntegrationGitExecutable, "-C", repositoryPath, "commit", "-m", "add secret")
-				commitCommand.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+				commitCommand.Env = buildGitCommandEnvironment(nil)
 				require.NoError(testInstance, commitCommand.Run())
 
 				return repositoryPath, extendedPath
@@ -497,6 +497,10 @@ func TestReposCommandIntegration(testInstance *testing.T) {
 
 	for testCaseIndex, testCase := range testCases {
 		testInstance.Run(fmt.Sprintf(reposIntegrationSubtestNameTemplate, testCaseIndex, testCase.name), func(subtest *testing.T) {
+			subtest.Setenv("GIT_CONFIG_SYSTEM", "/dev/null")
+			subtest.Setenv("GIT_CONFIG_GLOBAL", "/dev/null")
+			subtest.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+
 			repositoryPath, extendedPath := testCase.setup(subtest)
 
 			commandArguments := append([]string{}, testCase.arguments...)
@@ -568,11 +572,11 @@ func initializeRepositoryWithStub(testInstance *testing.T) (string, string) {
 	repositoryPath := filepath.Join(tempDirectory, "legacy")
 
 	initCommand := exec.Command(reposIntegrationGitExecutable, reposIntegrationInitFlag, reposIntegrationInitialBranchFlag, repositoryPath)
-	initCommand.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	initCommand.Env = buildGitCommandEnvironment(nil)
 	require.NoError(testInstance, initCommand.Run())
 
 	remoteCommand := exec.Command(reposIntegrationGitExecutable, "-C", repositoryPath, reposIntegrationRemoteSubcommand, reposIntegrationAddSubcommand, reposIntegrationOriginRemoteName, reposIntegrationOriginURL)
-	remoteCommand.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	remoteCommand.Env = buildGitCommandEnvironment(nil)
 	require.NoError(testInstance, remoteCommand.Run())
 
 	stubDirectory := filepath.Join(tempDirectory, "bin")
