@@ -296,7 +296,7 @@ func TestShellExecutorFailsWithoutTokenForCriticalGitHubCommand(testInstance *te
 	require.Equal(testInstance, 0, len(recordingRunner.recordedCommands))
 }
 
-func TestShellExecutorWarnsWithoutTokenForOptionalGitHubCommand(testInstance *testing.T) {
+func TestShellExecutorWarnsButRunsWithoutTokenForOptionalGitHubCommand(testInstance *testing.T) {
 	observerCore, logs := observer.New(zap.DebugLevel)
 	logger := zap.New(observerCore)
 
@@ -309,14 +309,14 @@ func TestShellExecutorWarnsWithoutTokenForOptionalGitHubCommand(testInstance *te
 		Arguments:              []string{"status"},
 		GitHubTokenRequirement: githubauth.TokenOptional,
 	})
-	require.Error(testInstance, executionError)
+	require.NoError(testInstance, executionError)
 
-	missingToken, ok := githubauth.IsMissingTokenError(executionError)
-	require.True(testInstance, ok)
-	require.False(testInstance, missingToken.CriticalRequirement())
-	require.Equal(testInstance, 0, len(recordingRunner.recordedCommands))
-	require.Len(testInstance, logs.All(), 1)
-	require.Contains(testInstance, logs.All()[0].Message, "GitHub token missing")
+	require.Equal(testInstance, 1, len(recordingRunner.recordedCommands))
+
+	capturedLogs := logs.All()
+	require.GreaterOrEqual(testInstance, len(capturedLogs), 1)
+	require.Contains(testInstance, capturedLogs[0].Message, "GitHub token missing; proceeding without explicit token")
+	require.Equal(testInstance, zap.WarnLevel, capturedLogs[0].Level)
 }
 
 func TestShellExecutorHumanReadableLoggingForGitHubRepoView(testInstance *testing.T) {

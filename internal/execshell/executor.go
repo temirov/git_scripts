@@ -218,14 +218,15 @@ func (executor *ShellExecutor) prepareCommand(command ShellCommand) (ShellComman
 
 	token, tokenAvailable := githubauth.ResolveToken(command.Details.EnvironmentVariables)
 	if !tokenAvailable {
-		critical := requirement == githubauth.TokenRequired
-		missingError := githubauth.NewMissingTokenError(strings.Join(command.Details.Arguments, " "), critical)
-		if !critical {
-			executor.logger.Warn("GitHub token missing; skipping GitHub command",
-				zap.Strings(commandArgumentsFieldNameConstant, command.Details.Arguments),
-			)
+		if requirement == githubauth.TokenRequired {
+			missingError := githubauth.NewMissingTokenError(strings.Join(command.Details.Arguments, " "), true)
+			return command, missingError
 		}
-		return command, missingError
+
+		executor.logger.Warn("GitHub token missing; proceeding without explicit token",
+			zap.Strings(commandArgumentsFieldNameConstant, command.Details.Arguments),
+		)
+		return command, nil
 	}
 
 	command.Details.EnvironmentVariables = ensureGitHubEnvironment(command.Details.EnvironmentVariables, token)
