@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/temirov/gix/internal/execshell"
+	"github.com/temirov/gix/internal/githubauth"
 	"github.com/temirov/gix/internal/githubcli"
 	"github.com/temirov/gix/internal/gitrepo"
 	"github.com/temirov/gix/internal/utils"
@@ -38,6 +39,7 @@ const (
 	workflowStageErrorTemplateConstant              = "unable to stage workflow updates: %w"
 	workflowCommitErrorTemplateConstant             = "unable to commit workflow updates: %w"
 	workflowPushErrorTemplateConstant               = "unable to push workflow updates: %w"
+	githubTokenMissingMessageConstant               = "missing GitHub authentication token; set GH_TOKEN, GITHUB_TOKEN, or GITHUB_API_TOKEN"
 	pagesUpdateErrorTemplateConstant                = "GitHub Pages update failed: %w"
 	pagesUpdateWarningMessageConstant               = "GitHub Pages update skipped"
 	pagesUpdateWarningTemplateConstant              = "PAGES-SKIP: %s (%s)"
@@ -156,6 +158,12 @@ var (
 	errCleanWorktreeRequired    = errors.New(cleanWorktreeRequiredMessageConstant)
 )
 
+type MissingGitHubTokenError struct{}
+
+func (MissingGitHubTokenError) Error() string {
+	return githubTokenMissingMessageConstant
+}
+
 // NewService constructs a Service with the provided dependencies.
 func NewService(dependencies ServiceDependencies) (*Service, error) {
 	if dependencies.RepositoryManager == nil {
@@ -189,6 +197,22 @@ func NewService(dependencies ServiceDependencies) (*Service, error) {
 	return service, nil
 }
 
+func (service *Service) ensureGitHubTokenAvailable(options MigrationOptions) error {
+	if len(strings.TrimSpace(options.RepositoryIdentifier)) == 0 {
+		return nil
+	}
+	if _, available := githubauth.ResolveToken(nil); available {
+		return nil
+	}
+	return DefaultBranchUpdateError{
+		RepositoryPath:       options.RepositoryPath,
+		RepositoryIdentifier: options.RepositoryIdentifier,
+		SourceBranch:         options.SourceBranch,
+		TargetBranch:         options.TargetBranch,
+		Cause:                MissingGitHubTokenError{},
+	}
+}
+
 // Execute performs the migration workflow.
 func (service *Service) Execute(executionContext context.Context, options MigrationOptions) (MigrationResult, error) {
 	if validationError := service.validateOptions(options); validationError != nil {
@@ -209,6 +233,10 @@ func (service *Service) Execute(executionContext context.Context, options Migrat
 		if !cleanWorktree {
 			return MigrationResult{}, errCleanWorktreeRequired
 		}
+	}
+
+	if tokenError := service.ensureGitHubTokenAvailable(options); tokenError != nil {
+		return MigrationResult{}, tokenError
 	}
 
 	workflowOutcome, rewriteError := service.workflowRewriter.Rewrite(executionContext, WorkflowRewriteConfig{

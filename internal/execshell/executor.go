@@ -4,8 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"go.uber.org/zap"
+
+	"github.com/temirov/gix/internal/githubauth"
 )
 
 const (
@@ -132,6 +135,8 @@ func (executor *ShellExecutor) Execute(executionContext context.Context, command
 		return ExecutionResult{}, ErrCommandNameMissing
 	}
 
+	command = executor.prepareCommand(command)
+
 	if executor.humanReadableLogging {
 		if executor.messageFormatter.shouldLogStartMessage(command) {
 			executor.logger.Info(executor.messageFormatter.BuildStartedMessage(command))
@@ -194,4 +199,41 @@ func (executor *ShellExecutor) ExecuteGitHubCLI(executionContext context.Context
 // ExecuteCurl runs the curl executable with the provided details.
 func (executor *ShellExecutor) ExecuteCurl(executionContext context.Context, details CommandDetails) (ExecutionResult, error) {
 	return executor.Execute(executionContext, ShellCommand{Name: CommandCurl, Details: details})
+}
+
+func (executor *ShellExecutor) prepareCommand(command ShellCommand) ShellCommand {
+	if command.Name == CommandGitHub {
+		command.Details = enrichGitHubEnvironment(command.Details)
+	}
+	return command
+}
+
+func enrichGitHubEnvironment(details CommandDetails) CommandDetails {
+	token, tokenAvailable := githubauth.ResolveToken(details.EnvironmentVariables)
+	if !tokenAvailable {
+		return details
+	}
+
+	environment := cloneEnvironment(details.EnvironmentVariables)
+
+	if value, exists := environment[githubauth.EnvGitHubCLIToken]; !exists || len(strings.TrimSpace(value)) == 0 {
+		environment[githubauth.EnvGitHubCLIToken] = token
+	}
+	if value, exists := environment[githubauth.EnvGitHubToken]; !exists || len(strings.TrimSpace(value)) == 0 {
+		environment[githubauth.EnvGitHubToken] = token
+	}
+
+	details.EnvironmentVariables = environment
+	return details
+}
+
+func cloneEnvironment(environment map[string]string) map[string]string {
+	if len(environment) == 0 {
+		return map[string]string{}
+	}
+	cloned := make(map[string]string, len(environment))
+	for key, value := range environment {
+		cloned[key] = value
+	}
+	return cloned
 }

@@ -49,7 +49,8 @@ workflow operation apply-tasks failed: failed to create branch "master" from ori
 - [x] [GX-303] the command hangs: `gix r prs delete --yes`
   - Resolution: Branch cleanup now skips GitHub metadata lookups by default, preventing `gh repo view` from blocking the run; runtime options and audits tolerate missing GitHub clients, and new tests cover the metadata-free path.
 
-- [ ] [GX-303] The command `gix b default master` fails despite having a valid token in the environment. Ensure we are reading the default GH token GITHUB_API_TOKEN, or, if the env variable is absent or empty and the remote exists, fail fast with an appropriate error message about missing token
+- [x] [GX-303] The command `gix b default master` fails despite having a valid token in the environment. Ensure we are reading the default GH token GITHUB_API_TOKEN, or, if the env variable is absent or empty and the remote exists, fail fast with an appropriate error message about missing token
+  - Resolution: GitHub CLI invocations now normalize `GITHUB_API_TOKEN`/`GITHUB_TOKEN`/`GH_TOKEN`, and default-branch migrations validate token presence before issuing GitHub calls with a clear error when missing; regression coverage added across shell executor, migrate workflow, and integration harnesses.
 ```shell
 12:40:01 tyemirov@computercat:~/Development/Poodle/ProductScanner/tools/mpr-ui [main] $ gix b default master
 workflow operation apply-tasks failed: DEFAULT-BRANCH-UPDATE repository=MarcoPoloResearchLab/mpr-ui path=/home/tyemirov/Development/Poodle/ProductScanner/tools/mpr-ui source=main target=master: gh: Validation Failed (HTTP 422)

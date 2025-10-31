@@ -11,6 +11,7 @@ import (
 	"go.uber.org/zap/zaptest/observer"
 
 	"github.com/temirov/gix/internal/execshell"
+	"github.com/temirov/gix/internal/githubauth"
 )
 
 const (
@@ -221,6 +222,57 @@ func TestShellExecutorHumanReadableLogging(testInstance *testing.T) {
 			}
 		})
 	}
+}
+
+func TestShellExecutorInjectsGitHubTokenFromEnvironment(testInstance *testing.T) {
+	testInstance.Setenv(githubauth.EnvGitHubCLIToken, "")
+	testInstance.Setenv(githubauth.EnvGitHubToken, "")
+	testInstance.Setenv(githubauth.EnvGitHubAPIToken, "api-token")
+
+	observerCore, _ := observer.New(zap.DebugLevel)
+	logger := zap.New(observerCore)
+
+	recordingRunner := &recordingCommandRunner{
+		executionResult: execshell.ExecutionResult{ExitCode: 0},
+	}
+
+	shellExecutor, creationError := execshell.NewShellExecutor(logger, recordingRunner, false)
+	require.NoError(testInstance, creationError)
+
+	_, executionError := shellExecutor.ExecuteGitHubCLI(context.Background(), execshell.CommandDetails{Arguments: []string{"status"}})
+	require.NoError(testInstance, executionError)
+
+	require.Len(testInstance, recordingRunner.recordedCommands, 1)
+	environment := recordingRunner.recordedCommands[0].Details.EnvironmentVariables
+	require.Equal(testInstance, "api-token", environment[githubauth.EnvGitHubCLIToken])
+	require.Equal(testInstance, "api-token", environment[githubauth.EnvGitHubToken])
+}
+
+func TestShellExecutorPreservesExplicitGitHubToken(testInstance *testing.T) {
+	observerCore, _ := observer.New(zap.DebugLevel)
+	logger := zap.New(observerCore)
+
+	recordingRunner := &recordingCommandRunner{
+		executionResult: execshell.ExecutionResult{ExitCode: 0},
+	}
+
+	shellExecutor, creationError := execshell.NewShellExecutor(logger, recordingRunner, false)
+	require.NoError(testInstance, creationError)
+
+	details := execshell.CommandDetails{
+		Arguments: []string{"status"},
+		EnvironmentVariables: map[string]string{
+			githubauth.EnvGitHubCLIToken: "existing-token",
+		},
+	}
+
+	_, executionError := shellExecutor.ExecuteGitHubCLI(context.Background(), details)
+	require.NoError(testInstance, executionError)
+
+	require.Len(testInstance, recordingRunner.recordedCommands, 1)
+	environment := recordingRunner.recordedCommands[0].Details.EnvironmentVariables
+	require.Equal(testInstance, "existing-token", environment[githubauth.EnvGitHubCLIToken])
+	require.Equal(testInstance, "existing-token", environment[githubauth.EnvGitHubToken])
 }
 
 func TestShellExecutorHumanReadableLoggingForGitHubRepoView(testInstance *testing.T) {

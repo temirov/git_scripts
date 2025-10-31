@@ -10,6 +10,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/temirov/gix/internal/execshell"
+	"github.com/temirov/gix/internal/githubauth"
 	"github.com/temirov/gix/internal/githubcli"
 	"github.com/temirov/gix/internal/gitrepo"
 )
@@ -98,8 +99,11 @@ func makeCommandFailedError(message string) error {
 	}
 }
 
+const testGitHubTokenValue = "test-token"
+
 func TestServiceExecuteContinuesWhenPagesLookupFails(testInstance *testing.T) {
-	testInstance.Parallel()
+	testInstance.Setenv(githubauth.EnvGitHubCLIToken, testGitHubTokenValue)
+	testInstance.Setenv(githubauth.EnvGitHubToken, testGitHubTokenValue)
 
 	repositoryExecutor := stubGitCommandExecutor{}
 	repositoryManager, managerError := gitrepo.NewRepositoryManager(repositoryExecutor)
@@ -141,7 +145,8 @@ func TestServiceExecuteContinuesWhenPagesLookupFails(testInstance *testing.T) {
 }
 
 func TestServiceExecuteWarnsWhenRetargetFails(testInstance *testing.T) {
-	testInstance.Parallel()
+	testInstance.Setenv(githubauth.EnvGitHubCLIToken, testGitHubTokenValue)
+	testInstance.Setenv(githubauth.EnvGitHubToken, testGitHubTokenValue)
 
 	repositoryExecutor := stubGitCommandExecutor{}
 	repositoryManager, managerError := gitrepo.NewRepositoryManager(repositoryExecutor)
@@ -179,7 +184,8 @@ func TestServiceExecuteWarnsWhenRetargetFails(testInstance *testing.T) {
 }
 
 func TestServiceExecuteWarnsWhenBranchProtectionFails(testInstance *testing.T) {
-	testInstance.Parallel()
+	testInstance.Setenv(githubauth.EnvGitHubCLIToken, testGitHubTokenValue)
+	testInstance.Setenv(githubauth.EnvGitHubToken, testGitHubTokenValue)
 
 	repositoryExecutor := stubGitCommandExecutor{}
 	repositoryManager, managerError := gitrepo.NewRepositoryManager(repositoryExecutor)
@@ -215,7 +221,8 @@ func TestServiceExecuteWarnsWhenBranchProtectionFails(testInstance *testing.T) {
 }
 
 func TestServiceExecuteReturnsActionableDefaultBranchError(testInstance *testing.T) {
-	testInstance.Parallel()
+	testInstance.Setenv(githubauth.EnvGitHubCLIToken, testGitHubTokenValue)
+	testInstance.Setenv(githubauth.EnvGitHubToken, testGitHubTokenValue)
 
 	repositoryExecutor := stubGitCommandExecutor{}
 	repositoryManager, managerError := gitrepo.NewRepositoryManager(repositoryExecutor)
@@ -276,4 +283,49 @@ func TestServiceExecuteReturnsActionableDefaultBranchError(testInstance *testing
 	require.Contains(testInstance, errorMessage, "source=main")
 	require.Contains(testInstance, errorMessage, "target=master")
 	require.Contains(testInstance, errorMessage, "GraphQL: branch not found")
+}
+
+func TestServiceExecuteFailsWhenGitHubTokenMissing(testInstance *testing.T) {
+	testInstance.Setenv(githubauth.EnvGitHubCLIToken, "")
+	testInstance.Setenv(githubauth.EnvGitHubToken, "")
+	testInstance.Setenv(githubauth.EnvGitHubAPIToken, "")
+
+	repositoryExecutor := stubGitCommandExecutor{}
+	repositoryManager, managerError := gitrepo.NewRepositoryManager(repositoryExecutor)
+	require.NoError(testInstance, managerError)
+
+	githubOperations := &recordingGitHubOperations{}
+
+	service, serviceError := NewService(ServiceDependencies{
+		Logger:            zap.NewNop(),
+		RepositoryManager: repositoryManager,
+		GitHubClient:      githubOperations,
+		GitExecutor:       stubCommandExecutor{},
+	})
+	require.NoError(testInstance, serviceError)
+
+	options := MigrationOptions{
+		RepositoryPath:       testInstance.TempDir(),
+		RepositoryRemoteName: "origin",
+		RepositoryIdentifier: "owner/example",
+		WorkflowsDirectory:   ".github/workflows",
+		SourceBranch:         BranchMain,
+		TargetBranch:         BranchMaster,
+		PushUpdates:          false,
+		DeleteSourceBranch:   false,
+	}
+
+	_, executionError := service.Execute(context.Background(), options)
+	require.Error(testInstance, executionError)
+
+	var updateError DefaultBranchUpdateError
+	require.ErrorAs(testInstance, executionError, &updateError)
+
+	var missingTokenError MissingGitHubTokenError
+	require.ErrorAs(testInstance, executionError, &missingTokenError)
+
+	errorMessage := updateError.Error()
+	require.Contains(testInstance, errorMessage, "DEFAULT-BRANCH-UPDATE")
+	require.Contains(testInstance, errorMessage, "missing GitHub authentication token")
+	require.False(testInstance, githubOperations.defaultBranchSet)
 }

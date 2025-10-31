@@ -78,6 +78,8 @@ func TestBranchMigrationOperationRequiresSingleTarget(testInstance *testing.T) {
 }
 
 func TestBranchMigrationOperationReturnsActionableDefaultBranchError(testInstance *testing.T) {
+	testInstance.Setenv("GH_TOKEN", "test-token")
+	testInstance.Setenv("GITHUB_TOKEN", "test-token")
 	executor := newDefaultBranchFailureExecutor("GraphQL: branch not found")
 
 	repositoryManager, managerError := gitrepo.NewRepositoryManager(executor)
