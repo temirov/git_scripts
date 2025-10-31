@@ -321,8 +321,9 @@ func TestServiceExecuteFailsWhenGitHubTokenMissing(testInstance *testing.T) {
 	var updateError DefaultBranchUpdateError
 	require.ErrorAs(testInstance, executionError, &updateError)
 
-	var missingTokenError MissingGitHubTokenError
+	var missingTokenError githubauth.MissingTokenError
 	require.ErrorAs(testInstance, executionError, &missingTokenError)
+	require.True(testInstance, missingTokenError.CriticalRequirement())
 
 	errorMessage := updateError.Error()
 	require.Contains(testInstance, errorMessage, "DEFAULT-BRANCH-UPDATE")

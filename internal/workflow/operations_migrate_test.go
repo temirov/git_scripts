@@ -9,6 +9,7 @@ import (
 
 	"github.com/temirov/gix/internal/audit"
 	"github.com/temirov/gix/internal/execshell"
+	"github.com/temirov/gix/internal/githubauth"
 	"github.com/temirov/gix/internal/githubcli"
 	"github.com/temirov/gix/internal/gitrepo"
 	migrate "github.com/temirov/gix/internal/migrate"
@@ -78,8 +79,8 @@ func TestBranchMigrationOperationRequiresSingleTarget(testInstance *testing.T) {
 }
 
 func TestBranchMigrationOperationReturnsActionableDefaultBranchError(testInstance *testing.T) {
-	testInstance.Setenv("GH_TOKEN", "test-token")
-	testInstance.Setenv("GITHUB_TOKEN", "test-token")
+	testInstance.Setenv(githubauth.EnvGitHubCLIToken, "test-token")
+	testInstance.Setenv(githubauth.EnvGitHubToken, "test-token")
 	executor := newDefaultBranchFailureExecutor("GraphQL: branch not found")
 
 	repositoryManager, managerError := gitrepo.NewRepositoryManager(executor)

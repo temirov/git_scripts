@@ -41,10 +41,11 @@ const (
 
 // CommandDetails describes command invocation properties.
 type CommandDetails struct {
-	Arguments            []string
-	WorkingDirectory     string
-	EnvironmentVariables map[string]string
-	StandardInput        []byte
+	Arguments              []string
+	WorkingDirectory       string
+	EnvironmentVariables   map[string]string
+	StandardInput          []byte
+	GitHubTokenRequirement githubauth.TokenRequirement
 }
 
 // ShellCommand represents a fully qualified command invocation.
@@ -135,7 +136,11 @@ func (executor *ShellExecutor) Execute(executionContext context.Context, command
 		return ExecutionResult{}, ErrCommandNameMissing
 	}
 
-	command = executor.prepareCommand(command)
+	var preparationError error
+	command, preparationError = executor.prepareCommand(command)
+	if preparationError != nil {
+		return ExecutionResult{}, preparationError
+	}
 
 	if executor.humanReadableLogging {
 		if executor.messageFormatter.shouldLogStartMessage(command) {
@@ -201,30 +206,41 @@ func (executor *ShellExecutor) ExecuteCurl(executionContext context.Context, det
 	return executor.Execute(executionContext, ShellCommand{Name: CommandCurl, Details: details})
 }
 
-func (executor *ShellExecutor) prepareCommand(command ShellCommand) ShellCommand {
-	if command.Name == CommandGitHub {
-		command.Details = enrichGitHubEnvironment(command.Details)
+func (executor *ShellExecutor) prepareCommand(command ShellCommand) (ShellCommand, error) {
+	if command.Name != CommandGitHub {
+		return command, nil
 	}
-	return command
+
+	requirement := command.Details.GitHubTokenRequirement
+	if requirement != githubauth.TokenOptional {
+		requirement = githubauth.TokenRequired
+	}
+
+	token, tokenAvailable := githubauth.ResolveToken(command.Details.EnvironmentVariables)
+	if !tokenAvailable {
+		critical := requirement == githubauth.TokenRequired
+		missingError := githubauth.NewMissingTokenError(strings.Join(command.Details.Arguments, " "), critical)
+		if !critical {
+			executor.logger.Warn("GitHub token missing; skipping GitHub command",
+				zap.Strings(commandArgumentsFieldNameConstant, command.Details.Arguments),
+			)
+		}
+		return command, missingError
+	}
+
+	command.Details.EnvironmentVariables = ensureGitHubEnvironment(command.Details.EnvironmentVariables, token)
+	return command, nil
 }
 
-func enrichGitHubEnvironment(details CommandDetails) CommandDetails {
-	token, tokenAvailable := githubauth.ResolveToken(details.EnvironmentVariables)
-	if !tokenAvailable {
-		return details
+func ensureGitHubEnvironment(environment map[string]string, token string) map[string]string {
+	clone := cloneEnvironment(environment)
+	if value, exists := clone[githubauth.EnvGitHubCLIToken]; !exists || len(strings.TrimSpace(value)) == 0 {
+		clone[githubauth.EnvGitHubCLIToken] = token
 	}
-
-	environment := cloneEnvironment(details.EnvironmentVariables)
-
-	if value, exists := environment[githubauth.EnvGitHubCLIToken]; !exists || len(strings.TrimSpace(value)) == 0 {
-		environment[githubauth.EnvGitHubCLIToken] = token
+	if value, exists := clone[githubauth.EnvGitHubToken]; !exists || len(strings.TrimSpace(value)) == 0 {
+		clone[githubauth.EnvGitHubToken] = token
 	}
-	if value, exists := environment[githubauth.EnvGitHubToken]; !exists || len(strings.TrimSpace(value)) == 0 {
-		environment[githubauth.EnvGitHubToken] = token
-	}
-
-	details.EnvironmentVariables = environment
-	return details
+	return clone
 }
 
 func cloneEnvironment(environment map[string]string) map[string]string {
