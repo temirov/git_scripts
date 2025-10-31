@@ -81,3 +81,35 @@ func TestApplicationVersionFlagPrintsVersionAndExits(t *testing.T) {
 	require.Equal(t, "gix version: v2.0.0\n", output)
 	require.Equal(t, 0, exitCode)
 }
+
+func TestApplicationVersionCommandPrintsVersion(t *testing.T) {
+	application := NewApplication()
+	application.versionResolver = func(context.Context) string {
+		return "v2.0.0"
+	}
+
+	exitCode := -1
+	application.exitFunction = func(code int) {
+		exitCode = code
+		panic("unexpected exit invocation")
+	}
+
+	capture := startStdoutCapture(t)
+	defer func() {
+		if capture.reader != nil {
+			_ = capture.Stop(t)
+		}
+	}()
+
+	originalArgs := os.Args
+	defer func() {
+		os.Args = originalArgs
+	}()
+	os.Args = []string{"gix", "version"}
+
+	require.NoError(t, application.Execute())
+
+	output := capture.Stop(t)
+	require.Equal(t, "gix version: v2.0.0\n", output)
+	require.Equal(t, -1, exitCode)
+}
