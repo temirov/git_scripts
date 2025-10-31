@@ -62,3 +62,33 @@ func TestTaskRunnerRunWithTasksNoRepositories(testInstance *testing.T) {
 	err := runner.Run(context.Background(), []string{"/tmp"}, definitions, RuntimeOptions{DryRun: true})
 	require.NoError(testInstance, err)
 }
+
+func TestTaskRunnerRunSkipsGitHubMetadataRequirement(testInstance *testing.T) {
+	executor := noopGitExecutor{}
+	repositoryManager, managerError := gitrepo.NewRepositoryManager(executor)
+	require.NoError(testInstance, managerError)
+
+	dependencies := Dependencies{
+		RepositoryDiscoverer: emptyDiscoverer{},
+		GitExecutor:          executor,
+		RepositoryManager:    repositoryManager,
+		Output:               io.Discard,
+		Errors:               io.Discard,
+	}
+
+	runner := NewTaskRunner(dependencies)
+
+	definitions := []TaskDefinition{{
+		Name:    "Update Remote",
+		Actions: []TaskActionDefinition{{Type: taskActionCanonicalRemote, Options: map[string]any{}}},
+		Commit:  TaskCommitDefinition{},
+	}}
+
+	err := runner.Run(
+		context.Background(),
+		[]string{"/tmp"},
+		definitions,
+		RuntimeOptions{DryRun: true, SkipRepositoryMetadata: true},
+	)
+	require.NoError(testInstance, err)
+}

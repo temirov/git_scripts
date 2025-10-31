@@ -46,6 +46,8 @@ type RuntimeOptions struct {
 	IncludeNestedRepositories            bool
 	ProcessRepositoriesByDescendingDepth bool
 	CaptureInitialWorktreeStatus         bool
+	// SkipRepositoryMetadata disables GitHub metadata resolution during repository inspections.
+	SkipRepositoryMetadata bool
 }
 
 // Executor coordinates workflow operation execution.
@@ -61,7 +63,8 @@ func NewExecutor(operations []Operation, dependencies Dependencies) *Executor {
 
 // Execute orchestrates workflow operations across discovered repositories.
 func (executor *Executor) Execute(executionContext context.Context, roots []string, runtimeOptions RuntimeOptions) error {
-	if executor.dependencies.RepositoryDiscoverer == nil || executor.dependencies.GitExecutor == nil || executor.dependencies.RepositoryManager == nil || executor.dependencies.GitHubClient == nil {
+	requireGitHubClient := !runtimeOptions.SkipRepositoryMetadata
+	if executor.dependencies.RepositoryDiscoverer == nil || executor.dependencies.GitExecutor == nil || executor.dependencies.RepositoryManager == nil || (requireGitHubClient && executor.dependencies.GitHubClient == nil) {
 		return errors.New(workflowExecutorDependenciesMessage)
 	}
 

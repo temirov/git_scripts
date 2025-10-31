@@ -191,6 +191,25 @@ func TestServiceRunBehaviors(testInstance *testing.T) {
 			expectedOutput: "folder_name,final_github_repo,name_matches,remote_default_branch,local_branch,in_sync,remote_protocol,origin_matches_canonical\nexample,canonical/example,yes,main,main,n/a,https,no\n",
 			expectedError:  "DEBUG: discovered 1 candidate repos under: /tmp/example\nDEBUG: checking /tmp/example\n",
 		},
+		{
+			name: "metadata_skipped_when_resolver_missing",
+			options: audit.CommandOptions{
+				Roots:           []string{"/tmp/example"},
+				InspectionDepth: audit.InspectionDepthMinimal,
+			},
+			discoverer: stubDiscoverer{repositories: []string{"/tmp/example"}},
+			executorOutputs: map[string]execshell.ExecutionResult{
+				"rev-parse --is-inside-work-tree": {StandardOutput: "true"},
+				"ls-remote --symref origin HEAD":  {StandardOutput: "ref: refs/heads/main\tHEAD\n"},
+			},
+			gitManager: stubGitManager{
+				cleanWorktree: true,
+				branchName:    "main",
+				remoteURL:     "https://github.com/origin/example.git",
+			},
+			expectedOutput: "folder_name,final_github_repo,name_matches,remote_default_branch,local_branch,in_sync,remote_protocol,origin_matches_canonical\nexample,origin/example,yes,main,,n/a,https,n/a\n",
+			expectedError:  "",
+		},
 	}
 
 	for testCaseIndex, testCase := range testCases {

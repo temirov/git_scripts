@@ -9,7 +9,6 @@ import (
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 
-	"github.com/temirov/gix/internal/githubcli"
 	"github.com/temirov/gix/internal/gitrepo"
 	"github.com/temirov/gix/internal/repos/dependencies"
 	"github.com/temirov/gix/internal/repos/prompt"
@@ -114,17 +113,12 @@ func (builder *CommandBuilder) run(command *cobra.Command, arguments []string) e
 	fileSystem := dependencies.ResolveFileSystem(builder.FileSystem)
 	prompter := builder.resolvePrompter(command)
 
-	githubClient, clientError := githubcli.NewClient(gitExecutor)
-	if clientError != nil {
-		return clientError
-	}
-
 	taskDependencies := workflow.Dependencies{
 		Logger:               logger,
 		RepositoryDiscoverer: repositoryDiscoverer,
 		GitExecutor:          gitExecutor,
 		RepositoryManager:    repositoryManager,
-		GitHubClient:         githubClient,
+		GitHubClient:         nil,
 		FileSystem:           fileSystem,
 		Prompter:             prompter,
 		Output:               command.OutOrStdout(),
@@ -148,8 +142,9 @@ func (builder *CommandBuilder) run(command *cobra.Command, arguments []string) e
 	}
 
 	runtimeOptions := workflow.RuntimeOptions{
-		DryRun:    options.CleanupOptions.DryRun,
-		AssumeYes: options.CleanupOptions.AssumeYes,
+		DryRun:                 options.CleanupOptions.DryRun,
+		AssumeYes:              options.CleanupOptions.AssumeYes,
+		SkipRepositoryMetadata: true,
 	}
 	return taskRunner.Run(command.Context(), options.RepositoryRoots, []workflow.TaskDefinition{taskDefinition}, runtimeOptions)
 }
