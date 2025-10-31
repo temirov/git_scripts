@@ -183,6 +183,9 @@ const (
 	versionFlagNameConstant                                          = "version"
 	versionFlagUsageConstant                                         = "Print the application version and exit"
 	versionOutputTemplateConstant                                    = "gix version: %s\n"
+	versionCommandUseNameConstant                                    = "version"
+	versionCommandShortDescriptionConstant                           = "Print the gix version"
+	versionCommandLongDescriptionConstant                            = "version prints the current gix release identifier."
 	operationDecodeErrorMessageConstant                              = "unable to decode operation defaults"
 	operationNameLogFieldConstant                                    = "operation"
 	operationErrorLogFieldConstant                                   = "error"
@@ -465,8 +468,7 @@ func NewApplication() *Application {
 			}
 
 			if versionRequested {
-				versionString := application.versionResolver(command.Context())
-				fmt.Printf(versionOutputTemplateConstant, versionString)
+				application.printVersion(command.Context())
 				application.exitFunction(0)
 			}
 
@@ -523,6 +525,19 @@ func NewApplication() *Application {
 	cobraCommand.PersistentFlags().String(flagutils.RemoteFlagName, "", flagutils.RemoteFlagUsage)
 
 	cobraCommand.PersistentFlags().BoolVar(&application.versionFlag, versionFlagNameConstant, false, versionFlagUsageConstant)
+
+	versionCommand := &cobra.Command{
+		Use:           versionCommandUseNameConstant,
+		Short:         versionCommandShortDescriptionConstant,
+		Long:          versionCommandLongDescriptionConstant,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(command *cobra.Command, arguments []string) error {
+			application.printVersion(command.Context())
+			return nil
+		},
+	}
+	cobraCommand.AddCommand(versionCommand)
 
 	auditBuilder := auditcli.CommandBuilder{
 		LoggerProvider: func() *zap.Logger {
@@ -1099,6 +1114,11 @@ func (application *Application) resolveVersion(executionContext context.Context)
 		return resolved
 	}
 	return trimmed
+}
+
+func (application *Application) printVersion(executionContext context.Context) {
+	versionString := application.versionResolver(executionContext)
+	fmt.Printf(versionOutputTemplateConstant, versionString)
 }
 
 func (application *Application) reposRenameConfiguration() repos.RenameConfiguration {

@@ -23,6 +23,8 @@ failed to fetch updates: git command exited with code 128
 ```
 If a repository doesnt have a remote, there is nothing to fetch, but we can still change the default branch, methinks. Identify non-critical steps and ensure they produce warnings but are non-blocking. Encode this semntics into tasks and workflows.
 - Resolution: `branch cd` now logs `FETCH-SKIP`/`PULL-SKIP` warnings when network operations fail and continues switching branches, so repositories without remotes (or offline) still migrate.
+- [x] [GX-203] make gix version and gix --version work the same and display its version
+  - Resolution: Added a `version` subcommand backed by the existing resolver so both `gix version` and `gix --version` print identical output; new regression coverage locks the behavior.
 
 ## BugFixes (300–399)
 
@@ -44,6 +46,7 @@ workflow operation apply-tasks failed: failed to create branch "master" from ori
   - Resolution: Branch change service now distinguishes missing-branch failures from dirty working tree errors, surfaces the Git diagnostics in returned messages, and adds regression coverage for both scenarios so the CLI reports actionable guidance instead of redundant branch creation attempts.
   - Update: Fetch and pull skip warnings now include repository paths so operators can see which repository triggered the Git error.
   - Update: Missing or inaccessible remotes now raise `WARNING: no remote counterpart for <repo>` so branch-cd skips fetches without dumping Git internals while still pointing to the affected repository.
+- [ ] [GX-303] the command hangs: `gix r prs delete --yes`
 
 ## Maintenance (400–499)
 
