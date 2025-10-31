@@ -42,15 +42,14 @@ const (
 {"id":%d,"metadata":{"container":{"tags":[]}}},
 {"id":%d,"metadata":{"container":{"tags":[]}}}
 ]`
-	packagesIntegrationVersionsPathTemplateConstant     = "/orgs/%s/packages/container/%s/versions"
-	packagesIntegrationDeletePathTemplateConstant       = "/orgs/%s/packages/container/%s/versions/%d"
-	packagesIntegrationAuthorizationTemplateConstant    = "Bearer %s"
-	packagesIntegrationGitExecutableConstant            = "git"
-	packagesIntegrationGitNoPromptEnvAssignmentConstant = "GIT_TERMINAL_PROMPT=0"
-	packagesIntegrationOriginRemoteNameConstant         = "origin"
-	packagesIntegrationOriginURLTemplateConstant        = "https://github.com/%s/%s.git"
-	packagesIntegrationStubExecutableNameConstant       = "gh"
-	packagesIntegrationStubScriptTemplateConstant       = "#!/bin/sh\nif [ \"$1\" = \"repo\" ] && [ \"$2\" = \"view\" ]; then\n  cat <<'EOF'\n{\"nameWithOwner\":\"%s/%s\",\"defaultBranchRef\":{\"name\":\"main\"},\"description\":\"\",\"isInOrganization\":true}\nEOF\n  exit 0\nfi\nexit 0\n"
+	packagesIntegrationVersionsPathTemplateConstant  = "/orgs/%s/packages/container/%s/versions"
+	packagesIntegrationDeletePathTemplateConstant    = "/orgs/%s/packages/container/%s/versions/%d"
+	packagesIntegrationAuthorizationTemplateConstant = "Bearer %s"
+	packagesIntegrationGitExecutableConstant         = "git"
+	packagesIntegrationOriginRemoteNameConstant      = "origin"
+	packagesIntegrationOriginURLTemplateConstant     = "https://github.com/%s/%s.git"
+	packagesIntegrationStubExecutableNameConstant    = "gh"
+	packagesIntegrationStubScriptTemplateConstant    = "#!/bin/sh\nif [ \"$1\" = \"repo\" ] && [ \"$2\" = \"view\" ]; then\n  cat <<'EOF'\n{\"nameWithOwner\":\"%s/%s\",\"defaultBranchRef\":{\"name\":\"main\"},\"description\":\"\",\"isInOrganization\":true}\nEOF\n  exit 0\nfi\nexit 0\n"
 )
 
 type packagesIntegrationListRequest struct {
@@ -305,7 +304,7 @@ func configurePackagesIntegrationRemote(testInstance *testing.T, repositoryRoot 
 	remoteURL := fmt.Sprintf(packagesIntegrationOriginURLTemplateConstant, owner, repositoryName)
 
 	getURLCommand := exec.Command(packagesIntegrationGitExecutableConstant, "-C", repositoryRoot, "remote", "get-url", packagesIntegrationOriginRemoteNameConstant)
-	getURLCommand.Env = append(os.Environ(), packagesIntegrationGitNoPromptEnvAssignmentConstant)
+	getURLCommand.Env = buildGitCommandEnvironment(nil)
 	outputBytes, getURLError := getURLCommand.CombinedOutput()
 	remoteExists := getURLError == nil
 	originalURL := strings.TrimSpace(string(outputBytes))
@@ -316,7 +315,7 @@ func configurePackagesIntegrationRemote(testInstance *testing.T, repositoryRoot 
 	} else {
 		configureCommand = exec.Command(packagesIntegrationGitExecutableConstant, "-C", repositoryRoot, "remote", "add", packagesIntegrationOriginRemoteNameConstant, remoteURL)
 	}
-	configureCommand.Env = append(os.Environ(), packagesIntegrationGitNoPromptEnvAssignmentConstant)
+	configureCommand.Env = buildGitCommandEnvironment(nil)
 	require.NoError(testInstance, configureCommand.Run())
 
 	return func() {
@@ -326,7 +325,7 @@ func configurePackagesIntegrationRemote(testInstance *testing.T, repositoryRoot 
 		} else {
 			cleanupCommand = exec.Command(packagesIntegrationGitExecutableConstant, "-C", repositoryRoot, "remote", "remove", packagesIntegrationOriginRemoteNameConstant)
 		}
-		cleanupCommand.Env = append(os.Environ(), packagesIntegrationGitNoPromptEnvAssignmentConstant)
+		cleanupCommand.Env = buildGitCommandEnvironment(nil)
 		require.NoError(testInstance, cleanupCommand.Run())
 	}
 }

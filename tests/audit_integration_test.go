@@ -60,12 +60,12 @@ func TestAuditRunCommandIntegration(testInstance *testing.T) {
 	tempDirectory := testInstance.TempDir()
 
 	initCommand := exec.Command(auditIntegrationGitExecutable, auditIntegrationInitFlag, auditIntegrationInitialBranchFlag, repositoryPath)
-	initCommand.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	initCommand.Env = buildGitCommandEnvironment(nil)
 	initError := initCommand.Run()
 	require.NoError(testInstance, initError)
 
 	remoteCommand := exec.Command(auditIntegrationGitExecutable, "-C", repositoryPath, auditIntegrationRemoteSubcommand, auditIntegrationAddSubcommand, auditIntegrationOriginRemoteName, auditIntegrationOriginURL)
-	remoteCommand.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	remoteCommand.Env = buildGitCommandEnvironment(nil)
 	remoteError := remoteCommand.Run()
 	require.NoError(testInstance, remoteError)
 
@@ -93,10 +93,10 @@ func TestAuditRunCommandIntegration(testInstance *testing.T) {
 	})
 	includeAllRepositoryPath := filepath.Join(includeAllRoot, "audit-all-repository")
 	initIncludeAllCommand := exec.Command(auditIntegrationGitExecutable, auditIntegrationInitFlag, auditIntegrationInitialBranchFlag, includeAllRepositoryPath)
-	initIncludeAllCommand.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	initIncludeAllCommand.Env = buildGitCommandEnvironment(nil)
 	require.NoError(testInstance, initIncludeAllCommand.Run())
 	includeAllRemoteCommand := exec.Command(auditIntegrationGitExecutable, "-C", includeAllRepositoryPath, auditIntegrationRemoteSubcommand, auditIntegrationAddSubcommand, auditIntegrationOriginRemoteName, auditIntegrationOriginURL)
-	includeAllRemoteCommand.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	includeAllRemoteCommand.Env = buildGitCommandEnvironment(nil)
 	require.NoError(testInstance, includeAllRemoteCommand.Run())
 
 	nonGitFolderName := "notes"

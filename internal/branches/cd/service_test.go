@@ -139,7 +139,7 @@ func TestChangeWarnsWhenPullFails(t *testing.T) {
 		{result: execshell.ExecutionResult{StandardOutput: "origin\n"}},
 		{result: execshell.ExecutionResult{}},
 		{},
-		{err: commandFailedError("fatal: Could not read from remote repository")},
+		{err: commandFailedError("fatal: Could not read from remote repository\nPlease make sure you have the correct access rights.")},
 	}}
 	service, err := NewService(ServiceDependencies{GitExecutor: executor})
 	require.NoError(t, err)

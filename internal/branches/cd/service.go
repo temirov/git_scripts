@@ -287,9 +287,9 @@ func summarizeCommandError(err error) string {
 	}
 	var commandFailure execshell.CommandFailedError
 	if errors.As(err, &commandFailure) {
-		trimmed := strings.TrimSpace(commandFailure.Result.StandardError)
-		if len(trimmed) > 0 {
-			return firstLine(trimmed)
+		trimmedStandardError := strings.TrimSpace(commandFailure.Result.StandardError)
+		if len(trimmedStandardError) > 0 {
+			return firstLine(trimmedStandardError)
 		}
 		return firstLine(commandFailure.Error())
 	}

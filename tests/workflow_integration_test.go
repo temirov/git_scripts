@@ -253,26 +253,26 @@ func TestWorkflowRunDisplaysHelpWhenConfigurationMissing(testInstance *testing.T
 
 func initializeWorkflowRepository(testInstance *testing.T, repositoryPath string) {
 	initCommand := exec.Command(workflowIntegrationGitExecutable, workflowIntegrationInitFlag, workflowIntegrationInitialBranchFlag, repositoryPath)
-	initCommand.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	initCommand.Env = buildGitCommandEnvironment(nil)
 	require.NoError(testInstance, initCommand.Run())
 
 	configNameCommand := exec.Command(workflowIntegrationGitExecutable, "-C", repositoryPath, workflowIntegrationConfigUserName, workflowIntegrationUserNameKey, workflowIntegrationUserNameValue)
-	configNameCommand.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	configNameCommand.Env = buildGitCommandEnvironment(nil)
 	require.NoError(testInstance, configNameCommand.Run())
 
 	configEmailCommand := exec.Command(workflowIntegrationGitExecutable, "-C", repositoryPath, workflowIntegrationConfigUserName, workflowIntegrationUserEmailKey, workflowIntegrationUserEmailValue)
-	configEmailCommand.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	configEmailCommand.Env = buildGitCommandEnvironment(nil)
 	require.NoError(testInstance, configEmailCommand.Run())
 
 	readmePath := filepath.Join(repositoryPath, workflowIntegrationReadmeFileName)
 	require.NoError(testInstance, os.WriteFile(readmePath, []byte("hello\n"), 0o644))
 
 	addReadme := exec.Command(workflowIntegrationGitExecutable, "-C", repositoryPath, "add", workflowIntegrationReadmeFileName)
-	addReadme.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	addReadme.Env = buildGitCommandEnvironment(nil)
 	require.NoError(testInstance, addReadme.Run())
 
 	commitInitial := exec.Command(workflowIntegrationGitExecutable, "-C", repositoryPath, "commit", "-m", workflowIntegrationInitialCommitMessage)
-	commitInitial.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	commitInitial.Env = buildGitCommandEnvironment(nil)
 	require.NoError(testInstance, commitInitial.Run())
 
 	workflowsDirectory := filepath.Join(repositoryPath, workflowIntegrationWorkflowDirectory)
@@ -281,23 +281,23 @@ func initializeWorkflowRepository(testInstance *testing.T, repositoryPath string
 	require.NoError(testInstance, os.WriteFile(workflowPath, []byte(workflowIntegrationWorkflowContent), 0o644))
 
 	addWorkflow := exec.Command(workflowIntegrationGitExecutable, "-C", repositoryPath, "add", workflowIntegrationWorkflowDirectory)
-	addWorkflow.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	addWorkflow.Env = buildGitCommandEnvironment(nil)
 	require.NoError(testInstance, addWorkflow.Run())
 
 	commitWorkflow := exec.Command(workflowIntegrationGitExecutable, "-C", repositoryPath, "commit", "-m", workflowIntegrationWorkflowCommitMessage)
-	commitWorkflow.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	commitWorkflow.Env = buildGitCommandEnvironment(nil)
 	require.NoError(testInstance, commitWorkflow.Run())
 
 	createMaster := exec.Command(workflowIntegrationGitExecutable, "-C", repositoryPath, workflowIntegrationBranchCommand, workflowIntegrationMasterBranch)
-	createMaster.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	createMaster.Env = buildGitCommandEnvironment(nil)
 	require.NoError(testInstance, createMaster.Run())
 
 	checkoutMaster := exec.Command(workflowIntegrationGitExecutable, "-C", repositoryPath, workflowIntegrationCheckoutCommand, workflowIntegrationMasterBranch)
-	checkoutMaster.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	checkoutMaster.Env = buildGitCommandEnvironment(nil)
 	require.NoError(testInstance, checkoutMaster.Run())
 
 	remoteCommand := exec.Command(workflowIntegrationGitExecutable, "-C", repositoryPath, "remote", "add", workflowIntegrationOriginRemoteName, workflowIntegrationHTTPSRemote)
-	remoteCommand.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	remoteCommand.Env = buildGitCommandEnvironment(nil)
 	require.NoError(testInstance, remoteCommand.Run())
 }
 
@@ -405,7 +405,7 @@ exit 0
 
 func verifyWorkflowRepositoryState(testInstance *testing.T, repositoryPath string, auditPath string) {
 	remoteCommand := exec.Command(workflowIntegrationGitExecutable, "-C", repositoryPath, "remote", "get-url", workflowIntegrationOriginRemoteName)
-	remoteCommand.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	remoteCommand.Env = buildGitCommandEnvironment(nil)
 	remoteOutput, remoteError := remoteCommand.CombinedOutput()
 	require.NoError(testInstance, remoteError, string(remoteOutput))
 	require.Equal(testInstance, "ssh://git@github.com/canonical/example.git\n", string(remoteOutput))
@@ -416,7 +416,7 @@ func verifyWorkflowRepositoryState(testInstance *testing.T, repositoryPath strin
 	require.Contains(testInstance, string(workflowBytes), "- master")
 
 	logCommand := exec.Command(workflowIntegrationGitExecutable, "-C", repositoryPath, "log", "-1", "--pretty=%s")
-	logCommand.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	logCommand.Env = buildGitCommandEnvironment(nil)
 	logOutput, logError := logCommand.CombinedOutput()
 	require.NoError(testInstance, logError, string(logOutput))
 	require.Equal(testInstance, workflowIntegrationBranchCommitMessage+"\n", string(logOutput))
