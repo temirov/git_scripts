@@ -23,6 +23,7 @@ failed to fetch updates: git command exited with code 128
 ```
 If a repository doesnt have a remote, there is nothing to fetch, but we can still change the default branch, methinks. Identify non-critical steps and ensure they produce warnings but are non-blocking. Encode this semntics into tasks and workflows.
 - Resolution: `branch cd` now logs `FETCH-SKIP`/`PULL-SKIP` warnings when network operations fail and continues switching branches, so repositories without remotes (or offline) still migrate.
+- [ ] [GX-203] make gix version and gix --version work the same and display its version
 
 ## BugFixes (300–399)
 
