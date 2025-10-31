@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/temirov/gix/internal/execshell"
+	"github.com/temirov/gix/internal/githubauth"
 	"github.com/temirov/gix/internal/githubcli"
 	"github.com/temirov/gix/internal/gitrepo"
 	"github.com/temirov/gix/internal/utils"
@@ -189,6 +190,22 @@ func NewService(dependencies ServiceDependencies) (*Service, error) {
 	return service, nil
 }
 
+func (service *Service) ensureGitHubTokenAvailable(options MigrationOptions) error {
+	if len(strings.TrimSpace(options.RepositoryIdentifier)) == 0 {
+		return nil
+	}
+	if _, available := githubauth.ResolveToken(nil); available {
+		return nil
+	}
+	return DefaultBranchUpdateError{
+		RepositoryPath:       options.RepositoryPath,
+		RepositoryIdentifier: options.RepositoryIdentifier,
+		SourceBranch:         options.SourceBranch,
+		TargetBranch:         options.TargetBranch,
+		Cause:                githubauth.NewMissingTokenError("default-branch", true),
+	}
+}
+
 // Execute performs the migration workflow.
 func (service *Service) Execute(executionContext context.Context, options MigrationOptions) (MigrationResult, error) {
 	if validationError := service.validateOptions(options); validationError != nil {
@@ -209,6 +226,10 @@ func (service *Service) Execute(executionContext context.Context, options Migrat
 		if !cleanWorktree {
 			return MigrationResult{}, errCleanWorktreeRequired
 		}
+	}
+
+	if tokenError := service.ensureGitHubTokenAvailable(options); tokenError != nil {
+		return MigrationResult{}, tokenError
 	}
 
 	workflowOutcome, rewriteError := service.workflowRewriter.Rewrite(executionContext, WorkflowRewriteConfig{
@@ -339,7 +360,11 @@ func isNonCriticalPagesError(err error) bool {
 		return true
 	}
 	var decodingError githubcli.ResponseDecodingError
-	return errors.As(err, &decodingError)
+	if errors.As(err, &decodingError) {
+		return true
+	}
+	var missingToken githubauth.MissingTokenError
+	return errors.As(err, &missingToken) && !missingToken.CriticalRequirement()
 }
 
 func (service *Service) validateOptions(options MigrationOptions) error {
@@ -447,6 +472,10 @@ func (service *Service) retargetPullRequests(executionContext context.Context, o
 }
 
 func summarizeCommandError(err error) string {
+	var missingToken githubauth.MissingTokenError
+	if errors.As(err, &missingToken) {
+		return missingToken.Error()
+	}
 	var commandFailure execshell.CommandFailedError
 	if errors.As(err, &commandFailure) {
 		trimmed := strings.TrimSpace(commandFailure.Result.StandardError)

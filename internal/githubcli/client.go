@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/temirov/gix/internal/execshell"
+	"github.com/temirov/gix/internal/githubauth"
 )
 
 const (
@@ -237,6 +238,7 @@ func (client *Client) ResolveRepoMetadata(executionContext context.Context, repo
 			jsonFlagConstant,
 			repoViewJSONFieldsConstant,
 		},
+		GitHubTokenRequirement: githubauth.TokenRequired,
 	}
 
 	executionResult, executionError := client.executor.ExecuteGitHubCLI(executionContext, commandDetails)
@@ -301,6 +303,7 @@ func (client *Client) ListPullRequests(executionContext context.Context, reposit
 			limitFlagConstant,
 			strconv.Itoa(resultLimit),
 		},
+		GitHubTokenRequirement: githubauth.TokenOptional,
 	}
 
 	executionResult, executionError := client.executor.ExecuteGitHubCLI(executionContext, commandDetails)
@@ -376,7 +379,10 @@ func (client *Client) CreatePullRequest(executionContext context.Context, option
 		arguments = append(arguments, draftFlagConstant)
 	}
 
-	commandDetails := execshell.CommandDetails{Arguments: arguments}
+	commandDetails := execshell.CommandDetails{
+		Arguments:              arguments,
+		GitHubTokenRequirement: githubauth.TokenRequired,
+	}
 	_, executionError := client.executor.ExecuteGitHubCLI(executionContext, commandDetails)
 	if executionError != nil {
 		return OperationError{Operation: createPullRequestOperationNameConstant, Cause: executionError}
@@ -422,7 +428,8 @@ func (client *Client) UpdatePagesConfig(executionContext context.Context, reposi
 			acceptHeaderFlagConstant,
 			acceptHeaderValueConstant,
 		},
-		StandardInput: payloadBytes,
+		StandardInput:          payloadBytes,
+		GitHubTokenRequirement: githubauth.TokenOptional,
 	}
 
 	_, executionError := client.executor.ExecuteGitHubCLI(executionContext, commandDetails)
@@ -449,6 +456,7 @@ func (client *Client) GetPagesConfig(executionContext context.Context, repositor
 			acceptHeaderFlagConstant,
 			acceptHeaderValueConstant,
 		},
+		GitHubTokenRequirement: githubauth.TokenOptional,
 	}
 
 	executionResult, executionError := client.executor.ExecuteGitHubCLI(executionContext, commandDetails)
@@ -507,6 +515,7 @@ func (client *Client) SetDefaultBranch(executionContext context.Context, reposit
 			acceptHeaderFlagConstant,
 			acceptHeaderValueConstant,
 		},
+		GitHubTokenRequirement: githubauth.TokenRequired,
 	}
 
 	_, executionError := client.executor.ExecuteGitHubCLI(executionContext, commandDetails)
@@ -543,6 +552,7 @@ func (client *Client) UpdatePullRequestBase(executionContext context.Context, re
 			baseFlagConstant,
 			trimmedBase,
 		},
+		GitHubTokenRequirement: githubauth.TokenOptional,
 	}
 
 	_, executionError := client.executor.ExecuteGitHubCLI(executionContext, commandDetails)
@@ -574,6 +584,7 @@ func (client *Client) CheckBranchProtection(executionContext context.Context, re
 			acceptHeaderFlagConstant,
 			acceptHeaderValueConstant,
 		},
+		GitHubTokenRequirement: githubauth.TokenOptional,
 	}
 
 	_, executionError := client.executor.ExecuteGitHubCLI(executionContext, commandDetails)

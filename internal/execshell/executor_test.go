@@ -11,6 +11,7 @@ import (
 	"go.uber.org/zap/zaptest/observer"
 
 	"github.com/temirov/gix/internal/execshell"
+	"github.com/temirov/gix/internal/githubauth"
 )
 
 const (
@@ -199,6 +200,9 @@ func TestShellExecutorHumanReadableLogging(testInstance *testing.T) {
 
 	for _, testCase := range testCases {
 		testInstance.Run(testCase.name, func(testInstance *testing.T) {
+			testInstance.Setenv(githubauth.EnvGitHubCLIToken, "test-token")
+			testInstance.Setenv(githubauth.EnvGitHubToken, "test-token")
+			testInstance.Setenv(githubauth.EnvGitHubAPIToken, "test-token")
 			observerCore, observedLogs := observer.New(zap.InfoLevel)
 			logger := zap.New(observerCore)
 
@@ -221,6 +225,98 @@ func TestShellExecutorHumanReadableLogging(testInstance *testing.T) {
 			}
 		})
 	}
+}
+
+func TestShellExecutorInjectsGitHubTokenFromEnvironment(testInstance *testing.T) {
+	testInstance.Setenv(githubauth.EnvGitHubCLIToken, "")
+	testInstance.Setenv(githubauth.EnvGitHubToken, "")
+	testInstance.Setenv(githubauth.EnvGitHubAPIToken, "api-token")
+
+	observerCore, _ := observer.New(zap.DebugLevel)
+	logger := zap.New(observerCore)
+
+	recordingRunner := &recordingCommandRunner{
+		executionResult: execshell.ExecutionResult{ExitCode: 0},
+	}
+
+	shellExecutor, creationError := execshell.NewShellExecutor(logger, recordingRunner, false)
+	require.NoError(testInstance, creationError)
+
+	_, executionError := shellExecutor.ExecuteGitHubCLI(context.Background(), execshell.CommandDetails{Arguments: []string{"status"}})
+	require.NoError(testInstance, executionError)
+
+	require.Len(testInstance, recordingRunner.recordedCommands, 1)
+	environment := recordingRunner.recordedCommands[0].Details.EnvironmentVariables
+	require.Equal(testInstance, "api-token", environment[githubauth.EnvGitHubCLIToken])
+	require.Equal(testInstance, "api-token", environment[githubauth.EnvGitHubToken])
+}
+
+func TestShellExecutorPreservesExplicitGitHubToken(testInstance *testing.T) {
+	observerCore, _ := observer.New(zap.DebugLevel)
+	logger := zap.New(observerCore)
+
+	recordingRunner := &recordingCommandRunner{
+		executionResult: execshell.ExecutionResult{ExitCode: 0},
+	}
+
+	shellExecutor, creationError := execshell.NewShellExecutor(logger, recordingRunner, false)
+	require.NoError(testInstance, creationError)
+
+	details := execshell.CommandDetails{
+		Arguments: []string{"status"},
+		EnvironmentVariables: map[string]string{
+			githubauth.EnvGitHubCLIToken: "existing-token",
+		},
+	}
+
+	_, executionError := shellExecutor.ExecuteGitHubCLI(context.Background(), details)
+	require.NoError(testInstance, executionError)
+
+	require.Len(testInstance, recordingRunner.recordedCommands, 1)
+	environment := recordingRunner.recordedCommands[0].Details.EnvironmentVariables
+	require.Equal(testInstance, "existing-token", environment[githubauth.EnvGitHubCLIToken])
+	require.Equal(testInstance, "existing-token", environment[githubauth.EnvGitHubToken])
+}
+
+func TestShellExecutorFailsWithoutTokenForCriticalGitHubCommand(testInstance *testing.T) {
+	observerCore, _ := observer.New(zap.DebugLevel)
+	logger := zap.New(observerCore)
+
+	recordingRunner := &recordingCommandRunner{}
+
+	shellExecutor, creationError := execshell.NewShellExecutor(logger, recordingRunner, false)
+	require.NoError(testInstance, creationError)
+
+	_, executionError := shellExecutor.ExecuteGitHubCLI(context.Background(), execshell.CommandDetails{Arguments: []string{"status"}})
+	require.Error(testInstance, executionError)
+
+	missingToken, ok := githubauth.IsMissingTokenError(executionError)
+	require.True(testInstance, ok)
+	require.True(testInstance, missingToken.CriticalRequirement())
+	require.Equal(testInstance, 0, len(recordingRunner.recordedCommands))
+}
+
+func TestShellExecutorWarnsButRunsWithoutTokenForOptionalGitHubCommand(testInstance *testing.T) {
+	observerCore, logs := observer.New(zap.DebugLevel)
+	logger := zap.New(observerCore)
+
+	recordingRunner := &recordingCommandRunner{}
+
+	shellExecutor, creationError := execshell.NewShellExecutor(logger, recordingRunner, false)
+	require.NoError(testInstance, creationError)
+
+	_, executionError := shellExecutor.ExecuteGitHubCLI(context.Background(), execshell.CommandDetails{
+		Arguments:              []string{"status"},
+		GitHubTokenRequirement: githubauth.TokenOptional,
+	})
+	require.NoError(testInstance, executionError)
+
+	require.Equal(testInstance, 1, len(recordingRunner.recordedCommands))
+
+	capturedLogs := logs.All()
+	require.GreaterOrEqual(testInstance, len(capturedLogs), 1)
+	require.Contains(testInstance, capturedLogs[0].Message, "GitHub token missing; proceeding without explicit token")
+	require.Equal(testInstance, zap.WarnLevel, capturedLogs[0].Level)
 }
 
 func TestShellExecutorHumanReadableLoggingForGitHubRepoView(testInstance *testing.T) {
@@ -262,6 +358,9 @@ func TestShellExecutorHumanReadableLoggingForGitHubRepoView(testInstance *testin
 
 	for _, testCase := range testCases {
 		testInstance.Run(testCase.name, func(testInstance *testing.T) {
+			testInstance.Setenv(githubauth.EnvGitHubCLIToken, "test-token")
+			testInstance.Setenv(githubauth.EnvGitHubToken, "test-token")
+			testInstance.Setenv(githubauth.EnvGitHubAPIToken, "test-token")
 			observerCore, observedLogs := observer.New(zap.InfoLevel)
 			logger := zap.New(observerCore)
 
@@ -330,6 +429,11 @@ func TestShellExecutorWrappersSetCommandNames(testInstance *testing.T) {
 
 	for _, testCase := range testCases {
 		testInstance.Run(testCase.name, func(testInstance *testing.T) {
+			if testCase.expectedCommand == execshell.CommandGitHub {
+				testInstance.Setenv(githubauth.EnvGitHubCLIToken, "test-token")
+				testInstance.Setenv(githubauth.EnvGitHubToken, "test-token")
+				testInstance.Setenv(githubauth.EnvGitHubAPIToken, "test-token")
+			}
 			recordingRunner := &recordingCommandRunner{
 				executionResult: execshell.ExecutionResult{ExitCode: 1},
 			}
