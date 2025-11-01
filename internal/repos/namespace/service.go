@@ -1,7 +1,6 @@
 package namespace
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"errors"
@@ -14,6 +13,7 @@ import (
 	"sort"
 	"strings"
 
+	"golang.org/x/mod/modfile"
 	"golang.org/x/tools/imports"
 
 	"github.com/temirov/gix/internal/execshell"
@@ -189,14 +189,6 @@ func (plan changePlan) relativeGoFiles() []string {
 		paths = append(paths, path)
 	}
 	sort.Strings(paths)
-	return paths
-}
-
-func (plan changePlan) allChangedRelativePaths() []string {
-	paths := plan.relativeGoFiles()
-	if plan.goMod {
-		paths = append([]string{"go.mod"}, paths...)
-	}
 	return paths
 }
 
@@ -474,60 +466,134 @@ func (service *Service) rewriteGoMod(goModPath string, oldPrefix ModulePrefix, n
 		return readErr
 	}
 
-	scanner := bufio.NewScanner(bytes.NewReader(content))
-	var lines []string
-	didChange := false
-	inBlock := ""
-	oldWithSlash := oldPrefix.String() + "/"
-	newWithSlash := newPrefix.String() + "/"
-	for scanner.Scan() {
-		line := scanner.Text()
-		trimmed := strings.TrimSpace(line)
+	file, parseErr := modfile.Parse("go.mod", content, nil)
+	if parseErr != nil {
+		return parseErr
+	}
 
-		switch {
-		case strings.HasPrefix(trimmed, "module "):
-			old := "module " + oldPrefix.String() + "/"
-			if strings.HasPrefix(trimmed, old) {
-				didChange = true
-				lines = append(lines, strings.Replace(trimmed, oldWithSlash, newWithSlash, 1))
-				continue
+	replacer := namespaceReplacer{
+		old: oldPrefix.String(),
+		new: newPrefix.String(),
+	}
+
+	didChange := false
+
+	if file.Module != nil {
+		if updated, changed := replacer.replace(file.Module.Mod.Path); changed {
+			file.Module.Mod.Path = updated
+			if syntax := file.Module.Syntax; syntax != nil && len(syntax.Token) >= 2 {
+				syntax.Token[1] = modfile.AutoQuote(updated)
 			}
-		case strings.HasPrefix(trimmed, "require "), strings.HasPrefix(trimmed, "replace "):
-			if strings.HasPrefix(trimmed, "require (") {
-				inBlock = "require"
-				lines = append(lines, line)
-				continue
-			}
-			if strings.HasPrefix(trimmed, "replace (") {
-				inBlock = "replace"
-				lines = append(lines, line)
-				continue
-			}
-			if strings.Contains(line, oldWithSlash) {
-				didChange = true
-				lines = append(lines, strings.ReplaceAll(line, oldWithSlash, newWithSlash))
-				continue
-			}
-		case trimmed == ")":
-			inBlock = ""
-		}
-		if inBlock != "" && strings.Contains(line, oldWithSlash) {
 			didChange = true
-			lines = append(lines, strings.ReplaceAll(line, oldWithSlash, newWithSlash))
+		}
+	}
+
+	for _, require := range file.Require {
+		if require == nil {
 			continue
 		}
+		if updated, changed := replacer.replace(require.Mod.Path); changed {
+			require.Mod.Path = updated
+			if syntax := require.Syntax; syntax != nil {
+				token := modfile.AutoQuote(updated)
+				if syntax.InBlock {
+					if len(syntax.Token) >= 1 {
+						syntax.Token[0] = token
+					}
+				} else if len(syntax.Token) >= 2 {
+					syntax.Token[1] = token
+				}
+			}
+			didChange = true
+		}
+	}
 
-		lines = append(lines, line)
+	for _, replace := range file.Replace {
+		if replace == nil {
+			continue
+		}
+		if updated, changed := replacer.replace(replace.Old.Path); changed {
+			replace.Old.Path = updated
+			if syntax := replace.Syntax; syntax != nil {
+				token := modfile.AutoQuote(updated)
+				if syntax.InBlock {
+					if len(syntax.Token) >= 1 {
+						syntax.Token[0] = token
+					}
+				} else if len(syntax.Token) >= 2 {
+					syntax.Token[1] = token
+				}
+			}
+			didChange = true
+		}
+		if updated, changed := replacer.replace(replace.New.Path); changed {
+			replace.New.Path = updated
+			if syntax := replace.Syntax; syntax != nil {
+				token := modfile.AutoQuote(updated)
+				if syntax.InBlock {
+					if len(syntax.Token) >= 3 {
+						syntax.Token[2] = token
+					}
+				} else if len(syntax.Token) >= 4 {
+					syntax.Token[3] = token
+				}
+			}
+			didChange = true
+		}
 	}
-	if err := scanner.Err(); err != nil {
-		return err
+
+	for _, exclude := range file.Exclude {
+		if exclude == nil {
+			continue
+		}
+		if updated, changed := replacer.replace(exclude.Mod.Path); changed {
+			exclude.Mod.Path = updated
+			if syntax := exclude.Syntax; syntax != nil {
+				token := modfile.AutoQuote(updated)
+				if syntax.InBlock {
+					if len(syntax.Token) >= 1 {
+						syntax.Token[0] = token
+					}
+				} else if len(syntax.Token) >= 2 {
+					syntax.Token[1] = token
+				}
+			}
+			didChange = true
+		}
 	}
+
 	if !didChange {
 		return nil
 	}
 
+	file.Cleanup()
+
+	formatted, formatErr := file.Format()
+	if formatErr != nil {
+		return formatErr
+	}
+
 	mode := filePermissionsOrDefault(service.fileSystem, goModPath, 0o644)
-	return service.fileSystem.WriteFile(goModPath, []byte(strings.Join(lines, "\n")), mode)
+	return service.fileSystem.WriteFile(goModPath, formatted, mode)
+}
+
+type namespaceReplacer struct {
+	old string
+	new string
+}
+
+func (replacer namespaceReplacer) replace(path string) (string, bool) {
+	if path == "" {
+		return path, false
+	}
+	if path == replacer.old {
+		return replacer.new, replacer.old != replacer.new
+	}
+	oldWithSlash := replacer.old + "/"
+	if strings.HasPrefix(path, oldWithSlash) {
+		return replacer.new + path[len(replacer.old):], true
+	}
+	return path, false
 }
 
 func (service *Service) rewriteGoFile(absolutePath string, oldPrefix ModulePrefix, newPrefix ModulePrefix) error {
