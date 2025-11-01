@@ -2,8 +2,9 @@
 
 Entries record newly discovered requests or changes, with their outcomes. No instructive content lives here. Read @NOTES.md for the process to follow when fixing issues.
 
-## Features (120–199)
+## Features (100–199)
 
+- [ ] [GX-100] Implement rewriting namespace. The prototype is under @tools/ns-rewrite. Use worklfow / task interface and lean on the already built ability to change file content
 
 ## Improvements (200–299)
 
