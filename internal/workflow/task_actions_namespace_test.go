@@ -100,6 +100,7 @@ func main() { dep.Do() }
 		"branch_prefix":                 "rewrite",
 		"remote":                        "origin",
 		namespaceCommitMessageOptionKey: namespaceTestCommitMessage,
+		namespaceCommitMessageFlagName: namespaceTestCommitMessage,
 	}
 
 	err = handleNamespaceRewriteAction(context.Background(), environment, repository, parameters)
