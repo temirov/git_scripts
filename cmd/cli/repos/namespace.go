@@ -17,16 +17,18 @@ import (
 )
 
 const (
-	namespaceUseConstant          = "repo-namespace-rewrite"
-	namespaceShortDescription     = "Rewrite Go module namespaces across repositories"
-	namespaceLongDescription      = "repo-namespace-rewrite updates go.mod and Go imports to replace an old module namespace with a new one."
-	namespaceOldFlagName          = "old"
-	namespaceNewFlagName          = "new"
-	namespaceBranchPrefixFlagName = "branch-prefix"
-	namespaceRemoteFlagName       = "remote"
-	namespacePushFlagName         = "push"
-	namespaceCommitFlagName       = "commit-message"
-	namespaceActionType           = "repo.namespace.rewrite"
+	namespaceUseConstant               = "repo-namespace-rewrite"
+	namespaceShortDescription          = "Rewrite Go module namespaces across repositories"
+	namespaceLongDescription           = "repo-namespace-rewrite updates go.mod and Go imports to replace an old module namespace with a new one."
+	namespaceOldFlagName               = "old"
+	namespaceNewFlagName               = "new"
+	namespaceBranchPrefixFlagName      = "branch-prefix"
+	namespaceBranchPrefixOptionKeyName = "branch_prefix"
+	namespaceRemoteFlagName            = "remote"
+	namespacePushFlagName              = "push"
+	namespaceCommitFlagName            = "commit-message"
+	namespaceCommitOptionKeyName       = "commit_message"
+	namespaceActionType                = "repo.namespace.rewrite"
 )
 
 // NamespaceCommandBuilder assembles the namespace rewrite command.
@@ -195,18 +197,21 @@ func (builder *NamespaceCommandBuilder) run(command *cobra.Command, arguments []
 		namespacePushFlagName: push,
 	}
 	if len(branchPrefix) > 0 {
+		actionOptions[namespaceBranchPrefixOptionKeyName] = branchPrefix
 		actionOptions[namespaceBranchPrefixFlagName] = branchPrefix
 	}
 	if len(remote) > 0 {
 		actionOptions[namespaceRemoteFlagName] = remote
 	}
 	if len(commitMessage) > 0 {
+		actionOptions[namespaceCommitOptionKeyName] = commitMessage
 		actionOptions[namespaceCommitFlagName] = commitMessage
 	}
 
 	taskDefinition := workflow.TaskDefinition{
 		Name:        "Rewrite Go namespace",
 		EnsureClean: false,
+		Safeguards:  configuration.Safeguards,
 		Actions: []workflow.TaskActionDefinition{
 			{Type: namespaceActionType, Options: actionOptions},
 		},

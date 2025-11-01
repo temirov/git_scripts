@@ -47,6 +47,7 @@ func TestNamespaceCommandUsesConfigurationDefaults(t *testing.T) {
 				Push:            true,
 				Remote:          "origin",
 				BranchPrefix:    "ns",
+				Safeguards:      map[string]any{"require_clean": true},
 			}
 		},
 		TaskRunnerFactory: func(workflow.Dependencies) repos.TaskRunnerExecutor { return taskRunner },
@@ -72,7 +73,8 @@ func TestNamespaceCommandUsesConfigurationDefaults(t *testing.T) {
 	require.Equal(t, "github.com/old/org", action.Options["old"])
 	require.Equal(t, "github.com/new/org", action.Options["new"])
 	require.Equal(t, true, action.Options["push"])
-	require.Equal(t, "ns", action.Options["branch-prefix"])
+	require.Equal(t, "ns", action.Options["branch_prefix"])
+	require.Equal(t, map[string]any{"require_clean": true}, taskRunner.definitions[0].Safeguards)
 }
 
 func TestNamespaceCommandFlagOverrides(t *testing.T) {
@@ -97,7 +99,7 @@ func TestNamespaceCommandFlagOverrides(t *testing.T) {
 
 	args := flagutils.NormalizeToggleArguments([]string{
 		"--dry-run",
-		"--yes",
+		"--" + flagutils.AssumeYesFlagName,
 		"--" + flagutils.DefaultRootFlagName, "/tmp/cli-root",
 		"--old", "github.com/cli/old",
 		"--new", "github.com/cli/new",
@@ -119,9 +121,9 @@ func TestNamespaceCommandFlagOverrides(t *testing.T) {
 	require.Equal(t, "github.com/cli/old", action.Options["old"])
 	require.Equal(t, "github.com/cli/new", action.Options["new"])
 	require.Equal(t, false, action.Options["push"])
-	require.Equal(t, "rewrite", action.Options["branch-prefix"])
+	require.Equal(t, "rewrite", action.Options["branch_prefix"])
 	require.Equal(t, "upstream", action.Options["remote"])
-	require.Equal(t, "chore: rewrite", action.Options["commit-message"])
+	require.Equal(t, "chore: rewrite", action.Options["commit_message"])
 }
 
 func TestNamespaceCommandRequiresPrefixes(t *testing.T) {

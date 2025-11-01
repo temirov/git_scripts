@@ -70,15 +70,16 @@ type ReplaceConfiguration struct {
 
 // NamespaceConfiguration describes configuration values for namespace rewrite.
 type NamespaceConfiguration struct {
-	DryRun          bool     `mapstructure:"dry_run"`
-	AssumeYes       bool     `mapstructure:"assume_yes"`
-	RepositoryRoots []string `mapstructure:"roots"`
-	OldPrefix       string   `mapstructure:"old"`
-	NewPrefix       string   `mapstructure:"new"`
-	Push            bool     `mapstructure:"push"`
-	Remote          string   `mapstructure:"remote"`
-	BranchPrefix    string   `mapstructure:"branch_prefix"`
-	CommitMessage   string   `mapstructure:"commit_message"`
+	DryRun          bool           `mapstructure:"dry_run"`
+	AssumeYes       bool           `mapstructure:"assume_yes"`
+	RepositoryRoots []string       `mapstructure:"roots"`
+	OldPrefix       string         `mapstructure:"old"`
+	NewPrefix       string         `mapstructure:"new"`
+	Push            bool           `mapstructure:"push"`
+	Remote          string         `mapstructure:"remote"`
+	BranchPrefix    string         `mapstructure:"branch_prefix"`
+	CommitMessage   string         `mapstructure:"commit_message"`
+	Safeguards      map[string]any `mapstructure:"safeguards"`
 }
 
 // DefaultToolsConfiguration returns baseline configuration values for repository commands.
@@ -135,6 +136,7 @@ func DefaultToolsConfiguration() ToolsConfiguration {
 			Remote:          "origin",
 			BranchPrefix:    "namespace-rewrite",
 			CommitMessage:   "",
+			Safeguards:      nil,
 		},
 	}
 }
@@ -203,6 +205,14 @@ func (configuration NamespaceConfiguration) sanitize() NamespaceConfiguration {
 	sanitized.Remote = strings.TrimSpace(configuration.Remote)
 	sanitized.BranchPrefix = strings.TrimSpace(configuration.BranchPrefix)
 	sanitized.CommitMessage = strings.TrimSpace(configuration.CommitMessage)
+	if len(configuration.Safeguards) > 0 {
+		sanitized.Safeguards = make(map[string]any, len(configuration.Safeguards))
+		for key, value := range configuration.Safeguards {
+			sanitized.Safeguards[key] = value
+		}
+	} else {
+		sanitized.Safeguards = nil
+	}
 	return sanitized
 }
 

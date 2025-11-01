@@ -471,11 +471,7 @@ func (service *Service) rewriteGoMod(goModPath string, oldPrefix ModulePrefix, n
 		return parseErr
 	}
 
-	replacer := namespaceReplacer{
-		old: oldPrefix.String(),
-		new: newPrefix.String(),
-	}
-
+	replacer := namespaceReplacer{old: oldPrefix.String(), new: newPrefix.String()}
 	didChange := false
 
 	if file.Module != nil {
@@ -567,7 +563,6 @@ func (service *Service) rewriteGoMod(goModPath string, oldPrefix ModulePrefix, n
 	}
 
 	file.Cleanup()
-
 	formatted, formatErr := file.Format()
 	if formatErr != nil {
 		return formatErr

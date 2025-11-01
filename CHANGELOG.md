@@ -9,6 +9,7 @@
 - `branch default` command now accepts the target branch as a positional argument (`gix b default master`) while retaining configuration fallbacks and removing the legacy `--to` flag.
 
 ### Improvements ⚙️
+- Workflow tasks now support reusable safeguards (clean worktree, branch, path checks) so repositories can be skipped declaratively before mutating operations.
 - Introduced validated domain types for repository paths, owner/repo tuples, remotes, and branch names, refactoring repository executors and workflow options to consume the new constructors.
 - Added a contextual error catalog and updated repository executors/workflow bridges to emit stable sentinel codes instead of ad-hoc failure strings.
 - Consolidated repository helper utilities (optional owner parsing, confirmation policies, shared reporter) and removed duplicated normalization across workflows.

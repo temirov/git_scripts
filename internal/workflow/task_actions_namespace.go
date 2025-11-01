@@ -13,15 +13,17 @@ const (
 	namespaceActionType             = "repo.namespace.rewrite"
 	namespaceOldPrefixOptionKey     = "old"
 	namespaceNewPrefixOptionKey     = "new"
-	namespaceBranchPrefixOptionKey  = "branch-prefix"
-	namespaceBranchPrefixLegacyKey  = "branch_prefix"
+	namespaceBranchPrefixOptionKey  = "branch_prefix"
+	namespaceBranchPrefixLegacyKey  = "branch-prefix"
+	namespaceCommitMessageOptionKey = "commit_message"
+	namespaceCommitMessageFlagName  = "commit-message"
 	namespacePushOptionKey          = "push"
 	namespaceRemoteOptionKey        = "remote"
-	namespaceCommitMessageOptionKey = "commit_message"
-	namespacePlanMessageTemplate    = "NAMESPACE-PLAN: %s branch=%s files=%d push=%t\n"
-	namespaceApplyMessageTemplate   = "NAMESPACE-APPLY: %s branch=%s files=%d push=%t\n"
-	namespaceNoopMessageTemplate    = "NAMESPACE-NOOP: %s reason=%s\n"
-	namespaceSkipMessageTemplate    = "NAMESPACE-SKIP: %s reason=%s\n"
+	namespaceSafeguardsOptionKey    = "safeguards"
+	namespacePlanMessageTemplate    = "NAMESPACE-PLAN: %s branch=%s files=%d push=%t\\n"
+	namespaceApplyMessageTemplate   = "NAMESPACE-APPLY: %s branch=%s files=%d push=%t\\n"
+	namespaceNoopMessageTemplate    = "NAMESPACE-NOOP: %s reason=%s\\n"
+	namespaceSkipMessageTemplate    = "NAMESPACE-SKIP: %s reason=%s\\n"
 	namespacePromptTemplate         = "Rewrite namespace %s -> %s in %s? [a/N/y] "
 )
 
@@ -68,12 +70,14 @@ func handleNamespaceRewriteAction(ctx context.Context, environment *Environment,
 		return branchErr
 	}
 	if !branchExists {
-		legacyPrefix, legacyExists, legacyErr := reader.stringValue(namespaceBranchPrefixLegacyKey)
-		if legacyErr != nil {
+		if value, exists, legacyErr := reader.stringValue(namespaceBranchPrefixLegacyKey); legacyErr != nil {
 			return legacyErr
-		}
-		if legacyExists {
-			branchPrefix = legacyPrefix
+		} else if exists {
+			branchPrefix = strings.TrimSpace(value)
+		} else if raw, ok := parameters[namespaceBranchPrefixLegacyKey]; ok {
+			if stringValue, ok := raw.(string); ok {
+				branchPrefix = strings.TrimSpace(stringValue)
+			}
 		}
 	}
 
@@ -91,14 +95,41 @@ func handleNamespaceRewriteAction(ctx context.Context, environment *Environment,
 		remote = strings.TrimSpace(value)
 	}
 
-	commitMessage, _, commitErr := reader.stringValue(namespaceCommitMessageOptionKey)
+	commitMessage, commitExists, commitErr := reader.stringValue(namespaceCommitMessageOptionKey)
 	if commitErr != nil {
 		return commitErr
+	}
+	if !commitExists {
+		if value, exists, legacyErr := reader.stringValue(namespaceCommitMessageFlagName); legacyErr != nil {
+			return legacyErr
+		} else if exists {
+			commitMessage = strings.TrimSpace(value)
+		} else if raw, ok := parameters[namespaceCommitMessageFlagName]; ok {
+			if stringValue, ok := raw.(string); ok {
+				commitMessage = strings.TrimSpace(stringValue)
+			}
+		}
 	}
 
 	repositoryPath, repoPathErr := shared.NewRepositoryPath(repository.Path)
 	if repoPathErr != nil {
 		return repoPathErr
+	}
+
+	safeguards, _, safeguardsErr := reader.mapValue(namespaceSafeguardsOptionKey)
+	if safeguardsErr != nil {
+		return safeguardsErr
+	}
+
+	if len(safeguards) > 0 {
+		pass, reason, evalErr := EvaluateSafeguards(ctx, environment, repository, safeguards)
+		if evalErr != nil {
+			return evalErr
+		}
+		if !pass {
+			writeNamespaceReason(environment, namespaceSkipMessageTemplate, repository.Path, reason)
+			return nil
+		}
 	}
 
 	service, serviceErr := namespace.NewService(namespace.Dependencies{
