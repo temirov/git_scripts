@@ -114,10 +114,55 @@ func main() { dep.Do() }
 	require.Contains(t, joinedCommands, "push --set-upstream origin")
 }
 
+func TestHandleNamespaceRewriteActionRespectsSafeguards(t *testing.T) {
+	t.Parallel()
+
+	tempDir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(tempDir, ".git"), 0o755))
+
+	goMod := "module github.com/old/org/app\n\ngo 1.22\nrequire github.com/old/org/dep v1.0.0\n"
+	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "go.mod"), []byte(goMod), 0o644))
+
+	source := `package main
+import "github.com/old/org/dep"
+func main() { dep.Do() }
+`
+	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "main.go"), []byte(source), 0o644))
+
+	executor := &namespaceTestGitExecutor{statusOutput: " M main.go"}
+	manager, err := gitrepo.NewRepositoryManager(executor)
+	require.NoError(t, err)
+	output := &bytes.Buffer{}
+	environment := &Environment{
+		FileSystem:        filesystem.OSFileSystem{},
+		GitExecutor:       executor,
+		RepositoryManager: manager,
+		Output:            output,
+	}
+
+	repository := &RepositoryState{Path: tempDir}
+	parameters := map[string]any{
+		"old":        "github.com/old/org",
+		"new":        "github.com/new/org",
+		"safeguards": map[string]any{"require_clean": true},
+	}
+
+	err = handleNamespaceRewriteAction(context.Background(), environment, repository, parameters)
+	require.NoError(t, err)
+
+	updatedSource, readErr := os.ReadFile(filepath.Join(tempDir, "main.go"))
+	require.NoError(t, readErr)
+	require.Contains(t, string(updatedSource), "github.com/old/org/dep")
+
+	require.Contains(t, output.String(), "NAMESPACE-SKIP")
+	require.Equal(t, []string{"status --porcelain"}, executor.recorded())
+}
+
 type namespaceTestGitExecutor struct {
 	commands     []execshell.CommandDetails
 	staged       map[string]struct{}
 	configValues map[string]string
+	statusOutput string
 }
 
 func (executor *namespaceTestGitExecutor) ExecuteGit(_ context.Context, details execshell.CommandDetails) (execshell.ExecutionResult, error) {
@@ -133,7 +178,7 @@ func (executor *namespaceTestGitExecutor) ExecuteGit(_ context.Context, details 
 
 	switch args[0] {
 	case "status":
-		return execshell.ExecutionResult{StandardOutput: ""}, nil
+		return execshell.ExecutionResult{StandardOutput: executor.statusOutput}, nil
 	case "checkout":
 		return execshell.ExecutionResult{}, nil
 	case "add":
