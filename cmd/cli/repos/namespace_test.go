@@ -47,6 +47,7 @@ func TestNamespaceCommandUsesConfigurationDefaults(t *testing.T) {
 				Push:            true,
 				Remote:          "origin",
 				BranchPrefix:    "ns",
+				Safeguards:      map[string]any{"require_clean": true},
 			}
 		},
 		TaskRunnerFactory: func(workflow.Dependencies) repos.TaskRunnerExecutor { return taskRunner },
@@ -73,6 +74,7 @@ func TestNamespaceCommandUsesConfigurationDefaults(t *testing.T) {
 	require.Equal(t, "github.com/new/org", action.Options["new"])
 	require.Equal(t, true, action.Options["push"])
 	require.Equal(t, "ns", action.Options["branch-prefix"])
+	require.Equal(t, map[string]any{"require_clean": true}, taskRunner.definitions[0].Safeguards)
 }
 
 func TestNamespaceCommandFlagOverrides(t *testing.T) {

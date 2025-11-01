@@ -207,6 +207,7 @@ func (builder *NamespaceCommandBuilder) run(command *cobra.Command, arguments []
 	taskDefinition := workflow.TaskDefinition{
 		Name:        "Rewrite Go namespace",
 		EnsureClean: false,
+		Safeguards:  configuration.Safeguards,
 		Actions: []workflow.TaskActionDefinition{
 			{Type: namespaceActionType, Options: actionOptions},
 		},

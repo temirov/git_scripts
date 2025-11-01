@@ -17,6 +17,7 @@ const (
 	namespacePushOptionKey          = "push"
 	namespaceRemoteOptionKey        = "remote"
 	namespaceCommitMessageOptionKey = "commit_message"
+	namespaceSafeguardsOptionKey    = "safeguards"
 	namespacePlanMessageTemplate    = "NAMESPACE-PLAN: %s branch=%s files=%d push=%t\n"
 	namespaceApplyMessageTemplate   = "NAMESPACE-APPLY: %s branch=%s files=%d push=%t\n"
 	namespaceNoopMessageTemplate    = "NAMESPACE-NOOP: %s reason=%s\n"
@@ -89,6 +90,22 @@ func handleNamespaceRewriteAction(ctx context.Context, environment *Environment,
 	repositoryPath, repoPathErr := shared.NewRepositoryPath(repository.Path)
 	if repoPathErr != nil {
 		return repoPathErr
+	}
+
+	safeguards, _, safeguardsErr := reader.mapValue(namespaceSafeguardsOptionKey)
+	if safeguardsErr != nil {
+		return safeguardsErr
+	}
+
+	if len(safeguards) > 0 {
+		pass, reason, evalErr := EvaluateSafeguards(ctx, environment, repository, safeguards)
+		if evalErr != nil {
+			return evalErr
+		}
+		if !pass {
+			writeNamespaceReason(environment, namespaceSkipMessageTemplate, repository.Path, reason)
+			return nil
+		}
 	}
 
 	service, serviceErr := namespace.NewService(namespace.Dependencies{
