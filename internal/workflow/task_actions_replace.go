@@ -21,10 +21,6 @@ const (
 	fileReplaceCommandOptionKey    = "command"
 	fileReplaceSafeguardsOptionKey = "safeguards"
 
-	fileReplaceRequireCleanKey  = "require_clean"
-	fileReplaceRequireBranchKey = "branch"
-	fileReplaceRequirePathsKey  = "paths"
-
 	fileReplacePlanMessageTemplate    = "REPLACE-PLAN: %s file=%s replacements=%d\n"
 	fileReplaceApplyMessageTemplate   = "REPLACE-APPLY: %s file=%s replacements=%d\n"
 	fileReplaceSkipMessageTemplate    = "REPLACE-SKIP: %s reason=%s\n"

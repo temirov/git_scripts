@@ -192,14 +192,6 @@ func (plan changePlan) relativeGoFiles() []string {
 	return paths
 }
 
-func (plan changePlan) allChangedRelativePaths() []string {
-	paths := plan.relativeGoFiles()
-	if plan.goMod {
-		paths = append([]string{"go.mod"}, paths...)
-	}
-	return paths
-}
-
 // Rewrite applies namespace updates across go.mod and Go source files.
 func (service *Service) Rewrite(ctx context.Context, options Options) (Result, error) {
 	if service == nil {
