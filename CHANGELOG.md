@@ -2,6 +2,7 @@
 ## [v0.2.0-rc.1]
 
 ### Features ✨
+- Added `repo namespace rewrite` command backed by a namespace rewrite service and workflow action to update Go module paths across repositories.
 - Added `repo files replace` command for file replacement tasks across repositories.
 - Added `repo history purge` command with task-runner orchestration and dry-run previews.
 - Routed the workflow CLI through the shared task runner so declarative workflow steps execute as orchestrated tasks.

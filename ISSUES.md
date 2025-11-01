@@ -4,7 +4,8 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
 
 ## Features (100–199)
 
-- [ ] [GX-100] Implement rewriting namespace. The prototype is under @tools/ns-rewrite. Use worklfow / task interface and lean on the already built ability to change file content
+- [x] [GX-100] Implement rewriting namespace. The prototype is under @tools/ns-rewrite. Use worklfow / task interface and lean on the already built ability to change file content
+  - Resolution: Added namespace rewrite service, workflow action, and `gix repo namespace rewrite` command with tests and configuration defaults.
 
 ## Improvements (200–299)
 
