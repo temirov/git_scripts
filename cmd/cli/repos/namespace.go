@@ -27,6 +27,7 @@ const (
 	namespaceRemoteFlagName            = "remote"
 	namespacePushFlagName              = "push"
 	namespaceCommitFlagName            = "commit-message"
+	namespaceCommitOptionKeyName       = "commit_message"
 	namespaceActionType                = "repo.namespace.rewrite"
 )
 
@@ -196,14 +197,13 @@ func (builder *NamespaceCommandBuilder) run(command *cobra.Command, arguments []
 		namespacePushFlagName: push,
 	}
 	if len(branchPrefix) > 0 {
-		actionOptions[namespaceBranchPrefixFlagName] = branchPrefix
 		actionOptions[namespaceBranchPrefixOptionKeyName] = branchPrefix
 	}
 	if len(remote) > 0 {
 		actionOptions[namespaceRemoteFlagName] = remote
 	}
 	if len(commitMessage) > 0 {
-		actionOptions[namespaceCommitFlagName] = commitMessage
+		actionOptions[namespaceCommitOptionKeyName] = commitMessage
 	}
 
 	taskDefinition := workflow.TaskDefinition{

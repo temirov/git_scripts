@@ -141,6 +141,65 @@ func main() { dep.Do() }
 	require.Contains(t, executor.recordedCommands(), "push --set-upstream origin ns-update/20241124-120000Z")
 }
 
+func TestRewriteUpdatesGoModDependencyBlocks(t *testing.T) {
+	t.Parallel()
+
+	tempDir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(tempDir, ".git"), 0o755))
+
+	goModContent := "module github.com/old/account/app\n\ngo 1.22\n\nrequire (\n\tgithub.com/old/account/dep v1.0.0\n\tgithub.com/another/module v0.2.0\n)\n\nreplace (\n\tgithub.com/old/account/dep => github.com/old/account/dep v1.0.1\n\tgithub.com/old/account/tool => github.com/old/account/tool v1.2.3\n)\n"
+	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "go.mod"), []byte(goModContent), 0o644))
+
+	source := `package main
+import "github.com/old/account/dep"
+func main() { dep.Do() }
+`
+	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "main.go"), []byte(source), 0o644))
+
+	oldPrefix, err := namespace.NewModulePrefix("github.com/old/account")
+	require.NoError(t, err)
+	newPrefix, err := namespace.NewModulePrefix("github.com/new/account")
+	require.NoError(t, err)
+
+	executor := &recordingGitExecutor{
+		configValues: map[string]string{
+			"user.name":  "Test User",
+			"user.email": "test@example.com",
+		},
+	}
+	manager, err := gitrepo.NewRepositoryManager(executor)
+	require.NoError(t, err)
+
+	service, err := namespace.NewService(namespace.Dependencies{
+		FileSystem:        filesystem.OSFileSystem{},
+		GitExecutor:       executor,
+		RepositoryManager: manager,
+		Clock:             fixedClock{instant: time.Date(2024, 11, 24, 12, 0, 0, 0, time.UTC)},
+	})
+	require.NoError(t, err)
+
+	repositoryPath, err := shared.NewRepositoryPath(tempDir)
+	require.NoError(t, err)
+
+	_, rewriteErr := service.Rewrite(context.Background(), namespace.Options{
+		RepositoryPath: repositoryPath,
+		OldPrefix:      oldPrefix,
+		NewPrefix:      newPrefix,
+		CommitMessage:  "chore: rewrite namespace",
+		Push:           false,
+	})
+	require.NoError(t, rewriteErr)
+
+	updatedGoMod, readErr := os.ReadFile(filepath.Join(tempDir, "go.mod"))
+	require.NoError(t, readErr)
+	goModString := string(updatedGoMod)
+
+	require.NotContains(t, goModString, "github.com/old/account/dep v1.0.0")
+	require.Contains(t, goModString, "github.com/new/account/dep v1.0.0")
+	require.Contains(t, goModString, "github.com/new/account/dep => github.com/new/account/dep v1.0.1")
+	require.Contains(t, goModString, "github.com/new/account/tool => github.com/new/account/tool v1.2.3")
+}
+
 type noopGitExecutor struct{}
 
 func (noopGitExecutor) ExecuteGit(_ context.Context, _ execshell.CommandDetails) (execshell.ExecutionResult, error) {

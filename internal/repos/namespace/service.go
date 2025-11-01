@@ -469,25 +469,41 @@ func (service *Service) rewriteGoMod(goModPath string, oldPrefix ModulePrefix, n
 	scanner := bufio.NewScanner(bytes.NewReader(content))
 	var lines []string
 	didChange := false
+	inRequireBlock := false
+	inReplaceBlock := false
+	oldNamespace := oldPrefix.String() + "/"
+	newNamespace := newPrefix.String() + "/"
 	for scanner.Scan() {
 		line := scanner.Text()
 		trimmed := strings.TrimSpace(line)
 
 		switch {
 		case strings.HasPrefix(trimmed, "module "):
-			old := "module " + oldPrefix.String() + "/"
+			old := "module " + oldNamespace
 			if strings.HasPrefix(trimmed, old) {
 				didChange = true
-				lines = append(lines, strings.Replace(trimmed, oldPrefix.String()+"/", newPrefix.String()+"/", 1))
-				continue
-			}
-		case strings.HasPrefix(trimmed, "require "), strings.HasPrefix(trimmed, "replace "):
-			if strings.Contains(line, oldPrefix.String()+"/") {
-				didChange = true
-				lines = append(lines, strings.ReplaceAll(line, oldPrefix.String()+"/", newPrefix.String()+"/"))
+				lines = append(lines, strings.Replace(trimmed, oldNamespace, newNamespace, 1))
 				continue
 			}
 		}
+
+		switch {
+		case strings.HasPrefix(trimmed, "require ("):
+			inRequireBlock = true
+		case strings.HasPrefix(trimmed, "replace ("):
+			inReplaceBlock = true
+		case strings.HasPrefix(trimmed, ")"):
+			inRequireBlock = false
+			inReplaceBlock = false
+		}
+
+		if strings.HasPrefix(trimmed, "require ") || strings.HasPrefix(trimmed, "replace ") || inRequireBlock || inReplaceBlock {
+			if strings.Contains(line, oldNamespace) {
+				didChange = true
+				line = strings.ReplaceAll(line, oldNamespace, newNamespace)
+			}
+		}
+
 		lines = append(lines, line)
 	}
 	if err := scanner.Err(); err != nil {
