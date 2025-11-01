@@ -15,9 +15,10 @@ const (
 	namespaceNewPrefixOptionKey     = "new"
 	namespaceBranchPrefixOptionKey  = "branch_prefix"
 	namespaceBranchPrefixFlagName   = "branch-prefix"
+	namespaceCommitMessageOptionKey = "commit_message"
+	namespaceCommitMessageFlagName  = "commit-message"
 	namespacePushOptionKey          = "push"
 	namespaceRemoteOptionKey        = "remote"
-	namespaceCommitMessageOptionKey = "commit_message"
 	namespaceSafeguardsOptionKey    = "safeguards"
 	namespacePlanMessageTemplate    = "NAMESPACE-PLAN: %s branch=%s files=%d push=%t\n"
 	namespaceApplyMessageTemplate   = "NAMESPACE-APPLY: %s branch=%s files=%d push=%t\n"
@@ -71,7 +72,7 @@ func handleNamespaceRewriteAction(ctx context.Context, environment *Environment,
 	if !branchExists {
 		if value, ok := parameters[namespaceBranchPrefixFlagName]; ok {
 			if stringValue, stringOk := value.(string); stringOk {
-				branchPrefix = stringValue
+				branchPrefix = strings.TrimSpace(stringValue)
 			}
 		}
 	}
@@ -90,9 +91,16 @@ func handleNamespaceRewriteAction(ctx context.Context, environment *Environment,
 		remote = strings.TrimSpace(value)
 	}
 
-	commitMessage, _, commitErr := reader.stringValue(namespaceCommitMessageOptionKey)
+	commitMessage, commitMessageExists, commitErr := reader.stringValue(namespaceCommitMessageOptionKey)
 	if commitErr != nil {
 		return commitErr
+	}
+	if !commitMessageExists {
+		if value, ok := parameters[namespaceCommitMessageFlagName]; ok {
+			if stringValue, stringOk := value.(string); stringOk {
+				commitMessage = strings.TrimSpace(stringValue)
+			}
+		}
 	}
 
 	repositoryPath, repoPathErr := shared.NewRepositoryPath(repository.Path)

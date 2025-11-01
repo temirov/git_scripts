@@ -15,6 +15,8 @@ import (
 	"github.com/temirov/gix/internal/repos/filesystem"
 )
 
+const namespaceTestCommitMessage = "chore: rewrite namespace"
+
 func TestHandleNamespaceRewriteActionDryRun(t *testing.T) {
 	t.Parallel()
 
@@ -93,10 +95,11 @@ func main() { dep.Do() }
 
 	repository := &RepositoryState{Path: tempDir}
 	parameters := map[string]any{
-		"old":           "github.com/old/org",
-		"new":           "github.com/new/org",
-		"branch_prefix": "rewrite",
-		"remote":        "origin",
+		"old":                          "github.com/old/org",
+		"new":                          "github.com/new/org",
+		"branch_prefix":                "rewrite",
+		"remote":                       "origin",
+		namespaceCommitMessageFlagName: namespaceTestCommitMessage,
 	}
 
 	err = handleNamespaceRewriteAction(context.Background(), environment, repository, parameters)
@@ -110,8 +113,21 @@ func main() { dep.Do() }
 
 	joinedCommands := strings.Join(executor.recorded(), "\n")
 	require.Contains(t, joinedCommands, "checkout -b rewrite/")
-	require.Contains(t, joinedCommands, "commit -m")
 	require.Contains(t, joinedCommands, "push --set-upstream origin")
+
+	commitCommandFound := false
+	for _, details := range executor.commands {
+		if len(details.Arguments) == 0 {
+			continue
+		}
+		if details.Arguments[0] != "commit" {
+			continue
+		}
+		commitCommandFound = true
+		require.Contains(t, details.Arguments, "-m")
+		require.Contains(t, details.Arguments, namespaceTestCommitMessage)
+	}
+	require.True(t, commitCommandFound)
 }
 
 func TestHandleNamespaceRewriteActionRespectsSafeguards(t *testing.T) {
