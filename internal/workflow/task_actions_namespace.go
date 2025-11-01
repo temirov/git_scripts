@@ -14,6 +14,7 @@ const (
 	namespaceOldPrefixOptionKey     = "old"
 	namespaceNewPrefixOptionKey     = "new"
 	namespaceBranchPrefixOptionKey  = "branch_prefix"
+	namespaceBranchPrefixFlagName   = "branch-prefix"
 	namespacePushOptionKey          = "push"
 	namespaceRemoteOptionKey        = "remote"
 	namespaceCommitMessageOptionKey = "commit_message"
@@ -63,9 +64,16 @@ func handleNamespaceRewriteAction(ctx context.Context, environment *Environment,
 		return newPrefixErr
 	}
 
-	branchPrefix, _, branchErr := reader.stringValue(namespaceBranchPrefixOptionKey)
+	branchPrefix, branchExists, branchErr := reader.stringValue(namespaceBranchPrefixOptionKey)
 	if branchErr != nil {
 		return branchErr
+	}
+	if !branchExists {
+		if value, ok := parameters[namespaceBranchPrefixFlagName]; ok {
+			if stringValue, stringOk := value.(string); stringOk {
+				branchPrefix = stringValue
+			}
+		}
 	}
 
 	push := true

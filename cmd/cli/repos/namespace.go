@@ -17,16 +17,17 @@ import (
 )
 
 const (
-	namespaceUseConstant          = "repo-namespace-rewrite"
-	namespaceShortDescription     = "Rewrite Go module namespaces across repositories"
-	namespaceLongDescription      = "repo-namespace-rewrite updates go.mod and Go imports to replace an old module namespace with a new one."
-	namespaceOldFlagName          = "old"
-	namespaceNewFlagName          = "new"
-	namespaceBranchPrefixFlagName = "branch-prefix"
-	namespaceRemoteFlagName       = "remote"
-	namespacePushFlagName         = "push"
-	namespaceCommitFlagName       = "commit-message"
-	namespaceActionType           = "repo.namespace.rewrite"
+	namespaceUseConstant               = "repo-namespace-rewrite"
+	namespaceShortDescription          = "Rewrite Go module namespaces across repositories"
+	namespaceLongDescription           = "repo-namespace-rewrite updates go.mod and Go imports to replace an old module namespace with a new one."
+	namespaceOldFlagName               = "old"
+	namespaceNewFlagName               = "new"
+	namespaceBranchPrefixFlagName      = "branch-prefix"
+	namespaceBranchPrefixOptionKeyName = "branch_prefix"
+	namespaceRemoteFlagName            = "remote"
+	namespacePushFlagName              = "push"
+	namespaceCommitFlagName            = "commit-message"
+	namespaceActionType                = "repo.namespace.rewrite"
 )
 
 // NamespaceCommandBuilder assembles the namespace rewrite command.
@@ -196,6 +197,7 @@ func (builder *NamespaceCommandBuilder) run(command *cobra.Command, arguments []
 	}
 	if len(branchPrefix) > 0 {
 		actionOptions[namespaceBranchPrefixFlagName] = branchPrefix
+		actionOptions[namespaceBranchPrefixOptionKeyName] = branchPrefix
 	}
 	if len(remote) > 0 {
 		actionOptions[namespaceRemoteFlagName] = remote

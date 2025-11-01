@@ -99,7 +99,7 @@ func TestNamespaceCommandFlagOverrides(t *testing.T) {
 
 	args := flagutils.NormalizeToggleArguments([]string{
 		"--dry-run",
-		"--assume-yes",
+		"--" + flagutils.AssumeYesFlagName,
 		"--" + flagutils.DefaultRootFlagName, "/tmp/cli-root",
 		"--old", "github.com/cli/old",
 		"--new", "github.com/cli/new",

@@ -95,7 +95,7 @@ func main() { dep.Do() }
 	parameters := map[string]any{
 		"old":           "github.com/old/org",
 		"new":           "github.com/new/org",
-		"branch-prefix": "rewrite",
+		"branch_prefix": "rewrite",
 		"remote":        "origin",
 	}
 
@@ -108,9 +108,10 @@ func main() { dep.Do() }
 	require.False(t, strings.Contains(string(updatedSource), "github.com/old/org"))
 	require.True(t, strings.Contains(string(updatedSource), "github.com/new/org"))
 
-	require.Contains(t, executor.recorded(), "checkout -b rewrite/")
-	require.Contains(t, executor.recorded(), "commit -m")
-	require.Contains(t, executor.recorded(), "push --set-upstream origin")
+	joinedCommands := strings.Join(executor.recorded(), "\n")
+	require.Contains(t, joinedCommands, "checkout -b rewrite/")
+	require.Contains(t, joinedCommands, "commit -m")
+	require.Contains(t, joinedCommands, "push --set-upstream origin")
 }
 
 type namespaceTestGitExecutor struct {
