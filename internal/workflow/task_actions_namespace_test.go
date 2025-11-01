@@ -177,9 +177,26 @@ func (executor *namespaceTestGitExecutor) handleConfig(details execshell.Command
 }
 
 func (executor *namespaceTestGitExecutor) recorded() []string {
-	results := make([]string, 0, len(executor.commands))
+	results := make([]string, 0, len(executor.commands)*3)
 	for _, details := range executor.commands {
-		results = append(results, strings.Join(details.Arguments, " "))
+		args := details.Arguments
+		if len(args) == 0 {
+			continue
+		}
+
+		results = append(results, strings.Join(args, " "))
+
+		if len(args) >= 2 {
+			results = append(results, strings.Join(args[:2], " "))
+		}
+
+		if len(args) >= 3 {
+			prefix := args[2]
+			if slash := strings.Index(prefix, "/"); slash >= 0 {
+				prefix = prefix[:slash+1]
+			}
+			results = append(results, args[0]+" "+args[1]+" "+prefix)
+		}
 	}
 	return results
 }

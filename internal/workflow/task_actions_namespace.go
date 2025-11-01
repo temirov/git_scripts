@@ -13,7 +13,8 @@ const (
 	namespaceActionType             = "repo.namespace.rewrite"
 	namespaceOldPrefixOptionKey     = "old"
 	namespaceNewPrefixOptionKey     = "new"
-	namespaceBranchPrefixOptionKey  = "branch_prefix"
+	namespaceBranchPrefixOptionKey  = "branch-prefix"
+	namespaceBranchPrefixLegacyKey  = "branch_prefix"
 	namespacePushOptionKey          = "push"
 	namespaceRemoteOptionKey        = "remote"
 	namespaceCommitMessageOptionKey = "commit_message"
@@ -62,9 +63,18 @@ func handleNamespaceRewriteAction(ctx context.Context, environment *Environment,
 		return newPrefixErr
 	}
 
-	branchPrefix, _, branchErr := reader.stringValue(namespaceBranchPrefixOptionKey)
+	branchPrefix, branchExists, branchErr := reader.stringValue(namespaceBranchPrefixOptionKey)
 	if branchErr != nil {
 		return branchErr
+	}
+	if !branchExists {
+		legacyPrefix, legacyExists, legacyErr := reader.stringValue(namespaceBranchPrefixLegacyKey)
+		if legacyErr != nil {
+			return legacyErr
+		}
+		if legacyExists {
+			branchPrefix = legacyPrefix
+		}
 	}
 
 	push := true
